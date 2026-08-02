@@ -27,7 +27,7 @@ namespace hNNet {
             }
             // Connect neurons
             void connect(const std::span<Neuron*> tx_neurons, const std::span<Neuron*> rx_neurons) {
-                auto neurons = _neurons | std::view::transform([] (const auto &neuron) { return neuron.get(); });
+                auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                 if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
                     throw std::invalid_argument("NNet::connect: neurons not in network!");
                 }
@@ -41,42 +41,47 @@ namespace hNNet {
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {
-                    auto input_layer = _neurons 
-                            | std::view::transform([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
-                    if (std::ranges::distance(input_layer) != SizeInput) {
-                        throw std::invalid_argument("NNet::train: size error!");
-                    }
                     bool converged{false};
                     while (not converged) { 
-                        for (auto &[neuron, data] : std::view:zip(input_layer, sample)) {
-                            neuron->set_signal(data.input);
-                            neuron->broadcast_signal();
-                            converged = backprop(data.target);
-                        }       
+                        for (const auto &data : sample)) {
+                            feed(data.input);
+                            converged = backprop(data.target);  
+                        }     
                     }
                 }  
         private:
+            // Perfrorm
+            template <size_t Size>
+                void feed(const Data<Size> &data) {
+                    auto input_layer = _neurons 
+                            | std::view::transform([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
+                    if (std::ranges::distance(input_layer) != Size) {
+                        throw std::invalid_argument("NNet::feed: size error!");
+                    }
+                    for (auto &[neuron, input] : std::view:zip(input_layer, data)) {
+                        neuron->set_signal(data.input);
+                        neuron->broadcast_signal();
+                }
             // Perform back-propagation
             template <size_t Size>
-            bool backprop(const Data<Size> &data) {
-                auto output_layer = _neurons // static?
-                        | std::view::transform([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
-                if (std::ranges::distance(output_layer) != Size) {
-                    throw std::invalid_argument("NNet::backprop: size error!");
-                }
-                bool learnt{false};            
-                for (auto &[neuron, data] : std::view::zip(output_layer, data)) {
-                    learnt = neuron->learn(data);
-                    if (not learnt) {
-                        break;
+                bool backprop(const Data<Size> &data) {
+                    auto output_layer = _neurons // static?
+                            | std::views::transform([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
+                    if (std::ranges::distance(output_layer) != Size) {
+                        throw std::invalid_argument("NNet::backprop: size error!");
                     }
-                }            
-                return learnt;
-            }
-        private:
+                    bool learnt{false};            
+                    for (auto &[neuron, target] : std::views::zip(output_layer, data)) {
+                        learnt = neuron->learn(target);
+                        if (not learnt) {
+                            break;
+                        }
+                    }            
+                     return learnt;
+                }
             // Data members
-            std::vector<std::unique_ptr<Neuron> _neurons{};
-            std::vector<std::unique_ptr<Neuron:SynapticConn> _connections{};
+            std::vector<std::unique_ptr<Neuron>> _neurons{};
+            std::vector<std::unique_ptr<Neuron::SynapticConn>> _connections{};
     }
 
 }

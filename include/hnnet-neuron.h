@@ -1,6 +1,4 @@
 #pragma once
-#include <vector>
-#include <algorithm>
 #include "hnnet.h"
 
 namespace hNNet {
@@ -62,13 +60,13 @@ namespace hNNet {
                 }
             }
             // Add connection to neuron
-            void add_connection(const SynapticConn* const conn) {
+            void add_connection(SynapticConn* const conn) {
                 if (conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
-                if (std::any_of(std::begin(_connections), std::end(_connections), [&] (const auto &existing_conn) { return existing_conn == conn; })) {
-                    throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
-                }
+                //if (std::any_of(_connections.begin(), _connections.end(), [&] (const auto &existing_conn) { return true; })) {
+                //    throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
+                //}
                 if (conn->tx != this or conn->rx != this) {
                     throw std::invalid_argument("Neuron::add_connection: invalid connection!");
                 }
@@ -77,13 +75,13 @@ namespace hNNet {
             // Get input connections
             std::vector<const SynapticConn*> get_in_connections() const {
                 return _connections 
-                        | std::view::transform([] (const auto &conn) -> const SynapticConn* { return conn->rx == this; ) 
+                        | std::views::transform([] (const auto &conn) -> const SynapticConn* { return conn->rx == this; } ) 
                         | std::ranges::to<std::vector>();
             }
             // Get output connections
             std::vector<const SynapticConn*> get_out_connections() const {
                 return _connections 
-                        | std::view::transform([] (const auto &conn) -> const SynapticConn* { return conn->tx == this; ) 
+                        | std::views::transform([] (const auto &conn) ->  SynapticConn* { return conn->tx == this; } ) 
                         | std::ranges::to<std::vector>();
             }
             // Learn from data
@@ -92,7 +90,7 @@ namespace hNNet {
                     return true;
                 }
                 bool learnt{false};
-                for (auto &conn : get_in_connections()) { // use: for (auto conn : _connections) if (conn->rx == self) ...?
+                for (const auto &conn : get_in_connections()) { // use: for (auto conn : _connections) if (conn->rx == self) ...?
                     update(conn, data);
                     //learnt = conn->tx->learn(data);
                 }
