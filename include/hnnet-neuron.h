@@ -62,7 +62,7 @@ namespace hNNet {
                 }
             }
             // Add connection to neuron
-            void add_connection(SynapticConn* const conn) {
+            void add_connection(const SynapticConn* const conn) {
                 if (conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
@@ -75,15 +75,15 @@ namespace hNNet {
                 _connections.push_back(conn);
             }
             // Get input connections
-            std::vector<SynapticConn*> get_in_connections() const {
+            std::vector<const SynapticConn*> get_in_connections() const {
                 return _connections 
-                        | std::view::transform([] (const auto &conn) { return conn->rx == this; ) 
+                        | std::view::transform([] (const auto &conn) -> const SynapticConn* { return conn->rx == this; ) 
                         | std::ranges::to<std::vector>();
             }
             // Get output connections
-            std::vector<SynapticConn*> get_out_connections() const {
+            std::vector<const SynapticConn*> get_out_connections() const {
                 return _connections 
-                        | std::view::transform([] (const auto &conn) { return conn->tx == this; ) 
+                        | std::view::transform([] (const auto &conn) -> const SynapticConn* { return conn->tx == this; ) 
                         | std::ranges::to<std::vector>();
             }
             // Learn from data
@@ -100,7 +100,7 @@ namespace hNNet {
             }
         private:
             // Update conenction weight according to data and a learining rule
-            virtual void update(SynapticConn *conn, const real_t data) {
+            virtual void update(SynapticConn* const conn, const real_t data) {
                 conn->weight += conn->get_weighted_signal() * data;
             }
             // Activation function
