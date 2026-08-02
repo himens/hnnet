@@ -11,7 +11,7 @@ namespace hNNet {
     class NNet {
         public:
             // Create new neuron
-            Neuron* const new_neuron() {
+            Neuron* new_neuron() {
                 auto neuron = std::make_unique<Neuron>();
                 const auto raw_ptr = neuron.get();
                 _neurons.push_back(std::move(neuron));
@@ -31,7 +31,7 @@ namespace hNNet {
                 if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
                     throw std::invalid_argument("NNet::connect: neurons not in network!");
                 }
-                for (auto [tx, rx] : std::views::zip(tx_neurons, rx_neurons)) {
+                for (auto &[tx, rx] : std::views::zip(tx_neurons, rx_neurons)) {
                     auto conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
                     tx->add_connection(conn.get());
                     rx->add_connection(conn.get());
@@ -50,7 +50,7 @@ namespace hNNet {
                     while (not converged) { 
                         for (auto &[neuron, data] : std::view:zip(input_layer, sample)) {
                             neuron->set_signal(data.input);
-                            neuron->broadcast_signal(data.input);
+                            neuron->broadcast_signal();
                             converged = backprop(data.target);
                         }       
                     }
