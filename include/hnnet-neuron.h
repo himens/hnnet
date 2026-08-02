@@ -37,9 +37,9 @@ namespace hNNet {
                 _signal = signal;
             }
             // Receive signal from synaptic connection
-            void receive_signal(const SynapticConn* const conn) {
+            void receive_signal(const SynapticConn* conn) {
                 const auto in_connections{get_in_connections()}; // static?
-                static std::vector<const SynapticConn*> in_connections_left{in_connections};
+                static std::vector<SynapticConn*> in_connections_left{in_connections};
                 const auto found = std::any_of(std::begin(in_connections_left), std::end(in_connections_left), [&] (const auto &in_conn) { return in_conn == conn; });
                 if (not found) {
                     throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
@@ -60,28 +60,28 @@ namespace hNNet {
                 }
             }
             // Add connection to neuron
-            void add_connection(SynapticConn* const conn) {
+            void add_connection(SynapticConn* conn) {
                 if (conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
-                //if (std::any_of(_connections.begin(), _connections.end(), [&] (const auto &existing_conn) { return true; })) {
-                //    throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
-                //}
+                if (std::any_of(std::begin(_connections), std::end(_connections), [&] (const auto &existing_conn) { return existing_conn == conn; })) {
+                    throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
+                }
                 if (conn->tx != this or conn->rx != this) {
                     throw std::invalid_argument("Neuron::add_connection: invalid connection!");
                 }
                 _connections.push_back(conn);
             }
             // Get input connections
-            std::vector<const SynapticConn*> get_in_connections() const {
+            std::vector<SynapticConn*> get_in_connections() const {
                 return _connections 
-                        | std::views::transform([] (const auto &conn) -> const SynapticConn* { return conn->rx == this; } ) 
+                        | std::views::filter([&] (const auto &conn) { return conn->rx == this; } ) 
                         | std::ranges::to<std::vector>();
             }
             // Get output connections
-            std::vector<const SynapticConn*> get_out_connections() const {
+            std::vector<SynapticConn*> get_out_connections() const {
                 return _connections 
-                        | std::views::transform([] (const auto &conn) ->  SynapticConn* { return conn->tx == this; } ) 
+                        | std::views::filter([&] (const auto &conn) { return conn->tx == this; } ) 
                         | std::ranges::to<std::vector>();
             }
             // Learn from data
@@ -90,7 +90,7 @@ namespace hNNet {
                     return true;
                 }
                 bool learnt{false};
-                for (const auto &conn : get_in_connections()) { // use: for (auto conn : _connections) if (conn->rx == self) ...?
+                for (auto &conn : get_in_connections()) { // use: for (auto conn : _connections) if (conn->rx == self) ...?
                     update(conn, data);
                     //learnt = conn->tx->learn(data);
                 }
@@ -98,7 +98,7 @@ namespace hNNet {
             }
         private:
             // Update conenction weight according to data and a learining rule
-            virtual void update(SynapticConn* const conn, const real_t data) {
+            virtual void update(SynapticConn* conn, const real_t data) {
                 conn->weight += conn->get_weighted_signal() * data;
             }
             // Activation function
@@ -109,6 +109,6 @@ namespace hNNet {
             // Data members
             real_t _signal{0.0};
             real_t _weighted_sum{0.0};
-            std::vector<SynapticConn*> _connections();
+            std::vector<SynapticConn*> _connections{};
     };
 }

@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <algorithm>
+#include <memory>
 
 namespace hNNet {
     using real_t = std::float64_t;

@@ -14,10 +14,10 @@ add_executable(hnnet
     src/main.cpp
 )
 
+target_link_libraries(hnnet PRIVATE hnnet_lib)
+
 set_target_properties(hnnet PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-
-target_link_libraries(hnnet PRIVATE hnnet_lib)
 
 message(STATUS "hnnet executable configured successfully")
