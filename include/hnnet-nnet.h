@@ -37,9 +37,8 @@ namespace hNNet {
                     size_t epoch{0};
                     bool converged{false};
                     while (not converged and (epoch <= max_epochs)) {
-                        epoch++;
                         std::println("======================");
-                        std::println("Epoch: {}", epoch      );
+                        std::println("Epoch: {}", ++epoch    );
                         std::println("======================");
                         size_t num_learnings{0};
                         for (const auto &data : sample) {
