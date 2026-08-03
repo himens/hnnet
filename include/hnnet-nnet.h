@@ -34,24 +34,26 @@ namespace hNNet {
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {
                     constexpr size_t max_epochs{1000};
-                    size_t epoch{1};
-                    while (epoch <= max_epochs) {
+                    size_t epoch{0};
+                    bool converged{false};
+                    while (not converged and (epoch <= max_epochs)) {
+                        epoch++;
                         std::println("======================");
                         std::println("Epoch: {}", epoch      );
                         std::println("======================");
-                        bool trained{true};
+                        size_t num_learnings{0};
                         for (const auto &data : sample) {
                             std::println("Training with input: {}, target: {}", data.inputs, data.targets);
                             feed(data.inputs);
-                            if (not learn(data.targets)) {
-                                trained = false;
-                            }
+                            num_learnings += learn(data.targets);
                         }
-                        if (trained) {
-                            std::println("NNet::train: net trained successfully! Epochs: {}", epoch);
-                            break;
-                        }
-                        epoch++;
+                        converged = (num_learnings == sample.size());
+                    }
+                    if (converged) {
+                        std::println("NNet::train: net converged successfully! Epochs: {}", epoch);
+                    }
+                    else {
+                        std::println("NNet::train: net training failed!");
                     }
                 }  
         private:
