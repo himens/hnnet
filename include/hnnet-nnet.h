@@ -60,23 +60,23 @@ namespace hNNet {
         private:
             // Feed net with input data
             template <size_t Size>
-                void feed(std::ranges::view auto input_neurons, const Data<Size> &inputs) {
-                    if (std::ranges::distance(input_neurons) != Size) {
+                void feed(std::ranges::view auto in_neurons, const Data<Size> &inputs) {
+                    if (std::ranges::distance(in_neurons) != Size) {
                         throw std::invalid_argument("NNet::feed: size error!");
                     }
-                    for (auto [neuron, input] : std::views::zip(input_neurons, inputs)) {
+                    for (auto [neuron, input] : std::views::zip(in_neurons, inputs)) {
                         neuron->set_signal(input);
                         neuron->broadcast_signal();
                     }
                 }
             // Learn from target data
             template <size_t Size>
-                bool learn(std::ranges::view auto output_neurons, const Data<Size> &targets) {
-                    if (std::ranges::distance(output_neurons) != Size) {
+                bool learn(std::ranges::view auto out_neurons, const Data<Size> &targets) {
+                    if (std::ranges::distance(out_neurons) != Size) {
                         throw std::invalid_argument("NNet::learn: size error!");
                     }
                     bool learnt{false};            
-                    for (auto [neuron, target] : std::views::zip(output_neurons, targets)) {
+                    for (auto [neuron, target] : std::views::zip(out_neurons, targets)) {
                         learnt = neuron->learn(target);
                         if (not learnt) {
                             break;
