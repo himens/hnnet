@@ -38,24 +38,26 @@ namespace hNNet {
             }
             // Receive signal from synaptic connection
             void receive_signal(const SynapticConn* conn) {
-                const auto in_connections{get_in_connections()}; // static?
-                static std::vector<SynapticConn*> in_connections_left{in_connections};
+                static real_t weighted_sum{0.0};
+                static std::vector<SynapticConn*> in_connections_left{get_in_connections()};
                 const auto found = std::any_of(std::begin(in_connections_left), std::end(in_connections_left), [&] (const auto &in_conn) { return in_conn == conn; });
                 if (not found) {
                     throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
                 }
-                _weighted_sum += conn->get_weighted_signal();
+                weighted_sum += conn->get_weighted_signal();
                 std::erase(in_connections_left, conn);
+                //std::println("Neuron::receive_signal: signal: {}, weight: {}, left: {}", conn->get_weighted_signal(), conn->weight, in_connections_left.size());
                 if (in_connections_left.empty()) {
-                    _signal = activation(_weighted_sum);
+                    _signal = activation(weighted_sum);
+                    //std::println("Neuron::receive_signal: all signals received! Signal: {}, weighted sum: {}", _signal, weighted_sum);
                     broadcast_signal();
-                    _weighted_sum = 0.0;
-                    in_connections_left = in_connections;
+                    weighted_sum = 0.0;
+                    in_connections_left = get_in_connections();
                 }
             }
             // Broadcast signal to all receiver neurons
             void broadcast_signal() const {
-                for (const auto &conn : get_out_connections()) { // use: for (auto conn : _connections) if (conn->tx == self) ...? 
+                for (const auto &conn : get_out_connections()) {
                     conn->transmit_signal();
                 }
             }
@@ -64,10 +66,12 @@ namespace hNNet {
                 if (conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
-                if (std::any_of(std::begin(_connections), std::end(_connections), [&] (const auto &existing_conn) { return existing_conn == conn; })) {
+                const auto found = std::any_of(std::begin(_connections), std::end(_connections),
+                        [&] (const auto &existing_conn) { return existing_conn == conn; });
+                if (found) {
                     throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
                 }
-                if (conn->tx != this or conn->rx != this) {
+                if ((conn->tx != this) and (conn->rx != this)) {
                     throw std::invalid_argument("Neuron::add_connection: invalid connection!");
                 }
                 _connections.push_back(conn);
@@ -84,31 +88,30 @@ namespace hNNet {
                         | std::views::filter([&] (const auto &conn) { return conn->tx == this; } ) 
                         | std::ranges::to<std::vector>();
             }
-            // Learn from data
-            virtual bool learn(const real_t data) {
-                if (_signal == data) { // use tolerance! it's a real_t comparison!
-                    return true;
-                }
-                bool learnt{false};
-                for (auto &conn : get_in_connections()) { // use: for (auto conn : _connections) if (conn->rx == self) ...?
-                    update(conn, data);
-                    //learnt = conn->tx->learn(data);
+            // Learn from target data
+            virtual bool learn(const real_t target) {
+                const auto learnt = std::abs(_signal - target) < 1e-6;
+                if (not learnt) {
+                    for (auto &conn : get_in_connections()) {
+                        update(conn, target);
+                        std::println("Neuron::learn: updated weight of connection {}: {}", static_cast<void*>(conn), conn->weight);
+                    }
                 }
                 return learnt;
             }
         private:
-            // Update conenction weight according to data and a learining rule
-            virtual void update(SynapticConn* conn, const real_t data) {
-                conn->weight += conn->get_weighted_signal() * data;
+            // Update conenction weight according to target and a learining rule (default: perceptron)
+            virtual void update(SynapticConn* conn, const real_t target) {
+                static constexpr real_t rate{1.0};
+                conn->weight += rate * target * conn->tx->get_signal();
             }
-            // Activation function
-            virtual real_t activation(const real_t signal) const {
-                static const real_t threshold{0.2};
-                return _weighted_sum >= threshold ? +1 : _weighted_sum < threshold ? -1 : 0;
+            // Activation function (default: perceptron)
+            virtual real_t activation(const real_t weighted_sum) const {
+                static constexpr real_t threshold{0.2};
+                return weighted_sum > threshold ? +1 : weighted_sum < -threshold ? -1 : 0;
             }
             // Data members
             real_t _signal{0.0};
-            real_t _weighted_sum{0.0};
             std::vector<SynapticConn*> _connections{};
     };
 }

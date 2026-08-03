@@ -7,9 +7,11 @@ int main() {
     net.connect(layer_x, y);
     
     // Example training data
-    std::vector<hNNet::TrainData<1, 1>> training_data = {
-        {{0.0}, {0.0}},
-        {{1.0}, {1.0}}
+    std::vector<hNNet::TrainData<3, 1>> training_data = {
+        {{1, 1, 1},  {1}},
+        {{1, 0, 1}, {-1}},
+        {{0, 1, 1}, {-1}},
+        {{0, 0, 1}, {-1}}
     };
     net.train(training_data);
     

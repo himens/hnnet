@@ -11,7 +11,7 @@ namespace hNNet {
             std::vector<Neuron*> new_neurons(const size_t num_neurons) {
                 std::vector<Neuron*> neurons(num_neurons);
                 for (size_t i{0}; i < num_neurons; ++i) {
-                    auto neuron = std::make_unique<Neuron>();
+                    auto &&neuron = std::make_unique<Neuron>();
                     neurons[i] = neuron.get();
                     _neurons.push_back(std::move(neuron));
                 }
@@ -23,8 +23,8 @@ namespace hNNet {
                 if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
                     throw std::invalid_argument("NNet::connect: neurons not in network!");
                 }
-                for (const auto &[tx, rx] : std::views::zip(tx_neurons, rx_neurons)) {
-                    auto conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
+                for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
+                    auto &&conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
                     tx->add_connection(conn.get());
                     rx->add_connection(conn.get());
                     _connections.push_back(std::move(conn));
@@ -33,38 +33,49 @@ namespace hNNet {
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {
-                    bool converged{false};
-                    while (not converged) { 
+                    constexpr size_t max_epochs{1000};
+                    size_t epoch{1};
+                    while (epoch <= max_epochs) {
+                        std::println("======================");
+                        std::println("Epoch: {}", epoch      );
+                        std::println("======================");
+                        bool trained{true};
                         for (const auto &data : sample) {
-                            feed(data.input);
-                            converged = backprop(data.target);  
-                        }     
+                            std::println("Training with input: {}, target: {}", data.inputs, data.targets);
+                            feed(data.inputs);
+                            if (not learn(data.targets)) {
+                                trained = false;
+                            }
+                        }
+                        if (trained) {
+                            std::println("NNet::train: net trained successfully! Epochs: {}", epoch);
+                            break;
+                        }
+                        epoch++;
                     }
                 }  
         private:
             // Feed net with input data
             template <size_t Size>
-                void feed(const Data<Size> &data) {
-                    auto input_layer = _neurons 
-                            | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
+                void feed(const Data<Size> &inputs) {
+                    auto input_layer = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });       
                     if (std::ranges::distance(input_layer) != Size) {
                         throw std::invalid_argument("NNet::feed: size error!");
                     }
-                    for (auto [neuron, input] : std::views::zip(input_layer, data)) {
+                    for (auto [neuron, input] : std::views::zip(input_layer, inputs)) {
                         neuron->set_signal(input);
                         neuron->broadcast_signal();
                     }
                 }
-            // Perform back-propagation
+            // Learn from target data
             template <size_t Size>
-                bool backprop(const Data<Size> &data) {
-                    auto output_layer = _neurons // static?
-                            | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
+                bool learn(const Data<Size> &targets) {
+                    auto output_layer = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
                     if (std::ranges::distance(output_layer) != Size) {
-                        throw std::invalid_argument("NNet::backprop: size error!");
+                        throw std::invalid_argument("NNet::learn: size error!");
                     }
                     bool learnt{false};            
-                    for (auto [neuron, target] : std::views::zip(output_layer, data)) {
+                    for (auto [neuron, target] : std::views::zip(output_layer, targets)) {
                         learnt = neuron->learn(target);
                         if (not learnt) {
                             break;
