@@ -33,6 +33,8 @@ namespace hNNet {
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {
+                    auto in_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
+                    auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
                     constexpr size_t max_epochs{1000};
                     size_t epoch{0};
                     bool converged{false};
@@ -43,8 +45,8 @@ namespace hNNet {
                         size_t num_learnings{0};
                         for (const auto &data : sample) {
                             std::println("Training with input: {}, target: {}", data.inputs, data.targets);
-                            feed(data.inputs);
-                            num_learnings += learn(data.targets);
+                            feed(in_neurons, data.inputs);
+                            num_learnings += learn(out_neurons, data.targets);
                         }
                         converged = (num_learnings == sample.size());
                     }
@@ -58,25 +60,23 @@ namespace hNNet {
         private:
             // Feed net with input data
             template <size_t Size>
-                void feed(const Data<Size> &inputs) {
-                    auto input_layer = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });       
-                    if (std::ranges::distance(input_layer) != Size) {
+                void feed(std::ranges::view auto input_neurons, const Data<Size> &inputs) {
+                    if (std::ranges::distance(input_neurons) != Size) {
                         throw std::invalid_argument("NNet::feed: size error!");
                     }
-                    for (auto [neuron, input] : std::views::zip(input_layer, inputs)) {
+                    for (auto [neuron, input] : std::views::zip(input_neurons, inputs)) {
                         neuron->set_signal(input);
                         neuron->broadcast_signal();
                     }
                 }
             // Learn from target data
             template <size_t Size>
-                bool learn(const Data<Size> &targets) {
-                    auto output_layer = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
-                    if (std::ranges::distance(output_layer) != Size) {
+                bool learn(std::ranges::view auto output_neurons, const Data<Size> &targets) {
+                    if (std::ranges::distance(output_neurons) != Size) {
                         throw std::invalid_argument("NNet::learn: size error!");
                     }
                     bool learnt{false};            
-                    for (auto [neuron, target] : std::views::zip(output_layer, targets)) {
+                    for (auto [neuron, target] : std::views::zip(output_neurons, targets)) {
                         learnt = neuron->learn(target);
                         if (not learnt) {
                             break;
