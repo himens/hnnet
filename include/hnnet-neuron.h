@@ -114,4 +114,7 @@ namespace hNNet {
             real_t _signal{0.0};
             std::vector<SynapticConn*> _connections{};
     };
+
+    template <typename Type>
+        concept NeuronType = std::derived_from<Type, Neuron>;
 }

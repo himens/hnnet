@@ -2,6 +2,7 @@
 #include <print>
 #include <stdexcept>
 #include <ranges>
+#include <concepts>
 #include <cstdint>
 #include <stdfloat>
 #include <vector>

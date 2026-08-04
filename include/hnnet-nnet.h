@@ -8,7 +8,7 @@ namespace hNNet {
     class NNet {
         public:
             // Create new neurons
-            template <typename Type>
+            template <NeuronType Type>
                 std::vector<Type*> new_neurons(const size_t num_neurons) {
                     std::vector<Type*> neurons(num_neurons);
                     for (size_t i{0}; i < num_neurons; ++i) {
@@ -19,7 +19,7 @@ namespace hNNet {
                     return neurons;
                 }
             // Connect neurons
-            template <typename TypeTx, typename TypeRx = TypeTx>
+            template <NeuronType TypeTx, NeuronType TypeRx = TypeTx>
                 void connect(const std::vector<TypeTx*> &tx_neurons, const std::vector<TypeRx*> &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
