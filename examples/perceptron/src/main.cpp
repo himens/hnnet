@@ -1,6 +1,11 @@
 #include "hnnet-nnet.h"
+
+////////////////////////////
+// PerceptronNeuron class //
+////////////////////////////
 class PerceptronNeuron : public hNNet::Neuron {
-        // Update conenction weight according to perceptron learning rule
+    private:
+        // Update connection weight according to perceptron learning rule
         void update(SynapticConn* conn, const hNNet::real_t target) {
             static constexpr hNNet::real_t rate{1.0};
             conn->weight += rate * target * conn->tx->get_signal();

@@ -100,7 +100,7 @@ namespace hNNet {
                 return learnt;
             }
         private:
-            // Update conenction weight according to target and a learining rule
+            // Update connection weight according to target and a learning rule
             virtual void update(SynapticConn* conn, const real_t target) = 0;
             // Activation function
             virtual real_t activation(const real_t weighted_sum) const = 0;
