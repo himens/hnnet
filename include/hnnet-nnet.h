@@ -8,22 +8,22 @@ namespace hNNet {
     class NNet {
         public:
             // Create new neurons
-            template <NeuronType Type>
-                std::vector<Type*> new_neurons(const size_t num_neurons) {
-                    std::vector<Type*> neurons(num_neurons);
+            template <NeuronType Neuron>
+                std::vector<Neuron*> new_neurons(const size_t num_neurons) {
+                    std::vector<Neuron*> neurons(num_neurons);
                     for (size_t i{0}; i < num_neurons; ++i) {
-                        auto &&neuron = std::make_unique<Type>();
+                        auto &&neuron = std::make_unique<Neuron>();
                         neurons[i] = neuron.get();
                         _neurons.push_back(std::move(neuron));
                     }
                     return neurons;
                 }
             // Connect neurons
-            template <NeuronType TypeTx, NeuronType TypeRx = TypeTx>
-                void connect(const std::vector<TypeTx*> &tx_neurons, const std::vector<TypeRx*> &rx_neurons) {
+            template <NeuronType NeuronTx, NeuronType NeuronRx = NeuronTx>
+                void connect(const std::vector<NeuronTx*> &tx_neurons, const std::vector<NeuronRx*> &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
-                        throw std::invalid_argument("NNet::connect: neurons not in network!");
+                        throw std::invalid_argument("NNet::connect: neurons not in net!");
                     }
                     for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
                         auto &&conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
