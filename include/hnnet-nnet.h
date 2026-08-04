@@ -19,8 +19,8 @@ namespace hNNet {
                     return neurons;
                 }
             // Connect neurons
-            template <typename TypeTx, typename TypeRx>
-                void connect(std::span<TypeTx* const> tx_neurons, std::span<TypeRx* const> rx_neurons) {
+            template <typename TypeTx, typename TypeRx = TypeTx>
+                void connect(const std::vector<TypeTx*> &tx_neurons, const std::vector<TypeRx*> &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
                         throw std::invalid_argument("NNet::connect: neurons not in network!");
