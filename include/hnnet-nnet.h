@@ -8,19 +8,19 @@ namespace hNNet {
     class NNet {
         public:
             // Create new neurons
-            template <NeuronType Neuron>
+            template <typename NeuronType>
+                requires std::derived_from<NeuronType, Neuron>
                 std::vector<Neuron*> new_neurons(const size_t num_neurons) {
                     std::vector<Neuron*> neurons(num_neurons);
                     for (size_t i{0}; i < num_neurons; ++i) {
-                        auto &&neuron = std::make_unique<Neuron>();
+                        auto &&neuron = std::make_unique<NeuronType>();
                         neurons[i] = neuron.get();
                         _neurons.push_back(std::move(neuron));
                     }
                     return neurons;
                 }
             // Connect neurons
-            template <NeuronType NeuronTx, NeuronType NeuronRx = NeuronTx>
-                void connect(const std::vector<NeuronTx*> &tx_neurons, const std::vector<NeuronRx*> &rx_neurons) {
+            void connect(const std::vector<Neuron*> &tx_neurons, const std::vector<Neuron*> &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
                         throw std::invalid_argument("NNet::connect: neurons not in net!");

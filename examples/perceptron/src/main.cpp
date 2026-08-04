@@ -21,7 +21,7 @@ int main() {
     hNNet::NNet net;
     const auto layer_x = net.new_neurons<PerceptronNeuron>(3);
     const auto y = net.new_neurons<PerceptronNeuron>(1);
-    net.connect<PerceptronNeuron>(layer_x, y);
+    net.connect(layer_x, y);
     
     // Example training data (3 inputs, 1 target) for a simple AND gate
     std::vector<hNNet::TrainData<3, 1>> training_data = {
