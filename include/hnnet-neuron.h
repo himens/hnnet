@@ -100,16 +100,10 @@ namespace hNNet {
                 return learnt;
             }
         private:
-            // Update conenction weight according to target and a learining rule (default: perceptron)
-            virtual void update(SynapticConn* conn, const real_t target) {
-                static constexpr real_t rate{1.0};
-                conn->weight += rate * target * conn->tx->get_signal();
-            }
-            // Activation function (default: perceptron)
-            virtual real_t activation(const real_t weighted_sum) const {
-                static constexpr real_t threshold{0.2};
-                return weighted_sum > threshold ? +1 : weighted_sum < -threshold ? -1 : 0;
-            }
+            // Update conenction weight according to target and a learining rule
+            virtual void update(SynapticConn* conn, const real_t target) = 0;
+            // Activation function
+            virtual real_t activation(const real_t weighted_sum) const = 0;
             // Data members
             real_t _signal{0.0};
             std::vector<SynapticConn*> _connections{};
