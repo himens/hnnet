@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
+
+set(CMAKE_CXX_COMPILER "/usr/bin/g++-16" CACHE STRING "C++ compiler" FORCE)
 project(hnnet LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -10,14 +12,4 @@ target_include_directories(hnnet_lib INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-add_executable(hnnet
-    src/main.cpp
-)
-
-target_link_libraries(hnnet PRIVATE hnnet_lib)
-
-set_target_properties(hnnet PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
-
-message(STATUS "hnnet executable configured successfully")
+message(STATUS "hnnet library configured successfully")
