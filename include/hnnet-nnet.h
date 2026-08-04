@@ -8,28 +8,30 @@ namespace hNNet {
     class NNet {
         public:
             // Create new neurons
-            std::vector<Neuron*> new_neurons(const size_t num_neurons) {
-                std::vector<Neuron*> neurons(num_neurons);
-                for (size_t i{0}; i < num_neurons; ++i) {
-                    auto &&neuron = std::make_unique<Neuron>();
-                    neurons[i] = neuron.get();
-                    _neurons.push_back(std::move(neuron));
+            template <typename Type>
+                std::vector<Type*> new_neurons(const size_t num_neurons) {
+                    std::vector<Type*> neurons(num_neurons);
+                    for (size_t i{0}; i < num_neurons; ++i) {
+                        auto &&neuron = std::make_unique<Type>();
+                        neurons[i] = neuron.get();
+                        _neurons.push_back(std::move(neuron));
+                    }
+                    return neurons;
                 }
-                return neurons;
-            }
             // Connect neurons
-            void connect(std::span<Neuron* const> tx_neurons, std::span<Neuron* const> rx_neurons) {
-                auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
-                if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
-                    throw std::invalid_argument("NNet::connect: neurons not in network!");
+            template <typename TypeTx, typename TypeRx>
+                void connect(std::span<TypeTx* const> tx_neurons, std::span<TypeRx* const> rx_neurons) {
+                    auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
+                    if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
+                        throw std::invalid_argument("NNet::connect: neurons not in network!");
+                    }
+                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
+                        auto &&conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
+                        tx->add_connection(conn.get());
+                        rx->add_connection(conn.get());
+                        _connections.push_back(std::move(conn));
+                    }
                 }
-                for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
-                    auto &&conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
-                    tx->add_connection(conn.get());
-                    rx->add_connection(conn.get());
-                    _connections.push_back(std::move(conn));
-                }
-            }
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {

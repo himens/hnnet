@@ -12,4 +12,6 @@ target_include_directories(hnnet_lib INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+add_subdirectory(examples/perceptron)
+
 message(STATUS "hnnet library configured successfully")
