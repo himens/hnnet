@@ -3,8 +3,10 @@
 #include <stdexcept>
 #include <ranges>
 #include <concepts>
+#include <type_traits>
 #include <cstdint>
 #include <stdfloat>
+#include <array>
 #include <vector>
 #include <algorithm>
 #include <memory>

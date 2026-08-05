@@ -6,32 +6,55 @@ namespace hNNet {
     // NNet class //
     ////////////////
     class NNet {
-        public:
+        public:            
+            // Create a single new neuron
+            template <NeuronType T>
+                Neuron* new_neuron() {
+                    auto neuron = std::make_unique<T>();
+                    auto ptr = neuron.get();
+                    _neurons.push_back(std::move(neuron));
+                    return ptr;
+                }            
             // Create new neurons
-            template <typename NeuronType>
-                requires std::derived_from<NeuronType, Neuron>
+            template <NeuronType T>
                 std::vector<Neuron*> new_neurons(const size_t num_neurons) {
+                    if (num_neurons == 0) {
+                        throw std::invalid_argument("NNet::new_neurons: num_neurons must be > 0!");
+                    }
                     std::vector<Neuron*> neurons(num_neurons);
-                    for (size_t i{0}; i < num_neurons; ++i) {
-                        auto &&neuron = std::make_unique<NeuronType>();
-                        neurons[i] = neuron.get();
-                        _neurons.push_back(std::move(neuron));
+                    for (auto &neuron : neurons) {
+                        neuron = new_neuron<T>();
                     }
                     return neurons;
                 }
             // Connect neurons
-            void connect(const std::vector<Neuron*> &tx_neurons, const std::vector<Neuron*> &rx_neurons) {
+            template <NeuronPtrRange RangeTx, NeuronPtrRange RangeRx>
+                void connect(const RangeTx &tx_range, const RangeRx &rx_range) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
-                    if (not std::ranges::includes(neurons, tx_neurons) or not std::ranges::includes(neurons, rx_neurons)) {
+                    auto is_in_net = [&] (Neuron *neuron) {
+                        return std::ranges::any_of(neurons, [&] (Neuron* net_neuron) { return net_neuron == neuron; });
+                    };
+                    if (not std::ranges::all_of(tx_range, is_in_net) or not std::ranges::all_of(rx_range, is_in_net)) {
                         throw std::invalid_argument("NNet::connect: neurons not in net!");
                     }
-                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
-                        auto &&conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
+                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_range, rx_range)) {
+                        auto conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
                         tx->add_connection(conn.get());
                         rx->add_connection(conn.get());
                         _connections.push_back(std::move(conn));
                     }
                 }
+            template <NeuronPtrRange Range>
+                void connect(const Range &tx_range, Neuron* rx) {
+                    connect(tx_range, std::views::single(rx));
+                } 
+            template <NeuronPtrRange Range>
+                void connect(Neuron* tx, const Range &rx_range) {
+                    connect(std::views::single(tx), rx_range);
+                } 
+            void connect(Neuron* tx, Neuron* rx) {
+                connect(std::views::single(tx), std::views::single(rx));
+            } 
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
                 void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {

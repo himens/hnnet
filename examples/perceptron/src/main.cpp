@@ -18,19 +18,18 @@ class PerceptronNeuron : public hNNet::Neuron {
 };
 
 int main() {
-    hNNet::NNet net;
-    const auto layer_x = net.new_neurons<PerceptronNeuron>(3);
-    const auto y = net.new_neurons<PerceptronNeuron>(1);
-    net.connect(layer_x, y);
-    
-    // Example training data (3 inputs, 1 target) for a simple AND gate
+    // Simple AND gate implementation using a perceptron neural network
+    hNNet::NNet gate;
+    const auto layer_x = gate.new_neurons<PerceptronNeuron>(3);
+    const auto y = gate.new_neuron<PerceptronNeuron>();
+    gate.connect(layer_x, y);
     std::vector<hNNet::TrainData<3, 1>> training_data = {
         {{1, 1, 1},  {1}},
         {{1, 0, 1}, {-1}},
         {{0, 1, 1}, {-1}},
         {{0, 0, 1}, {-1}}
     };
-    net.train(training_data);
+    gate.train(training_data);
     
     return 0;
 }

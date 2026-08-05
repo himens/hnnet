@@ -108,4 +108,11 @@ namespace hNNet {
             real_t _signal{0.0};
             std::vector<SynapticConn*> _connections{};
     };
+
+    template <typename T>
+        concept NeuronType = std::derived_from<T, Neuron>;
+    template <typename T>
+        concept NeuronPtr = std::is_pointer_v<std::remove_cvref_t<T>> and NeuronType<std::remove_pointer_t<std::remove_cvref_t<T>>>;
+    template <typename T>
+        concept NeuronPtrRange = std::ranges::range<T> and NeuronPtr<std::ranges::range_value_t<T>>;
 }
