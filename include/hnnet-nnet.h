@@ -28,7 +28,7 @@ namespace hNNet {
                     return neurons;
                 }
             // Connect neurons
-            template <NeuronPtrRange RangeTx, NeuronPtrRange RangeRx>
+            template <NeuronRange RangeTx, NeuronRange RangeRx>
                 void connect(const RangeTx &tx_range, const RangeRx &rx_range) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     auto is_in_net = [&] (Neuron *neuron) {
@@ -44,11 +44,11 @@ namespace hNNet {
                         _connections.push_back(std::move(conn));
                     }
                 }
-            template <NeuronPtrRange Range>
+            template <NeuronRange Range>
                 void connect(const Range &tx_range, Neuron* rx) {
                     connect(tx_range, std::views::single(rx));
                 } 
-            template <NeuronPtrRange Range>
+            template <NeuronRange Range>
                 void connect(Neuron* tx, const Range &rx_range) {
                     connect(std::views::single(tx), rx_range);
                 } 

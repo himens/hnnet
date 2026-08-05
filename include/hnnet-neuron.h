@@ -114,5 +114,5 @@ namespace hNNet {
     template <typename T>
         concept NeuronPtr = std::is_pointer_v<std::remove_cvref_t<T>> and NeuronType<std::remove_pointer_t<std::remove_cvref_t<T>>>;
     template <typename T>
-        concept NeuronPtrRange = std::ranges::range<T> and NeuronPtr<std::ranges::range_value_t<T>>;
+        concept NeuronRange = std::ranges::range<T> and NeuronPtr<std::ranges::range_value_t<T>>;
 }
