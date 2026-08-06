@@ -37,7 +37,7 @@ namespace hNNet {
                     if (not std::ranges::all_of(tx_range, is_in_net) or not std::ranges::all_of(rx_range, is_in_net)) {
                         throw std::invalid_argument("NNet::connect: neurons not in net!");
                     }
-                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_range, rx_range)) {
+                    for (const auto [tx, rx] : std::views::cartesian_product(tx_range, rx_range)) {
                         auto conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
                         tx->add_connection(conn.get());
                         rx->add_connection(conn.get());
@@ -57,7 +57,7 @@ namespace hNNet {
             } 
             // Train net
             template <size_t SizeInput, size_t SizeTarget>
-                void train(const std::vector<TrainData<SizeInput, SizeTarget>> &sample) {
+                void train(const std::vector<TrainData<SizeInput, SizeTarget>> &samples) {
                     auto in_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
                     auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
                     constexpr size_t max_epochs{1000};
@@ -68,19 +68,14 @@ namespace hNNet {
                         std::println("Epoch: {}", ++epoch    );
                         std::println("======================");
                         size_t num_learnings{0};
-                        for (const auto &data : sample) {
-                            std::println("Training with input: {}, target: {}", data.inputs, data.targets);
-                            feed(in_neurons, data.inputs);
-                            num_learnings += learn(out_neurons, data.targets);
+                        for (const auto &sample : samples) {
+                            std::println("Training with input: {}, target: {}", sample.inputs, sample.targets);
+                            feed(in_neurons, sample.inputs);
+                            num_learnings += learn(out_neurons, sample.targets);
                         }
-                        converged = (num_learnings == sample.size());
+                        converged = (num_learnings == samples.size());
                     }
-                    if (converged) {
-                        std::println("NNet::train: net converged successfully! Epochs: {}", epoch);
-                    }
-                    else {
-                        std::println("NNet::train: net training failed!");
-                    }
+                    converged ? std::println("NNet::train: net converged successfully! Epochs: {}", epoch) : std::println("NNet::train: net training failed!");
                 }  
         private:
             // Feed net with input data

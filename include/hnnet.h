@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <string>
 
 namespace hNNet {
     using real_t = std::float64_t;

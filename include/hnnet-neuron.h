@@ -38,21 +38,19 @@ namespace hNNet {
             }
             // Receive signal from synaptic connection
             void receive_signal(const SynapticConn* conn) {
-                static real_t weighted_sum{0.0};
-                static std::vector<SynapticConn*> in_connections_left{get_in_connections()};
-                const auto found = std::any_of(std::begin(in_connections_left), std::end(in_connections_left), [&] (const auto &in_conn) { return in_conn == conn; });
+                const auto in_connections = get_in_connections();
+                const auto found = std::any_of(std::begin(in_connections), std::end(in_connections), [&] (const auto &in_conn) { return in_conn == conn; });                
                 if (not found) {
                     throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
                 }
-                weighted_sum += conn->get_weighted_signal();
-                std::erase(in_connections_left, conn);
-                //std::println("Neuron::receive_signal: signal: {}, weight: {}, left: {}", conn->get_weighted_signal(), conn->weight, in_connections_left.size());
-                if (in_connections_left.empty()) {
-                    _signal = activation(weighted_sum);
-                    //std::println("Neuron::receive_signal: all signals received! Signal: {}, weighted sum: {}", _signal, weighted_sum);
+                _weighted_sum += conn->get_weighted_signal();
+                _number_rx_signals++;
+                if (_number_rx_signals == in_connections.size()) {
+                    _signal = activation(_weighted_sum);
+                    //std::println("Neuron::receive_signal: all signals received! Signal: {}, weighted sum: {}", _signal, _weighted_sum);
                     broadcast_signal();
-                    weighted_sum = 0.0;
-                    in_connections_left = get_in_connections();
+                    _weighted_sum = 0.0;
+                    _number_rx_signals = 0;
                 }
             }
             // Broadcast signal to all receiver neurons
@@ -105,7 +103,9 @@ namespace hNNet {
             // Activation function
             virtual real_t activation(const real_t weighted_sum) const = 0;
             // Data members
+            size_t _number_rx_signals{0};
             real_t _signal{0.0};
+            real_t _weighted_sum{0.0};
             std::vector<SynapticConn*> _connections{};
     };
 

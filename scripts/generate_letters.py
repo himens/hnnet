@@ -93,11 +93,10 @@ LETTERS = {
     ],
 }
 
-OUTPUT_DIR = Path("output")
+OUTPUT_DIR = Path("../data")
 NUM_FONTS = 3
 NOISY_PER_LETTER = 5
 FLIP_PROB = 0.05
-
 
 def validate_pattern(rows):
     if len(rows) != HEIGHT:
@@ -109,31 +108,14 @@ def validate_pattern(rows):
             if ch not in ('#', '.'):
                 raise ValueError(f"Invalid character '{ch}' in pattern; allowed: '#' '.'")
 
-
 def to_numeric(rows):
     return [[1 if ch == '#' else 0 for ch in r] for r in rows]
-
-def save_letters_txt(all_letters, outdir):
-    p = outdir / "letters.txt"
-    with p.open('w', encoding='utf-8') as f:
-        for letter, rows in all_letters.items():
-            f.write(f"Letter {letter} ({WIDTH}x{HEIGHT}):\n")
-            for r in rows:
-                f.write(r + "\n")
-            f.write("\n")
-
-def save_letters_bin(all_letters, outdir):
-    # Deprecated: replaced by save_letters_dat
-    pass
-
 
 def rows_to_matrix(rows):
     return [list(r) for r in rows]
 
-
 def matrix_to_rows(mat):
     return [''.join(r) for r in mat]
-
 
 def make_bold(rows):
     mat = rows_to_matrix(rows)
@@ -149,7 +131,6 @@ def make_bold(rows):
                     if 0 <= ny < h and 0 <= nx < w:
                         out[ny][nx] = '#'
     return matrix_to_rows(out)
-
 
 def make_thin(rows):
     mat = rows_to_matrix(rows)
@@ -169,7 +150,6 @@ def make_thin(rows):
                     out[y][x] = '.'
     return matrix_to_rows(out)
 
-
 def perturb(rows, flip_prob=FLIP_PROB):
     import random
     mat = rows_to_matrix(rows)
@@ -181,7 +161,6 @@ def perturb(rows, flip_prob=FLIP_PROB):
             if random.random() < flip_prob:
                 out[y][x] = '#' if mat[y][x] == '.' else '.'
     return matrix_to_rows(out)
-
 
 def save_letters_dat(all_letters, outdir):
     """Write `letters.dat` where each line corresponds to a letter (A..G)
@@ -228,7 +207,7 @@ def main():
                 ft.write("\n")
                 # flattened dat: letter, space-separated bits
                 bits = ' '.join('1' if ch == '#' else '0' for r in rows for ch in r)
-                fd.write(f"{letter}, {bits}\n")
+                fd.write(f"{letter} {bits}\n")
 
     # Generate noisy samples per font: produce .txt (human) and .dat (letter, bits)
     for idx, font in enumerate(fonts, start=1):
@@ -244,9 +223,6 @@ def main():
                 ft.write("\n")
                 bits = ' '.join('1' if ch == '#' else '0' for r in noisy for ch in r)
                 fd.write(f"{letter}, {bits}\n")
-
-    # Also save human-readable full letters file
-    save_letters_txt(base, OUTPUT_DIR)
 
     print(f"Saved grids and samples in: {OUTPUT_DIR.resolve()}")
 
