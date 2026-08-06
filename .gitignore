@@ -2,5 +2,6 @@
 **/*.o
 build/
 
+!.gitkeep
 !.gitignore
 !.github/
