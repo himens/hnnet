@@ -20,9 +20,4 @@ namespace hNNet {
 
     template <size_t Size>
         using Data = std::array<real_t, Size>;
-    template<size_t SizeInput, size_t SizeTarget>
-        struct TrainData {
-            Data<SizeInput> inputs;
-            Data<SizeTarget> targets;
-        };
 } 

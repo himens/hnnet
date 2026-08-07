@@ -5,8 +5,16 @@ namespace hNNet {
     ////////////////
     // NNet class //
     ////////////////
+    template <size_t SizeInput, size_t SizeOutput>
     class NNet {
-        public:            
+        public:
+            // Data types 
+            using InputData = Data<SizeInput>;
+            using OutputData = Data<SizeOutput>;
+            struct TrainingData {
+                InputData inputs;
+                OutputData targets;
+            }; 
             // Create a single new neuron
             template <NeuronType T>
                 Neuron* new_neuron() {
@@ -17,11 +25,11 @@ namespace hNNet {
                 }            
             // Create new neurons
             template <NeuronType T>
-                std::vector<Neuron*> new_neurons(const size_t num_neurons) {
-                    if (num_neurons == 0) {
-                        throw std::invalid_argument("NNet::new_neurons: num_neurons must be > 0!");
+                std::vector<Neuron*> new_neurons(const size_t number) {
+                    if (number == 0) {
+                        throw std::invalid_argument("NNet::new_neurons: number of neurons must be > 0!");
                     }
-                    std::vector<Neuron*> neurons(num_neurons);
+                    std::vector<Neuron*> neurons(number);
                     for (auto &neuron : neurons) {
                         neuron = new_neuron<T>();
                     }
@@ -31,10 +39,10 @@ namespace hNNet {
             template <NeuronRange RangeTx, NeuronRange RangeRx>
                 void connect(const RangeTx &tx_neurons, const RangeRx &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
-                    const auto is_in_net = [&] (Neuron *neuron) {
+                    const auto in_net = [&] (Neuron *neuron) {
                         return std::ranges::any_of(neurons, [&] (Neuron* net_neuron) { return net_neuron == neuron; });
                     };
-                    if (not std::ranges::all_of(tx_neurons, is_in_net) or not std::ranges::all_of(rx_neurons, is_in_net)) {
+                    if (not std::ranges::all_of(tx_neurons, in_net) or not std::ranges::all_of(rx_neurons, in_net)) {
                         throw std::invalid_argument("NNet::connect: neurons not in net!");
                     }
                     for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
@@ -47,47 +55,64 @@ namespace hNNet {
             template <NeuronRange Range>
                 void connect(const Range &tx_neurons, Neuron* rx) {
                     connect(tx_neurons, std::views::single(rx));
-                } 
+                }
             template <NeuronRange Range>
                 void connect(Neuron* tx, const Range &rx_neurons) {
                     connect(std::views::single(tx), rx_neurons);
-                } 
+                }
             void connect(Neuron* tx, Neuron* rx) {
                 connect(std::views::single(tx), std::views::single(rx));
-            } 
-            // Train net
-            template <size_t SizeInput, size_t SizeTarget>
-                void train(const std::vector<TrainData<SizeInput, SizeTarget>> &samples) {
-                    auto in_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
-                    auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
-                    constexpr size_t max_epochs{1000};
-                    size_t epoch{0};
-                    bool converged{false};
-                    while (not converged and (epoch <= max_epochs)) {
-                        std::println("======================");
-                        std::println("Epoch: {}", ++epoch    );
-                        std::println("======================");
-                        size_t num_learnings{0};
-                        for (const auto &sample : samples) {
-                            std::println("Training with input: {}, target: {}", sample.inputs, sample.targets);
-                            feed(in_neurons, sample.inputs);
-                            num_learnings += learn(out_neurons, sample.targets);
-                        }
-                        converged = (num_learnings == samples.size());
+            }
+            // Train net using a set of training samples
+            void train(const std::vector<TrainingData> &training_samples) {
+                auto in_neurons  = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
+                auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
+                constexpr size_t max_epochs{1000};
+                size_t epoch{0};
+                bool converged{false};
+                while (not converged and (epoch <= max_epochs)) {
+                    std::println("======================");
+                    std::println("Epoch: {}", ++epoch    );
+                    std::println("======================");
+                    size_t num_learnings{0};
+                    for (const auto &sample : training_samples) {
+                        //std::println("Training with inputs: {}, targets: {}", sample.inputs, sample.targets);
+                        feed(in_neurons, sample.inputs);
+                        num_learnings += learn(out_neurons, sample.targets);
                     }
-                    if (converged) {
-                        std::println("======================");
-                        std::println("Training summary      ");
-                        std::println("======================");
-                        std::println("NNet::train: epochs: {}", epoch);
-                        for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                            std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
-                        }
-                    } 
-                    else {
-                        std::println("NNet::train: net training failed!");
+                    converged = (num_learnings == training_samples.size());
+                }
+                if (converged) {
+                    _trained = true;
+                    std::println("======================");
+                    std::println("Training summary      ");
+                    std::println("======================");
+                    std::println("NNet::train: epochs: {}", epoch);
+                    for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                        std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
                     }
-                }  
+                }
+                else {
+                    _trained = false;
+                    std::println("NNet::train: net training failed!");
+                }
+            }
+            // Infer from data
+            OutputData infer(const InputData &data) {
+                if (not _trained) {
+                    std::println("NNet::infer: try to infer from an untrained net!");
+                    return {};
+                }
+                auto in_neurons  = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
+                auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
+                //std::println("Infer from data: {}", data);
+                feed(in_neurons, data);
+                OutputData outputs;
+                for (const auto &[idx, neuron] : out_neurons | std::views::enumerate) {
+                    outputs[idx] = neuron->get_signal(); 
+                }
+                return outputs;
+            }  
         private:
             // Feed net with input data
             template <NeuronView View, size_t Size>
@@ -116,6 +141,7 @@ namespace hNNet {
                     return learnt;
                 }
             // Data members
+            bool _trained{false};
             std::vector<std::unique_ptr<Neuron>> _neurons{};
             std::vector<std::unique_ptr<Neuron::SynapticConn>> _connections{};
     };
