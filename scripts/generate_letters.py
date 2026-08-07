@@ -108,9 +108,6 @@ def validate_pattern(rows):
             if ch not in ('#', '.'):
                 raise ValueError(f"Invalid character '{ch}' in pattern; allowed: '#' '.'")
 
-def to_numeric(rows):
-    return [[1 if ch == '#' else 0 for ch in r] for r in rows]
-
 def rows_to_matrix(rows):
     return [list(r) for r in rows]
 
@@ -162,17 +159,6 @@ def perturb(rows, flip_prob=FLIP_PROB):
                 out[y][x] = '#' if mat[y][x] == '.' else '.'
     return matrix_to_rows(out)
 
-def save_letters_dat(all_letters, outdir):
-    """Write `letters.dat` where each line corresponds to a letter (A..G)
-    and contains the flattened row-major sequence of '1' and '0' characters
-    (no separators)."""
-    p = outdir / "letters.dat"
-    with p.open('w', encoding='utf-8') as f:
-        for letter in sorted(all_letters.keys()):
-            rows = all_letters[letter]
-            flattened = ' '.join('1' if ch == '#' else '0' for r in rows for ch in r)
-            f.write(flattened + "\n")
-
 def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
     # Prepare 3 font variants: base, bold, thin
@@ -196,18 +182,14 @@ def main():
     # Save train files (one human-readable .txt and one .dat per font/sample)
     for idx, font in enumerate(fonts, start=1):
         fname_txt = OUTPUT_DIR / f"letters_train_{idx}.txt"
-        fname_dat = OUTPUT_DIR / f"letters_train_{idx}.dat"
-        with fname_txt.open('w', encoding='utf-8') as ft, fname_dat.open('w', encoding='utf-8') as fd:
+        with fname_txt.open('w', encoding='utf-8') as ft:
             for letter in sorted(font.keys()):
                 rows = font[letter]
                 # human readable
-                ft.write(f"Letter {letter} ({WIDTH}x{HEIGHT}):\n")
+                ft.write(f"Letter {letter}\n")
                 for r in rows:
                     ft.write(r + "\n")
                 ft.write("\n")
-                # flattened dat: letter, space-separated bits
-                bits = ' '.join('1' if ch == '#' else '0' for r in rows for ch in r)
-                fd.write(f"{letter} {bits}\n")
 
     # Generate noisy samples per font: produce .txt (human) and .dat (letter, bits)
     for idx, font in enumerate(fonts, start=1):
@@ -224,8 +206,7 @@ def main():
                 bits = ' '.join('1' if ch == '#' else '0' for r in noisy for ch in r)
                 fd.write(f"{letter}, {bits}\n")
 
-    print(f"Saved grids and samples in: {OUTPUT_DIR.resolve()}")
-
+    print(f"Saved letter grids in: {OUTPUT_DIR.resolve()}")
 
 if __name__ == '__main__':
     main()

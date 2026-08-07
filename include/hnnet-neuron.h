@@ -92,7 +92,7 @@ namespace hNNet {
                 if (not learnt) {
                     for (auto &conn : get_in_connections()) {
                         update(conn, target);
-                        std::println("Neuron::learn: updated weight of connection {}: {}", static_cast<void*>(conn), conn->weight);
+                        //std::println("Neuron::learn: updated weight of connection {}: {}", static_cast<void*>(conn), conn->weight);
                     }
                 }
                 return learnt;
