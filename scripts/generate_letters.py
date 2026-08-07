@@ -3,9 +3,7 @@
 Genera 7 griglie (7x9) contenenti le lettere A..G.
 Ogni griglia è larga 7 colonne e alta 9 righe.
 Output:
- - stampa a video ogni griglia
  - salva `output/grid_<LETTER>.txt` con #/. (ascii)
- - salva `output/grid_<LETTER>.csv` con 1/0 (valori separati da virgola)
 """
 
 import os
@@ -162,11 +160,11 @@ def perturb(rows, flip_prob=FLIP_PROB):
 def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
     # Prepare 3 font variants: base, bold, thin
+    # font 1: base
     fonts = []
     base = {k: [row.replace(' ', '.').replace('*', '#') for row in v] for k, v in LETTERS.items()}
     for letter, pattern in base.items():
         validate_pattern(pattern)
-
     fonts.append(base)
     # font 2: bold
     bold = {k: make_bold(v) for k, v in base.items()}
@@ -178,33 +176,26 @@ def main():
     for v in thin.values():
         validate_pattern(v)
     fonts.append(thin)
-
-    # Save train files (one human-readable .txt and one .dat per font/sample)
+    # Save train files
     for idx, font in enumerate(fonts, start=1):
         fname_txt = OUTPUT_DIR / f"letters_train_{idx}.txt"
         with fname_txt.open('w', encoding='utf-8') as ft:
             for letter in sorted(font.keys()):
                 rows = font[letter]
-                # human readable
                 ft.write(f"Letter {letter}\n")
                 for r in rows:
                     ft.write(r + "\n")
                 ft.write("\n")
-
-    # Generate noisy samples per font: produce .txt (human) and .dat (letter, bits)
+    # Generate noisy samples per font
     for idx, font in enumerate(fonts, start=1):
         fname_txt = OUTPUT_DIR / f"letters_noisy_{idx}.txt"
-        fname_dat = OUTPUT_DIR / f"letters_noisy_{idx}.dat"
-        with fname_txt.open('w', encoding='utf-8') as ft, fname_dat.open('w', encoding='utf-8') as fd:
+        with fname_txt.open('w', encoding='utf-8') as ft:
             for letter in sorted(font.keys()):
                 noisy = perturb(font[letter])
-                # human readable: single variant per letter
-                ft.write(f"Letter {letter} ({WIDTH}x{HEIGHT}):\n")
+                ft.write(f"Letter {letter}\n")
                 for r in noisy:
                     ft.write(r + "\n")
                 ft.write("\n")
-                bits = ' '.join('1' if ch == '#' else '0' for r in noisy for ch in r)
-                fd.write(f"{letter}, {bits}\n")
 
     print(f"Saved letter grids in: {OUTPUT_DIR.resolve()}")
 
