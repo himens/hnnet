@@ -29,15 +29,15 @@ namespace hNNet {
                 }
             // Connect neurons
             template <NeuronRange RangeTx, NeuronRange RangeRx>
-                void connect(const RangeTx &tx_range, const RangeRx &rx_range) {
+                void connect(const RangeTx &tx_neurons, const RangeRx &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
-                    auto is_in_net = [&] (Neuron *neuron) {
+                    const auto is_in_net = [&] (Neuron *neuron) {
                         return std::ranges::any_of(neurons, [&] (Neuron* net_neuron) { return net_neuron == neuron; });
                     };
-                    if (not std::ranges::all_of(tx_range, is_in_net) or not std::ranges::all_of(rx_range, is_in_net)) {
+                    if (not std::ranges::all_of(tx_neurons, is_in_net) or not std::ranges::all_of(rx_neurons, is_in_net)) {
                         throw std::invalid_argument("NNet::connect: neurons not in net!");
                     }
-                    for (const auto [tx, rx] : std::views::cartesian_product(tx_range, rx_range)) {
+                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
                         auto conn = std::make_unique<Neuron::SynapticConn>(tx, rx);
                         tx->add_connection(conn.get());
                         rx->add_connection(conn.get());
@@ -45,12 +45,12 @@ namespace hNNet {
                     }
                 }
             template <NeuronRange Range>
-                void connect(const Range &tx_range, Neuron* rx) {
-                    connect(tx_range, std::views::single(rx));
+                void connect(const Range &tx_neurons, Neuron* rx) {
+                    connect(tx_neurons, std::views::single(rx));
                 } 
             template <NeuronRange Range>
-                void connect(Neuron* tx, const Range &rx_range) {
-                    connect(std::views::single(tx), rx_range);
+                void connect(Neuron* tx, const Range &rx_neurons) {
+                    connect(std::views::single(tx), rx_neurons);
                 } 
             void connect(Neuron* tx, Neuron* rx) {
                 connect(std::views::single(tx), std::views::single(rx));
@@ -75,28 +75,39 @@ namespace hNNet {
                         }
                         converged = (num_learnings == samples.size());
                     }
-                    converged ? std::println("NNet::train: net converged successfully! Epochs: {}", epoch) : std::println("NNet::train: net training failed!");
+                    if (converged) {
+                        std::println("======================");
+                        std::println("Training summary      ");
+                        std::println("======================");
+                        std::println("NNet::train: epochs: {}", epoch);
+                        for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                            std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
+                        }
+                    } 
+                    else {
+                        std::println("NNet::train: net training failed!");
+                    }
                 }  
         private:
             // Feed net with input data
-            template <size_t Size>
-                void feed(std::ranges::view auto in_neurons, const Data<Size> &inputs) {
+            template <NeuronView View, size_t Size>
+                void feed(View in_neurons, const Data<Size> &inputs) {
                     if (std::ranges::distance(in_neurons) != Size) {
                         throw std::invalid_argument("NNet::feed: size error!");
                     }
-                    for (auto [neuron, input] : std::views::zip(in_neurons, inputs)) {
+                    for (const auto &[neuron, input] : std::views::zip(in_neurons, inputs)) {
                         neuron->set_signal(input);
                         neuron->broadcast_signal();
                     }
                 }
             // Learn from target data
-            template <size_t Size>
-                bool learn(std::ranges::view auto out_neurons, const Data<Size> &targets) {
+            template <NeuronView View, size_t Size>
+                bool learn(View out_neurons, const Data<Size> &targets) {
                     if (std::ranges::distance(out_neurons) != Size) {
                         throw std::invalid_argument("NNet::learn: size error!");
                     }
                     bool learnt{false};            
-                    for (auto [neuron, target] : std::views::zip(out_neurons, targets)) {
+                    for (const auto &[neuron, target] : std::views::zip(out_neurons, targets)) {
                         learnt = neuron->learn(target);
                         if (not learnt) {
                             break;

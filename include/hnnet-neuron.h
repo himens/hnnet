@@ -37,13 +37,13 @@ namespace hNNet {
                 _signal = signal;
             }
             // Receive signal from synaptic connection
-            void receive_signal(const SynapticConn* conn) {
+            void receive_signal(const SynapticConn* rx_conn) {
                 const auto in_connections = get_in_connections();
-                const auto found = std::any_of(std::begin(in_connections), std::end(in_connections), [&] (const auto &in_conn) { return in_conn == conn; });                
+                const auto found = std::any_of(std::begin(in_connections), std::end(in_connections), [&] (const auto &conn) { return conn == rx_conn; });                
                 if (not found) {
                     throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
                 }
-                _weighted_sum += conn->get_weighted_signal();
+                _weighted_sum += rx_conn->get_weighted_signal();
                 _number_rx_signals++;
                 if (_number_rx_signals == in_connections.size()) {
                     _signal = activation(_weighted_sum);
@@ -60,31 +60,26 @@ namespace hNNet {
                 }
             }
             // Add connection to neuron
-            void add_connection(SynapticConn* conn) {
-                if (conn == nullptr) {
+            void add_connection(SynapticConn* new_conn) {
+                if (new_conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
-                const auto found = std::any_of(std::begin(_connections), std::end(_connections),
-                        [&] (const auto &existing_conn) { return existing_conn == conn; });
+                const auto found = std::any_of(std::begin(_connections), std::end(_connections), [&] (const auto &conn) { return conn == new_conn; });
                 if (found) {
                     throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
                 }
-                if ((conn->tx != this) and (conn->rx != this)) {
+                if ((new_conn->tx != this) and (new_conn->rx != this)) {
                     throw std::invalid_argument("Neuron::add_connection: invalid connection!");
                 }
-                _connections.push_back(conn);
+                _connections.push_back(new_conn);
             }
             // Get input connections
             std::vector<SynapticConn*> get_in_connections() const {
-                return _connections 
-                        | std::views::filter([&] (const auto &conn) { return conn->rx == this; } ) 
-                        | std::ranges::to<std::vector>();
+                return _connections | std::views::filter([&] (const auto &conn) { return conn->rx == this; } ) | std::ranges::to<std::vector>();
             }
             // Get output connections
             std::vector<SynapticConn*> get_out_connections() const {
-                return _connections 
-                        | std::views::filter([&] (const auto &conn) { return conn->tx == this; } ) 
-                        | std::ranges::to<std::vector>();
+                return _connections | std::views::filter([&] (const auto &conn) { return conn->tx == this; } ) | std::ranges::to<std::vector>();
             }
             // Learn from target data
             virtual bool learn(const real_t target) {
@@ -108,11 +103,12 @@ namespace hNNet {
             real_t _weighted_sum{0.0};
             std::vector<SynapticConn*> _connections{};
     };
-
     template <typename T>
         concept NeuronType = std::derived_from<T, Neuron>;
     template <typename T>
-        concept NeuronPtr = std::is_pointer_v<std::remove_cvref_t<T>> and NeuronType<std::remove_pointer_t<std::remove_cvref_t<T>>>;
+        concept NeuronPtr = std::indirectly_readable<std::decay_t<T>> and NeuronType<std::iter_value_t<std::decay_t<T>>>;
     template <typename T>
         concept NeuronRange = std::ranges::range<T> and NeuronPtr<std::ranges::range_value_t<T>>;
+    template <typename T>
+        concept NeuronView = std::ranges::view<T> and NeuronRange<T>;
 }
