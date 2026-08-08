@@ -24,7 +24,7 @@ hNNet::Data<nb_pixels> encode(const std::array<std::array<char, nb_columns>, nb_
     return bits;
 }
 // Encode letters
-hNNet::Data<nb_letters> encode(const std::vector<char> &letters) {
+hNNet::Data<nb_letters> encode(const std::initializer_list<char> &letters) {
     hNNet::Data<nb_letters> bits;
     std::ranges::fill(bits, -1);
     for (const auto &letter : letters) {
@@ -100,7 +100,7 @@ int main() {
     grids.append_range(read_letters("data/letters_train_3.txt"));
     std::vector<Classifier::TrainingData> training_samples(grids.size());
     for (const auto &[letter, pixels] : grids) {
-        training_samples.push_back({.inputs = encode(pixels), .targets = encode(std::vector<char>{letter})});
+        training_samples.push_back({.inputs = encode(pixels), .targets = encode({letter})});
     }
     classifier.train(training_samples);
     // use net to classify other similar data (inference)
