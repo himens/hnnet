@@ -1,67 +1,67 @@
 # hNNet
 
-hNNet è una piccola libreria C++ per costruire reti neurali semplici basate su perceptroni. Il progetto include anche due esempi pratici:
+hNNet is a small C++ library for building simple neural networks based on perceptrons. The project also includes two practical examples:
 
-- un semplice gate AND costruito con una rete percettrone
-- un classificatore di lettere che usa dati presenti nella cartella data/
+- a simple AND gate built with a perceptron network
+- a letter classifier that uses data from the data/ folder
 
-## Requisiti
+## Requirements
 
-- CMake 3.16 o superiore
+- CMake 3.16 or newer
 - g++ 16
 - C++23
 
-Il progetto è già configurato per usare il compilatore `/usr/bin/g++-16`.
+The project is already configured to use the compiler `/usr/bin/g++-16`.
 
-## Compilazione
+## Build
 
-Dalla radice del repository esegui:
+From the repository root, run:
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-Gli eseguibili vengono generati nella cartella `build/bin`.
+The executables are generated in the `build/bin` folder.
 
-## Esecuzione degli esempi
+## Running the examples
 
-### 1. Esempio gate AND
+### 1. AND gate example
 
 ```bash
 ./build/bin/hnnet-perceptron-gate
 ```
 
-Questo esempio crea una rete con 3 ingressi e 1 uscita, addestra il modello su alcuni esempi del gate AND e verifica il comportamento del network.
+This example creates a network with 3 inputs and 1 output, trains the model on a few AND gate examples, and verifies the behavior of the network.
 
-### 2. Classificatore di lettere
+### 2. Letter classifier
 
 ```bash
 ./build/bin/hnnet-perceptron-classifier
 ```
 
-Questo esempio:
+This example:
 
-1. legge i file di training dalla cartella `data/`
-2. crea una rete con un layer di input e uno di output
-3. addestra il modello su esempi di lettere
-4. prova a classificare lettere rumorose
+1. reads the training files from the `data/` folder
+2. creates a network with an input layer and an output layer
+3. trains the model on letter examples
+4. tries to classify noisy letters
 
-> Per far funzionare il classificatore correttamente, esegui il comando dalla radice del progetto, così che i percorsi `data/letters_*.txt` vengano risolti correttamente.
+> To make the classifier work correctly, run the command from the project root so that the paths `data/letters_*.txt` are resolved properly.
 
-## Struttura del progetto
+## Project structure
 
-- `include/`: header della libreria
-  - `hnnet.h`: tipi base come `Data`
-  - `hnnet-neuron.h`: definizione della classe `Neuron`
-  - `hnnet-nnet.h`: implementazione della rete `NNet`
-- `examples/perceptron/`: esempi di utilizzo
-- `data/`: dataset usati dagli esempi
-- `scripts/`: script utili per generare o elaborare dati
+- `include/`: library headers
+  - `hnnet.h`: basic types such as `Data`
+  - `hnnet-neuron.h`: definition of the `Neuron` class
+  - `hnnet-nnet.h`: implementation of the `NNet` network
+- `examples/perceptron/`: usage examples
+- `data/`: datasets used by the examples
+- `scripts/`: helper scripts for generating or processing data
 
-## Uso base della libreria
+## Basic library usage
 
-Ecco un esempio minimo di come creare e addestrare una rete:
+Here is a minimal example of how to create and train a network:
 
 ```cpp
 #include "hnnet-nnet.h"
@@ -84,14 +84,14 @@ std::vector<Net::TrainingData> samples = {
 net.train(samples);
 ```
 
-Le funzioni principali sono:
+The main functions are:
 
-- `new_neuron<T>()`: crea un singolo neurone
-- `new_neurons<T>(n)`: crea `n` neuroni
-- `connect(...)`: collega neuroni tra loro
-- `train(...)`: addestra la rete sui dati forniti
-- `infer(...)`: esegue l'inferenza su nuovi input
+- `new_neuron<T>()`: creates a single neuron
+- `new_neurons<T>(n)`: creates `n` neurons
+- `connect(...)`: connects neurons to each other
+- `train(...)`: trains the network on the provided data
+- `infer(...)`: performs inference on new inputs
 
-## Note
+## Notes
 
-Il codice è pensato come esempio didattico e mostra un'implementazione semplice di una rete neurale basata su perceptroni, non una libreria pronta per uso industriale.
+The code is intended as a didactic example and shows a simple implementation of a perceptron-based neural network, not a production-ready library.
