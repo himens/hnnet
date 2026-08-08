@@ -1,9 +1,12 @@
 # hNNet
 
-hNNet is a small C++ library for building simple neural networks based on perceptrons. The project also includes two practical examples:
+hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model such as a perceptron, but to provide:
 
-- a simple AND gate built with a perceptron network
-- a letter classifier that uses data from the data/ folder
+- a generic network container, `NNet`, whose template parameters define the size of the input and output data
+- a flexible base neuron abstraction, `Neuron`, whose behavior can be customized through virtual hooks
+- a simple training and inference loop that works once the network topology and neuron behavior are defined
+
+The perceptron code in the examples is therefore only one concrete implementation of a neuron, not the defining feature of the library.
 
 ## Requirements
 
@@ -32,7 +35,7 @@ The executables are generated in the `build/bin` folder.
 ./build/bin/hnnet-perceptron-gate
 ```
 
-This example creates a network with 3 inputs and 1 output, trains the model on a few AND gate examples, and verifies the behavior of the network.
+This example builds a small network with 3 inputs and 1 output, trains it on a few AND gate examples, and checks the resulting behavior.
 
 ### 2. Letter classifier
 
@@ -52,25 +55,51 @@ This example:
 ## Project structure
 
 - `include/`: library headers
-  - `hnnet.h`: basic types such as `Data`
-  - `hnnet-neuron.h`: definition of the `Neuron` class
-  - `hnnet-nnet.h`: implementation of the `NNet` network
-- `examples/perceptron/`: usage examples
+  - `hnnet.h`: base types such as `Data`
+  - `hnnet-neuron.h`: definition of the generic `Neuron` abstraction
+  - `hnnet-nnet.h`: implementation of the generic `NNet` network
+- `examples/perceptron/`: example implementations built on top of the generic framework
 - `data/`: datasets used by the examples
 - `scripts/`: helper scripts for generating or processing data
 
-## Basic library usage
+## How the library is intended to be used
 
-Here is a minimal example of how to create and train a network:
+The library is designed around two main pieces:
+
+1. `NNet<SizeInput, SizeOutput>`
+   - defines the network shape through template parameters
+   - manages neuron creation and connections
+   - provides `train(...)` and `infer(...)` operations
+
+2. `Neuron`
+   - provides the generic signal propagation and learning infrastructure
+   - exposes customizable virtual behavior through methods such as `update(...)` and `activation(...)`
+   - allows you to define your own neuron model by deriving from it
+
+In other words, the framework is generic, and the perceptron implementation is just one possible neuron model that can be plugged into it.
+
+## Basic usage example
+
+Here is a minimal example of how to create and train a network using a custom neuron type:
 
 ```cpp
 #include "hnnet-nnet.h"
 
+struct MyNeuron : public hNNet::Neuron {
+    void update(SynapticConn* conn, const hNNet::real_t target) override {
+        conn->weight += target * conn->tx->get_signal();
+    }
+
+    hNNet::real_t activation(const hNNet::real_t weighted_sum) const override {
+        return weighted_sum > 0.0 ? 1.0 : -1.0;
+    }
+};
+
 using Net = hNNet::NNet<3, 1>;
 Net net;
 
-const auto inputs = net.new_neurons<Perceptron::Neuron>(3);
-const auto output = net.new_neuron<Perceptron::Neuron>();
+const auto inputs = net.new_neurons<MyNeuron>(3);
+const auto output = net.new_neuron<MyNeuron>();
 
 net.connect(inputs, output);
 
@@ -84,7 +113,7 @@ std::vector<Net::TrainingData> samples = {
 net.train(samples);
 ```
 
-The main functions are:
+The main operations are:
 
 - `new_neuron<T>()`: creates a single neuron
 - `new_neurons<T>(n)`: creates `n` neurons
@@ -94,4 +123,4 @@ The main functions are:
 
 ## Notes
 
-The code is intended as a didactic example and shows a simple implementation of a perceptron-based neural network, not a production-ready library.
+The code is intended as a didactic example and shows a lightweight, extensible neural-network framework rather than a fully specialized perceptron implementation.
