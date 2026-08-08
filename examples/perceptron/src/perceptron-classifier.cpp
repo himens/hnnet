@@ -106,7 +106,7 @@ int main() {
     classifier.train(training_samples);
     // use net to classify other similar data (inference)
     for (const auto &[letter, pixels] : read_letters("data/letters_noisy_3.txt")) {
-        const auto outputs = classifier.infer(encode(pixels));
+        const auto output = classifier.infer(encode(pixels));
         std::println("Expected letter = {}, classifier response = {}", letter, decode(outputs));
     }
 
