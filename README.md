@@ -35,7 +35,7 @@ The executables are generated in the `build/bin` folder.
 ./build/bin/hnnet-perceptron-gate
 ```
 
-This example builds a small network with 3 inputs and 1 output, trains it on a few AND gate examples, and checks the resulting behavior.
+This example builds a small network with 3 inputs and 1 output, trains it and checks the resulting behavior.
 
 ### 2. Letter classifier
 
@@ -123,4 +123,4 @@ The main operations are:
 
 ## Notes
 
-The code is intended as a didactic example and shows a lightweight, extensible neural-network framework rather than a fully specialized perceptron implementation.
+The code is intended as a didactic example and shows a lightweight, extensible neural-network framework.
