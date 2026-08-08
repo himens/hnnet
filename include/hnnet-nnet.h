@@ -75,7 +75,9 @@ namespace hNNet {
                 std::println("==================================");
                 while (not converged and (epoch <= max_epochs)) {
                     epoch++;
-                    if ((epoch < 1000    and epoch % 100 == 0)  or 
+                    if ((epoch < 10      and epoch % 1 == 0)    or
+                        (epoch < 100     and epoch % 10 == 0)   or
+                        (epoch < 1000    and epoch % 100 == 0)  or 
                         (epoch < 10'000  and epoch % 1000 == 0) or
                         (epoch < 100'000 and epoch % 10'000 == 0)) {
                         std::println("Epoch: {}", epoch);
