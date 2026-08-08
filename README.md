@@ -1,12 +1,12 @@
 # hNNet
 
-hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model such as a perceptron, but to provide:
+hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model but to provide:
 
 - a generic network container, `NNet`, whose template parameters define the size of the input and output data
 - a flexible base neuron abstraction, `Neuron`, whose behavior can be customized through virtual hooks
 - a simple training and inference loop that works once the network topology and neuron behavior are defined
 
-The perceptron code in the examples is therefore only one concrete implementation of a neuron, not the defining feature of the library.
+The perceptron code in the examples is only one concrete implementation of a neuron.
 
 ## Requirements
 
