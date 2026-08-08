@@ -13,11 +13,18 @@
 #include <string>
 
 namespace hNNet {
-    using real_t = std::float64_t;
-    using int_t = std::int64_t;
-    using real_lite_t = std::float32_t;
-    using int_lite_t = std::int32_t;
+    using real_t   = std::float64_t;
+    using int_t    = std::int64_t;
+    using real32_t = std::float32_t;
+    using int32_t  = std::int32_t;
+    using size_t   = std::size_t;
 
-    template <size_t Size>
-        using Data = std::array<real_t, Size>;
-} 
+    template <typename T>
+        concept ValueType = std::same_as<T, real_t>   or 
+                            std::same_as<T, int_t>    or 
+                            std::same_as<T, real32_t> or 
+                            std::same_as<T, int32_t>;
+    template <size_t Size, ValueType Type = real_t>
+        requires (Size > 0)
+        using Data = std::array<Type, Size>;
+}
