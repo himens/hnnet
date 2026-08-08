@@ -43,7 +43,6 @@ std::vector<char> decode(const hNNet::Data<nb_letters> &bits) {
         if (bits[bit] == +1) {
             const auto letter = static_cast<char>(bit + 'A');
             letters.push_back(letter);
-            break;
         }
     }
     return letters;
@@ -105,8 +104,8 @@ int main() {
     }
     classifier.train(training_samples);
     // use net to classify other similar data (inference)
-    for (const auto &[letter, pixels] : read_letters("data/letters_noisy_3.txt")) {
-        const auto output = classifier.infer(encode(pixels));
+    for (const auto &[letter, pixels] : read_letters("data/letters_noisy_1.txt")) {
+        const auto outputs = classifier.infer(encode(pixels));
         std::println("Expected letter = {}, classifier response = {}", letter, decode(outputs));
     }
 
