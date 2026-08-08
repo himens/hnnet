@@ -70,13 +70,19 @@ namespace hNNet {
                 constexpr size_t max_epochs{1000};
                 size_t epoch{0};
                 bool converged{false};
+                std::println("==================================");
+                std::println("Training net with {} samples...   ", training_samples.size());
+                std::println("==================================");
                 while (not converged and (epoch <= max_epochs)) {
-                    std::println("======================");
-                    std::println("Epoch: {}", ++epoch    );
-                    std::println("======================");
+                    epoch++;
+                    if ((epoch < 1000    and epoch % 100 == 0)  or 
+                        (epoch < 10'000  and epoch % 1000 == 0) or
+                        (epoch < 100'000 and epoch % 10'000 == 0)) {
+                        std::println("Epoch: {}", epoch);
+                    }
                     size_t num_learnings{0};
                     for (const auto &sample : training_samples) {
-                        //std::println("Training with inputs: {}, targets: {}", sample.inputs, sample.targets);
+                        //std::println("Epoch: {}, inputs: {}, targets: {}", epoch, sample.inputs, sample.targets);
                         feed(in_neurons, sample.inputs);
                         num_learnings += learn(out_neurons, sample.targets);
                     }
