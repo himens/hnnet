@@ -7,61 +7,64 @@ constexpr size_t nb_columns{7};
 constexpr size_t nb_pixels{nb_rows * nb_columns};
 constexpr size_t nb_letters{26};
 
-struct LetterGrid {
-    char letter;
-    std::array<std::array<char, nb_columns>, nb_rows> pixels;
+using PixelGrid = std::array<std::array<char, nb_columns>, nb_rows>;
+struct LetterData {
+    char character{'\0'};
+    PixelGrid pixels{};
 };
-// Encode pixels
-hNNet::Data<nb_pixels> encode(const std::array<std::array<char, nb_columns>, nb_rows> &pixels) {
-    hNNet::Data<nb_pixels> bits{};
-    std::ranges::fill(bits, -1);
-    for (const auto &[row, row_pixels] : pixels | std::views::enumerate) {
-        for (const auto &[col, pixel] : row_pixels | std::views::enumerate) {
-            const auto bit = row * nb_columns + col;
-            bits[bit] = pixel == '#' ? +1 : -1;
+using InputData  = hNNet::Data<nb_pixels, hNNet::int_t>;
+using OutputData = hNNet::Data<nb_letters, hNNet::int_t>;
+
+// Encode pixel grid
+InputData encode(const PixelGrid &grid) {
+    InputData data{};
+    std::ranges::fill(data, -1);
+    for (const auto &[row, pixels] : grid | std::views::enumerate) {
+        for (const auto &[col, pixel] : pixels | std::views::enumerate) {
+            const auto idx = row * nb_columns + col;
+            data[idx] = pixel == '#' ? +1 : -1;
         }
     }
-    return bits;
+    return data;
 }
 // Encode letters
-hNNet::Data<nb_letters> encode(const std::initializer_list<char> &letters) {
-    hNNet::Data<nb_letters> bits;
-    std::ranges::fill(bits, -1);
+OutputData encode(const std::initializer_list<char> &letters) {
+    OutputData data;
+    std::ranges::fill(data, -1);
     for (const auto &letter : letters) {
         if (letter < 'A' or letter > 'Z') {
             throw std::invalid_argument("encode: invalid letter: " + std::string{letter});
         }
-        const auto bit = static_cast<int>(letter - 'A');
-        bits[bit] = +1;
+        const auto idx = static_cast<int>(letter - 'A');
+        data[idx] = +1;
     }
-    return bits;
+    return data;
 }
 // Decode letters
-std::vector<char> decode(const hNNet::Data<nb_letters> &bits) {
+std::vector<char> decode(const OutputData &data) {
     std::vector<char> letters{};
-    for (size_t bit{0}; bit < bits.size(); bit++) {
-        if (bits[bit] == +1) {
-            const auto letter = static_cast<char>(bit + 'A');
+    for (size_t idx{0}; idx < data.size(); idx++) {
+        if (data[idx] == +1) {
+            const auto letter = static_cast<char>(idx + 'A');
             letters.push_back(letter);
         }
     }
     return letters;
 }
 // Read letter dataset from file (bipolar inputs, bipolar outputs)
-std::vector<LetterGrid> read_letters(const std::string &filename) {
+std::vector<LetterData> read_letters(const std::string &filename) {
     std::ifstream file{filename};
     if (not file.is_open()) {
         throw std::runtime_error("read_letters: unable to open letter dataset: " + filename + "!");
     }
     // read file and fill train sample
-    std::vector<LetterGrid> grids;
+    std::vector<LetterData> letters;
     std::string line;
     while (std::getline(file, line)) {
-        LetterGrid grid{};
+        LetterData letter{};
         if (line.contains("Letter")) {
-            // read letter
-            const auto letter = line | std::views::split(' ') | std::views::drop(1) | std::views::join | std::ranges::to<std::string>();
-            grid.letter = letter.front();
+            // read letter character
+            letter.character = (line | std::views::split(' ') | std::views::drop(1) | std::views::join | std::ranges::to<std::string>()).front();
             // read pixels
             for (size_t row{0}; row < nb_rows; row++) {
                 if (not std::getline(file, line)) {
@@ -69,44 +72,45 @@ std::vector<LetterGrid> read_letters(const std::string &filename) {
                 }
                 const auto valid = (line.size() == nb_columns) and std::ranges::all_of(line, [] (const auto &ch) { return ch == '#' or ch == '.'; });
                 if (not valid) {
-                    throw std::runtime_error("read_letters: invalid grid row: " + line);
+                    throw std::runtime_error("read_letters: invalid Pixels row: " + line);
                 }
                 for (const auto &[col, ch] : line | std::views::enumerate) {
-                    grid.pixels[row][col] = ch;
+                    letter.pixels[row][col] = ch;
                 }
             }
-            grids.push_back(grid);
+            letters.push_back(letter);
             //std::println("read_letter: letter: {}, inputs: {}, outputs: {}", letter, data.inputs, data.outputs);
         }
     }
-    if (grids.empty()) {
+    if (letters.empty()) {
         std::println("read_line: no letter found!");
     }
-    return grids;
+    return letters;
 }
 
 // Classify letters using the trained perceptron neural network
 int main() {
+    // define net type
+    using Classifier = hNNet::NNet<InputData, OutputData>;
     // create net
-    using Classifier = hNNet::NNet<nb_pixels, nb_letters>; 
     Classifier classifier;
     const auto layer_in  = classifier.new_neurons<Perceptron::Neuron>(nb_pixels);
     const auto layer_out = classifier.new_neurons<Perceptron::Neuron>(nb_letters);
     classifier.connect(layer_in, layer_out);
     // train net
-    std::vector<LetterGrid> grids{};
-    grids.append_range(read_letters("data/letters_train_1.txt"));
-    grids.append_range(read_letters("data/letters_train_2.txt"));
-    grids.append_range(read_letters("data/letters_train_3.txt"));
-    std::vector<Classifier::TrainingData> training_samples(grids.size());
-    for (const auto &[letter, pixels] : grids) {
-        training_samples.push_back({.inputs = encode(pixels), .targets = encode({letter})});
+    std::vector<LetterData> letters{};
+    letters.append_range(read_letters("data/letters_train_1.txt"));
+    letters.append_range(read_letters("data/letters_train_2.txt"));
+    letters.append_range(read_letters("data/letters_train_3.txt"));
+    std::vector<Classifier::TrainingData> training_samples(letters.size());
+    for (const auto &[ch, pixels] : letters) {
+        training_samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }
     classifier.train(training_samples);
-    // use net to classify other similar data (inference)
-    for (const auto &[letter, pixels] : read_letters("data/letters_noisy_1.txt")) {
+    // use net (inference)
+    for (const auto &[ch, pixels] : read_letters("data/letters_noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));
-        std::println("Expected letter = {}, classifier response = {}", letter, decode(outputs));
+        std::println("Expected letter = {}, classifier response = {}", ch, decode(outputs));
     }
 
     return 0;

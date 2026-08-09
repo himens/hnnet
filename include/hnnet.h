@@ -27,4 +27,6 @@ namespace hNNet {
     template <size_t Size, ValueType Type = real_t>
         requires (Size > 0)
         using Data = std::array<Type, Size>;
+    template <typename T>
+        concept DataType = requires{ {std::tuple_size<T>::value}; } and std::same_as<T, Data<std::tuple_size_v<T>, std::ranges::range_value_t<T>>>;
 }

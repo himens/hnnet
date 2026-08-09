@@ -5,16 +5,16 @@ namespace hNNet {
     ////////////////
     // NNet class //
     ////////////////
-    template <size_t SizeInput, size_t SizeOutput>
+    template <DataType InputType, DataType OutputType>
     class NNet {
         public:
             // Data types 
-            using InputData = Data<SizeInput>;
-            using OutputData = Data<SizeOutput>;
+            using InputData = InputType;   
+            using OutputData = OutputType;
             struct TrainingData {
                 InputData inputs;
                 OutputData targets;
-            }; 
+            };
             // Create a single new neuron
             template <NeuronType T>
                 Neuron* new_neuron() {
@@ -36,8 +36,8 @@ namespace hNNet {
                     return neurons;
                 }
             // Connect neurons
-            template <NeuronRange RangeTx, NeuronRange RangeRx>
-                void connect(const RangeTx &tx_neurons, const RangeRx &rx_neurons) {
+            template <NeuronRange TxRange, NeuronRange RxRange>
+                void connect(const TxRange &tx_neurons, const RxRange &rx_neurons) {
                     auto neurons = _neurons | std::views::transform([] (const auto &neuron) { return neuron.get(); });
                     const auto in_net = [&] (Neuron *neuron) {
                         return std::ranges::any_of(neurons, [&] (Neuron* net_neuron) { return net_neuron == neuron; });
@@ -123,9 +123,9 @@ namespace hNNet {
             }  
         private:
             // Feed net with input data
-            template <NeuronView View, size_t Size>
-                void feed(View in_neurons, const Data<Size> &inputs) {
-                    if (std::ranges::distance(in_neurons) != Size) {
+            template <NeuronView View>
+                void feed(View in_neurons, const InputData &inputs) {
+                    if (std::ranges::distance(in_neurons) != inputs.size()) {
                         throw std::invalid_argument("NNet::feed: size error!");
                     }
                     for (const auto &[neuron, input] : std::views::zip(in_neurons, inputs)) {
@@ -134,9 +134,9 @@ namespace hNNet {
                     }
                 }
             // Learn from target data
-            template <NeuronView View, size_t Size>
-                bool learn(View out_neurons, const Data<Size> &targets) {
-                    if (std::ranges::distance(out_neurons) != Size) {
+            template <NeuronView View>
+                bool learn(View out_neurons, const OutputData &targets) {
+                    if (std::ranges::distance(out_neurons) != targets.size()) {
                         throw std::invalid_argument("NNet::learn: size error!");
                     }
                     bool learnt{false};            

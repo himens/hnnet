@@ -3,6 +3,7 @@
 hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model but to provide:
 
 - a generic network container, `NNet`, whose template parameters define the size of the input and output data
+- a generic network container, `NNet`, whose template parameters define the input/output data types
 - a flexible base neuron abstraction, `Neuron`, whose behavior can be customized through virtual hooks
 - a simple training and inference loop that works once the network topology and neuron behavior are defined
 
@@ -66,10 +67,12 @@ This example:
 
 The library is designed around two main pieces:
 
-1. `NNet<SizeInput, SizeOutput>`
-   - defines the network shape through template parameters
+1. `NNet<InputData, OutputData>`
+    - defines the network input/output contract through `Data` types
    - manages neuron creation and connections
    - provides `train(...)` and `infer(...)` operations
+
+`InputData` and `OutputData` must satisfy `DataType`, so in practice you pass aliases based on `Data<Size, ValueType>`.
 
 2. `Neuron`
    - provides the generic signal propagation and learning infrastructure
@@ -95,7 +98,9 @@ struct MyNeuron : public hNNet::Neuron {
     }
 };
 
-using Net = hNNet::NNet<3, 1>;
+using InputData = hNNet::Data<3, hNNet::int_t>;
+using OutputData = hNNet::Data<1, hNNet::int_t>;
+using Net = hNNet::NNet<InputData, OutputData>;
 Net net;
 
 const auto inputs = net.new_neurons<MyNeuron>(3);
