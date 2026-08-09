@@ -1,5 +1,6 @@
 #pragma once
 #include "hnnet-neuron.h"
+#include "timer.h"
 
 namespace hNNet {
     ////////////////
@@ -70,9 +71,11 @@ namespace hNNet {
                 constexpr size_t max_epochs{1000};
                 size_t epoch{0};
                 bool converged{false};
-                std::println("==================================");
-                std::println("Training net with {} samples...   ", training_samples.size());
-                std::println("==================================");
+                std::println("NNet::train: ==================================");
+                std::println("NNet::train: Training net with {} samples...    ", training_samples.size());
+                std::println("NNet::train: ==================================");
+                Timer timer{};
+                timer.start();
                 while (not converged and (epoch <= max_epochs)) {
                     epoch++;
                     if ((epoch < 10      and epoch % 1 == 0)    or
@@ -80,7 +83,7 @@ namespace hNNet {
                         (epoch < 1000    and epoch % 100 == 0)  or 
                         (epoch < 10'000  and epoch % 1000 == 0) or
                         (epoch < 100'000 and epoch % 10'000 == 0)) {
-                        std::println("Epoch: {}", epoch);
+                        std::println("NNet::train: Epoch: {}", epoch);
                     }
                     size_t num_learnings{0};
                     for (const auto &sample : training_samples) {
@@ -90,20 +93,20 @@ namespace hNNet {
                     }
                     converged = (num_learnings == training_samples.size());
                 }
+                timer.stop();
                 if (converged) {
                     _trained = true;
-                    std::println("======================");
-                    std::println("Training summary      ");
-                    std::println("======================");
+                    std::println("NNet::train: Training summary:");
+                    //for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                    //    std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
+                    //}
+                    std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                     std::println("NNet::train: epochs: {}", epoch);
-                    for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                        std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
-                    }
                 }
                 else {
                     _trained = false;
                     std::println("NNet::train: net training failed!");
-                }
+                };
             }
             // Infer from data
             OutputData infer(const InputData &data) {
