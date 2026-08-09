@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-O3>)
+endif()
+
 add_library(hnnet_lib INTERFACE)
 add_library(hnnet::hnnet_lib ALIAS hnnet_lib)
 target_include_directories(hnnet_lib INTERFACE
