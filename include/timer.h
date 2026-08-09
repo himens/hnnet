@@ -1,6 +1,4 @@
 #pragma once
-#include <iostream>
-#include <sstream>
 #include <thread>    
 #include <chrono>
 
@@ -52,23 +50,7 @@ class Timer {
     	double get_elapsed_time_s() const { 
         	const std::chrono::duration<double> elapsed_s{_end - _start};
       		return elapsed_s.count();
-    	}
-		// Print timer information
-    	friend std::ostream& operator<<(std::ostream& os, const Timer t) {
-      		const auto elapsed_time_us = t.get_elapsed_time_us();
-      		os << "[Elapsed time = ";
-      		if (elapsed_time_us < 1e3) {
-				os << elapsed_time_us << "us";
-			}
-      		else if (elapsed_time_us >= 1e3 and elapsed_time_us < 1e6) {
-				os << elapsed_time_us * 1e-3 << "ms";
-			}
-      		else {
-				os << elapsed_time_us * 1e-6 << "s";
-			}
-			os << "]";
-      		return os;
-    	}    
+    	} 
   	private:  
 	    // Data members
 		bool _running{false};
