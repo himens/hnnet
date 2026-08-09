@@ -97,9 +97,9 @@ namespace hNNet {
                 if (converged) {
                     _trained = true;
                     std::println("NNet::train: Training summary:");
-                    //for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                    //    std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
-                    //}
+                    for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                        std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
+                    }
                     std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                     std::println("NNet::train: epochs: {}", epoch);
                 }
