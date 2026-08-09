@@ -7,20 +7,20 @@ constexpr size_t nb_columns{7};
 constexpr size_t nb_pixels{nb_rows * nb_columns};
 constexpr size_t nb_letters{26};
 
-using PixelGrid = std::array<std::array<char, nb_columns>, nb_rows>;
+using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
 struct LetterData {
     char character{'\0'};
-    PixelGrid pixels{};
+    Pixels pixels{};
 };
 using InputData  = hNNet::Data<nb_pixels, hNNet::int_t>;
 using OutputData = hNNet::Data<nb_letters, hNNet::int_t>;
 
 // Encode pixel grid
-InputData encode(const PixelGrid &grid) {
+InputData encode(const Pixels &pixels) {
     InputData data{};
     std::ranges::fill(data, -1);
-    for (const auto &[row, pixels] : grid | std::views::enumerate) {
-        for (const auto &[col, pixel] : pixels | std::views::enumerate) {
+    for (const auto &[row, row_pixels] : pixels | std::views::enumerate) {
+        for (const auto &[col, pixel] : row_pixels | std::views::enumerate) {
             const auto idx = row * nb_columns + col;
             data[idx] = pixel == '#' ? +1 : -1;
         }
