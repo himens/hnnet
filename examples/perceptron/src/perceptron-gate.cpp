@@ -4,8 +4,8 @@
 // Simple AND gate implementation using a perceptron neural network
 int main() {
     // define net type
-    using InputData  = hNNet::Data<3, hNNet::int_t>;
-    using OutputData = hNNet::Data<1, hNNet::int_t>;
+    using InputData  = hNNet::Data<hNNet::int_t, 3>;
+    using OutputData = hNNet::Data<hNNet::int_t, 1>;
     using Gate = hNNet::NNet<InputData, OutputData>;
     // create net
     Gate gate;

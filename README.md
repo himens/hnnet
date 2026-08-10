@@ -27,6 +27,12 @@ cmake --build build
 
 The executables are generated in the `build/bin` folder.
 
+Notes on current build configuration:
+
+- the project uses `/usr/bin/g++-16` and C++23
+- on GNU/Clang toolchains, CMake enables `-O3` for C++ compilation
+- examples link against the interface target `hnnet::hnnet_lib` (which also links `utility::utility`)
+
 ## Running the examples
 
 ### 1. AND gate example
@@ -50,6 +56,12 @@ This example:
 3. trains the model on letter examples
 4. tries to classify noisy letters
 
+Classifier data representation details:
+
+- each letter is a `9x7` pixel grid
+- `#` pixels are encoded as `+1`, `.` pixels as `-1`
+- output labels are bipolar too (`+1` for expected letter, `-1` for the others)
+
 > To make the classifier work correctly, run the command from the project root so that the paths `data/letters_*.txt` are resolved properly.
 
 ## Project structure
@@ -71,7 +83,7 @@ The library is designed around two main pieces:
    - manages neuron creation and connections
    - provides `train(...)` and `infer(...)` operations
 
-`InputData` and `OutputData` must satisfy `DataType`, so in practice you pass aliases based on `Data<Size, ValueType>`.
+`InputData` and `OutputData` must satisfy `DataType`, so in practice you pass aliases based on `Data<ValueType, Size>`.
 
 2. `Neuron`
    - provides the generic signal propagation and learning infrastructure
@@ -97,8 +109,8 @@ struct MyNeuron : public hNNet::Neuron {
     }
 };
 
-using InputData = hNNet::Data<3, hNNet::int_t>;
-using OutputData = hNNet::Data<1, hNNet::int_t>;
+using InputData = hNNet::Data<hNNet::int_t, 3>;
+using OutputData = hNNet::Data<hNNet::int_t, 1>;
 using Net = hNNet::NNet<InputData, OutputData>;
 Net net;
 
@@ -124,6 +136,8 @@ The main operations are:
 - `connect(...)`: connects neurons to each other
 - `train(...)`: trains the network on the provided data
 - `infer(...)`: performs inference on new inputs
+
+During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with learned weights, elapsed time, and total epochs.
 
 ## Notes
 

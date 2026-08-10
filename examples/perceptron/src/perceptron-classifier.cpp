@@ -12,8 +12,8 @@ struct LetterData {
     char character{'\0'};
     Pixels pixels{};
 };
-using InputData  = hNNet::Data<nb_pixels, hNNet::int_t>;
-using OutputData = hNNet::Data<nb_letters, hNNet::int_t>;
+using InputData  = hNNet::Data<hNNet::int_t, nb_pixels>;
+using OutputData = hNNet::Data<hNNet::int_t, nb_letters>;
 
 // Encode pixel grid
 InputData encode(const Pixels &pixels) {
@@ -72,7 +72,7 @@ std::vector<LetterData> read_letters(const std::string &filename) {
                 }
                 const auto valid = (line.size() == nb_columns) and std::ranges::all_of(line, [] (const auto &ch) { return ch == '#' or ch == '.'; });
                 if (not valid) {
-                    throw std::runtime_error("read_letters: invalid Pixels row: " + line);
+                    throw std::runtime_error("read_letters: invalid pixels row: " + line);
                 }
                 for (const auto &[col, ch] : line | std::views::enumerate) {
                     letter.pixels[row][col] = ch;
@@ -83,7 +83,7 @@ std::vector<LetterData> read_letters(const std::string &filename) {
         }
     }
     if (letters.empty()) {
-        std::println("read_line: no letter found!");
+        std::println("read_letters: no letter found!");
     }
     return letters;
 }

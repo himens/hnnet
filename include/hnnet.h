@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <cmath>
 
 namespace hNNet {
     using real_t   = std::float64_t;
@@ -24,9 +25,9 @@ namespace hNNet {
                             std::same_as<T, int_t>    or 
                             std::same_as<T, real32_t> or 
                             std::same_as<T, int32_t>;
-    template <size_t Size, ValueType Type = real_t>
+    template <ValueType Type, size_t Size>
         requires (Size > 0)
         using Data = std::array<Type, Size>;
     template <typename T>
-        concept DataType = requires{ {std::tuple_size<T>::value}; } and std::same_as<T, Data<std::tuple_size_v<T>, std::ranges::range_value_t<T>>>;
+        concept DataType = requires{ {std::tuple_size<T>::value}; } and std::same_as<T, Data<std::ranges::range_value_t<T>, std::tuple_size_v<T>>>;
 }
