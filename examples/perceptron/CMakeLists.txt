@@ -15,8 +15,8 @@ add_executable(hnnet-perceptron-classifier
     src/perceptron-classifier.cpp
 )
 
-target_link_libraries(hnnet-perceptron-gate PRIVATE hnnet::hnnet_lib)
-target_link_libraries(hnnet-perceptron-classifier PRIVATE hnnet::hnnet_lib)
+target_link_libraries(hnnet-perceptron-gate PRIVATE hnnet::hnnet)
+target_link_libraries(hnnet-perceptron-classifier PRIVATE hnnet::hnnet)
 
 target_include_directories(hnnet-perceptron-gate PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"

@@ -51,6 +51,54 @@ namespace hNNet {
             // Data members
             real_t threshold{0.0};
     };
+    ///////////////////////////
+    // Perceptron activation //
+    ///////////////////////////
+    class PerceptronActivation : public Activation {
+        public:
+            // Return activation value
+            real_t operator()(const real_t x) const final {
+                return x > threshold ? +1 : x < -threshold ? -1 : 0;
+            }
+            // Return activation derivative
+            real_t derivative(const real_t x) const final {
+                return 0.0; // Derivative is not defined at x=0, but we can return 0 for practical purposes
+            }
+            // Data members
+            real_t threshold{0.0};
+    };
+    ////////////////////////
+    // Sigmoid activation //
+    ////////////////////////
+    class SigmoidActivation : public Activation {
+        public:
+            // Return activation value
+            real_t operator()(const real_t x) const final {
+                return  1.0 / (1.0 + std::exp(-sigma * x));
+            }
+            // Return activation derivative
+            real_t derivative(const real_t x) const final {
+                const auto sig = (*this)(x);
+                return sigma * sig * (1.0 - sig);
+            }
+            real_t sigma{1.0};
+    };
+    ////////////////////////////////
+    // Bipolar sigmoid activation //
+    ////////////////////////////////
+    class BipolarSigmoidActivation : public Activation {
+        public:
+            // Return activation value
+            real_t operator()(const real_t x) const final {
+                return 2.0 / (1.0 + std::exp(-sigma * x)) - 1.0;
+            }
+            // Return activation derivative
+            real_t derivative(const real_t x) const final {
+                const auto sig = (*this)(x);
+                return 0.5 * sigma * (1.0 + sig) * (1.0 - sig);
+            }
+            real_t sigma{1.0};
+    };
     /////////////////////
     // ReLU activation //
     /////////////////////
@@ -66,22 +114,6 @@ namespace hNNet {
             }
             // Data members
             real_t offset{0.0};
-    };
-    ////////////////////////////
-    // Perceptron activation //
-    ////////////////////////////
-    class PerceptronActivation : public Activation {
-        public:
-            // Return activation value
-            real_t operator()(const real_t x) const final {
-                return x > threshold ? +1 : x < -threshold ? -1 : 0;
-            }
-            // Return activation derivative
-            real_t derivative(const real_t x) const final {
-                return 0.0; // Derivative is not defined at x=0, but we can return 0 for practical purposes
-            }
-            // Data members
-            real_t threshold{0.0};
     };
     /////////////////////////
     // Gaussian activation //
@@ -99,21 +131,6 @@ namespace hNNet {
             // Data members
             real_t mean{0.0};
             real_t sigma{1.0};
-    };
-    ////////////////////////
-    // Sigmoid activation //
-    ////////////////////////
-    class SigmoidActivation : public Activation {
-        public:
-            // Return activation value
-            real_t operator()(const real_t x) const final {
-                return  1.0 / (1.0 + std::exp(-x));
-            }
-            // Return activation derivative
-            real_t derivative(const real_t x) const final {
-                const auto sig = (*this)(x);
-                return sig * (1.0 - sig);
-            }
     };
     /////////////////////
     // Tanh activation //

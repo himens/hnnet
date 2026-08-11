@@ -12,7 +12,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 add_library(hnnet_lib INTERFACE)
-add_library(hnnet::hnnet_lib ALIAS hnnet_lib)
+add_library(hnnet::hnnet ALIAS hnnet_lib)
 target_include_directories(hnnet_lib INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
@@ -21,5 +21,6 @@ add_subdirectory(utility)
 target_link_libraries(hnnet_lib INTERFACE utility::utility)
 
 add_subdirectory(examples/perceptron)
+add_subdirectory(examples/backprop)
 
 message(STATUS "hnnet library configured successfully")
