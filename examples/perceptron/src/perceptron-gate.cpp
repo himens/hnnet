@@ -9,8 +9,8 @@ int main() {
     using Gate = hNNet::NNet<InputData, OutputData>;
     // create net
     Gate gate;
-    const auto layer_x = gate.new_neurons<Perceptron::Neuron>(3);
-    const auto y = gate.new_neuron<Perceptron::Neuron>();
+    const auto layer_x = gate.new_neurons<PerceptronNeuron>(3);
+    const auto y = gate.new_neuron<PerceptronNeuron>();
     gate.connect(layer_x, y);
     // tain net
     std::vector<Gate::TrainingData> training_samples = {

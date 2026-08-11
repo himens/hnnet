@@ -1,5 +1,5 @@
 #pragma once
-#include "hnnet.h"
+#include "hnnet-activation.h"
 
 namespace hNNet {
     //////////////////
@@ -7,6 +7,9 @@ namespace hNNet {
     //////////////////
     class Neuron {
         public:
+            /////////////////////////
+            // Synaptic connection //
+            /////////////////////////
             struct SynapticConn {
                 // Get weighted signal
                 real_t get_weighted_signal() const {
@@ -35,23 +38,6 @@ namespace hNNet {
             // Set neuron signal
             void set_signal(const real_t signal) {
                 _signal = signal;
-            }
-            // Receive signal from synaptic connection
-            void receive_signal(const SynapticConn* rx_conn) {
-                const auto in_connections = get_in_connections();
-                const auto found = std::any_of(std::begin(in_connections), std::end(in_connections), [&] (const auto &conn) { return conn == rx_conn; });                
-                if (not found) {
-                    throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
-                }
-                _weighted_sum += rx_conn->get_weighted_signal();
-                _number_rx_signals++;
-                if (_number_rx_signals == in_connections.size()) {
-                    _signal = activation(_weighted_sum);
-                    //std::println("Neuron::receive_signal: all signals received! Signal: {}, weighted sum: {}", _signal, _weighted_sum);
-                    broadcast_signal();
-                    _weighted_sum = 0.0;
-                    _number_rx_signals = 0;
-                }
             }
             // Broadcast signal to all receiver neurons
             void broadcast_signal() const {
@@ -92,16 +78,44 @@ namespace hNNet {
                 }
                 return learnt;
             }
+        protected:
+            // Constructor
+            Neuron(std::unique_ptr<Activation> activation) {
+                if (activation == nullptr) {
+                    throw std::invalid_argument("Neuron::Neuron: nullptr activation function!");
+                }
+                _activation = std::move(activation);
+            }
+            // Get activation function
+            const Activation& get_activation() const {
+                return *_activation;
+            }
         private:
             // Update connection weight according to target and a learning rule
             virtual void update(SynapticConn* conn, const real_t target) = 0;
-            // Activation function
-            virtual real_t activation(const real_t weighted_sum) const = 0;
+            // Receive signal from synaptic connection
+            void receive_signal(const SynapticConn* rx_conn) {
+                const auto in_connections = get_in_connections();
+                const auto found = std::any_of(std::begin(in_connections), std::end(in_connections), [&] (const auto &conn) { return conn == rx_conn; });                
+                if (not found) {
+                    throw std::invalid_argument("Neuron::receive_signal: invalid connection!");
+                }
+                _weighted_sum += rx_conn->get_weighted_signal();
+                _number_rx_signals++;
+                if (_number_rx_signals == in_connections.size()) {
+                    _signal = get_activation().value(_weighted_sum);
+                    //std::println("Neuron::receive_signal: all signals received! Signal: {}, weighted sum: {}", _signal, _weighted_sum);
+                    broadcast_signal();
+                    _weighted_sum = 0.0;
+                    _number_rx_signals = 0;
+                }
+            }
             // Data members
             size_t _number_rx_signals{0};
             real_t _signal{0.0};
             real_t _weighted_sum{0.0};
             std::vector<SynapticConn*> _connections{};
+            std::unique_ptr<Activation> _activation{nullptr};
     };
     template <typename T>
         concept NeuronType = std::derived_from<T, Neuron>;

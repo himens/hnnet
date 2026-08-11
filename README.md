@@ -87,7 +87,8 @@ The library is designed around two main pieces:
 
 2. `Neuron`
    - provides the generic signal propagation and learning infrastructure
-   - exposes customizable virtual behavior through methods such as `update(...)` and `activation(...)`
+    - owns an `Activation` strategy used to convert weighted sums into output signals
+    - exposes customizable virtual behavior through methods such as `update(...)`
    - allows you to define your own neuron model by deriving from it
 
 In other words, the framework is generic, and the perceptron implementation is just one possible neuron model that can be plugged into it.
@@ -98,14 +99,14 @@ Here is a minimal example of how to create and train a network using a custom ne
 
 ```cpp
 #include "hnnet-nnet.h"
+#include "hnnet-activations.h"
 
 struct MyNeuron : public hNNet::Neuron {
+    MyNeuron()
+        : hNNet::Neuron(std::make_unique<hNNet::BipolarStepActivation>()) {}
+
     void update(SynapticConn* conn, const hNNet::real_t target) override {
         conn->weight += target * conn->tx->get_signal();
-    }
-
-    hNNet::real_t activation(const hNNet::real_t weighted_sum) const override {
-        return weighted_sum > 0.0 ? 1.0 : -1.0;
     }
 };
 

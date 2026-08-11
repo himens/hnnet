@@ -94,8 +94,8 @@ int main() {
     using Classifier = hNNet::NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    const auto layer_in  = classifier.new_neurons<Perceptron::Neuron>(nb_pixels);
-    const auto layer_out = classifier.new_neurons<Perceptron::Neuron>(nb_letters);
+    const auto layer_in  = classifier.new_neurons<PerceptronNeuron>(nb_pixels);
+    const auto layer_out = classifier.new_neurons<PerceptronNeuron>(nb_letters);
     classifier.connect(layer_in, layer_out);
     // train net
     std::vector<LetterData> letters{};
