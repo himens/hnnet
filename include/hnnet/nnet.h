@@ -115,7 +115,7 @@ namespace hNNet {
                     }
                     //mean_squared_err /= training_samples.size();
                     converged = (mean_squared_err < error_threshold);
-                    std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
+                    //std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
                 }
                 timer.stop();
                 if (converged) {

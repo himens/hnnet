@@ -14,13 +14,25 @@ namespace hNNet {
             /////////////////////////
             struct SynapticConn {
                 // Transmit signal
-                void transmit_signal() const {
-                    if ((rx == nullptr) or (tx == nullptr)) {
-                       // throw std::invalid_argument("SynapticConn::transmit_signal: nullptr rx or tx!");
+                template <typename RxType = Neuron, typename ReceivePtr>
+                    //requires std::is_member_function_pointer_v<ReceivePtr> and std::is_invocable_v<ReceivePtr, RxType, real_t>
+                    void send(const real_t data, ReceivePtr receive) const {
+                        if ((rx == nullptr) or (tx == nullptr)) {
+                        throw std::invalid_argument("SynapticConn::transmit_signal: nullptr rx or tx!");
+                        }
+                        const auto weighted_data = data * weight;
+                        (static_cast<RxType*>(rx)->*receive)(weighted_data);
                     }
-                    const auto weighted_signal = tx->get_signal() * weight;
-                    rx->receive_signal(weighted_signal);
-                }
+                // Transmit signal
+                template <typename TxType = Neuron, typename ReceivePtr>
+                    //requires std::is_member_function_pointer_v<ReceivePtr> and std::is_invocable_v<ReceivePtr, RxType, real_t>
+                    void receive(const real_t data, ReceivePtr receive) const {
+                        if ((rx == nullptr) or (tx == nullptr)) {
+                        throw std::invalid_argument("SynapticConn::receive: nullptr rx or tx!");
+                        }
+                        const auto weighted_data = data * weight;
+                        (static_cast<TxType*>(tx)->*receive)(weighted_data);
+                    }
                 // Data members
                 //const Neuron* const tx{nullptr};
                 Neuron* const tx{nullptr};
@@ -43,7 +55,7 @@ namespace hNNet {
             // Broadcast signal to all receiver neurons
             void broadcast_signal() const {
                 for (const auto &conn : _out_connections) {
-                    conn->transmit_signal();
+                    conn->send(_signal, &Neuron::receive_signal);
                 }
             }
             // Add connection to neuron
@@ -51,13 +63,16 @@ namespace hNNet {
                 if (conn == nullptr) {
                     throw std::invalid_argument("Neuron::add_connection: nullptr connection!");
                 }
+                if ((conn->rx == nullptr) or (conn->tx == nullptr)) {
+                    throw std::invalid_argument("Neuron::add_connection: nullptr rx or tx!");
+                }
+                if ((conn->tx != this) and (conn->rx != this)) {
+                    throw std::invalid_argument("Neuron::add_connection: invalid connection!");
+                }
                 const auto found = std::any_of(std::begin(_in_connections),  std::end(_in_connections),  [&] (const auto &in_conn) { return in_conn == conn; }) or
                                    std::any_of(std::begin(_out_connections), std::end(_out_connections), [&] (const auto &out_conn) { return out_conn == conn; });
                 if (found) {
                     throw std::invalid_argument("Neuron::add_connection: duplicate connection!");
-                }
-                if ((conn->tx != this) and (conn->rx != this)) {
-                    throw std::invalid_argument("Neuron::add_connection: invalid connection!");
                 }
                 if (conn->tx == this) {
                     _out_connections.push_back(conn);

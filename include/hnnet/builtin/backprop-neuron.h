@@ -10,6 +10,7 @@ namespace hNNet {
         template <ActivationType Activation>
         class BackpropNeuron : public Neuron {
             public:
+                // Constructor
                 BackpropNeuron() : Neuron(std::make_unique<Activation>()) {}
             private:
                 // Learn from error
@@ -17,13 +18,8 @@ namespace hNNet {
                     const auto derivative = this->get_activation().derivative(this->get_net_signal());
                     const auto delta = error * derivative;
                     for (const auto &conn : this->get_in_connections()) {
-                        auto tx = dynamic_cast<BackpropNeuron*>(conn->tx);
-                        if (tx == nullptr) {
-                            throw std::runtime_error("BackpropNeuron::learn: nullptr tx!");
-                        }
-                        const auto weighted_delta = delta * conn->weight;
-                        tx->receive_delta(weighted_delta);
-                        update(conn, delta); 
+                        conn->receive<BackpropNeuron>(delta, &BackpropNeuron::receive_delta);
+                        update(conn, delta);
                     }
                 }
                 // Receive error from synaptic connection
