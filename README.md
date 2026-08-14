@@ -105,8 +105,12 @@ struct MyNeuron : public hNNet::Neuron {
     MyNeuron()
         : hNNet::Neuron(std::make_unique<hNNet::BipolarStepActivation>()) {}
 
-    void update(SynapticConn* conn, const hNNet::real_t target) override {
-        conn->weight += target * conn->tx->get_signal();
+    void learn(const hNNet::real_t error) override {
+        static constexpr real_t rate{1.0};
+        for (auto &conn : this->get_in_connections()) {
+             const auto target = error + this->get_signal();
+             conn->weight += rate * target * conn->tx->get_signal();
+        }
     }
 };
 
