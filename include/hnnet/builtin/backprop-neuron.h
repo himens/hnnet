@@ -18,7 +18,8 @@ namespace hNNet {
                     const auto derivative = this->get_activation().derivative(this->get_net_signal());
                     const auto delta = error * derivative;
                     for (const auto &conn : this->get_in_connections()) {
-                        conn->receive<BackpropNeuron>(delta, &BackpropNeuron::receive_delta);
+                        SynapticConn back_conn{.tx = this, .rx = conn->tx, .weight = conn->weight};
+                        back_conn.send<BackpropNeuron>(delta, &BackpropNeuron::receive_delta);
                         update(conn, delta);
                     }
                 }
