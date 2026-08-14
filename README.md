@@ -140,6 +140,17 @@ The main operations are:
 
 During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with learned weights, elapsed time, and total epochs.
 
+## TODO
+
+The main planned improvements are:
+
+- decouple backpropagation from the concrete neuron type
+- separate gradient calculation from weight updates
+- make inputs, outputs, and biases explicit parts of the network
+- add configurable training parameters and layer-building helpers
+
+See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.
+
 ## Notes
 
 The code is intended as a didactic example and shows a lightweight, extensible neural-network framework.
