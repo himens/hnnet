@@ -19,7 +19,7 @@ int main() {
         {{0, 1, 1}, {-1}},
         {{0, 0, 1}, {-1}}
     };
-    //gate.train(training_samples);
+    gate.train(training_samples);
 
     return 0;
 }

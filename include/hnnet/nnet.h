@@ -126,7 +126,7 @@ namespace hNNet {
                     }
                     auto targets = training_samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
                     auto outputs = training_samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
-                    std::println("NNet::train: targets: {:::.3f}, outputs: {:::.3f}", targets, outputs);
+                    std::println("NNet::train: targets: {}, outputs: {}", targets, outputs);
                     std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                     std::println("NNet::train: epochs: {}", epoch);
                 }

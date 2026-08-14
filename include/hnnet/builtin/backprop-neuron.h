@@ -4,9 +4,9 @@
 
 namespace hNNet {
     namespace Builtin {
-        ////////////////////////////
+        //////////////////////////
         // BackpropNeuron class //
-        ////////////////////////////
+        //////////////////////////
         class BackpropNeuron : public Neuron {
             public:
                 BackpropNeuron() : Neuron(std::make_unique<SigmoidActivation>()) {}

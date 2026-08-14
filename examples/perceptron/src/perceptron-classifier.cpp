@@ -106,7 +106,7 @@ int main() {
     for (const auto &[ch, pixels] : letters) {
         training_samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }
-    //classifier.train(training_samples);
+    classifier.train(training_samples);
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters_noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));
