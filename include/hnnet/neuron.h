@@ -18,20 +18,10 @@ namespace hNNet {
                     //requires std::is_member_function_pointer_v<ReceivePtr> and std::is_invocable_v<ReceivePtr, RxType, real_t>
                     void send(const real_t data, ReceivePtr receive) const {
                         if ((rx == nullptr) or (tx == nullptr)) {
-                        throw std::invalid_argument("SynapticConn::transmit_signal: nullptr rx or tx!");
+                            throw std::invalid_argument("SynapticConn::transmit_signal: nullptr rx or tx!");
                         }
                         const auto weighted_data = data * weight;
                         (static_cast<RxType*>(rx)->*receive)(weighted_data);
-                    }
-                // Transmit signal
-                template <typename TxType = Neuron, typename ReceivePtr>
-                    //requires std::is_member_function_pointer_v<ReceivePtr> and std::is_invocable_v<ReceivePtr, RxType, real_t>
-                    void receive(const real_t data, ReceivePtr receive) const {
-                        if ((rx == nullptr) or (tx == nullptr)) {
-                        throw std::invalid_argument("SynapticConn::receive: nullptr rx or tx!");
-                        }
-                        const auto weighted_data = data * weight;
-                        (static_cast<TxType*>(tx)->*receive)(weighted_data);
                     }
                 // Data members
                 //const Neuron* const tx{nullptr};
