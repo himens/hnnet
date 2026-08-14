@@ -67,9 +67,9 @@ Classifier data representation details:
 ## Project structure
 
 - `include/`: library headers
-  - `hnnet.h`: base types such as `Data`
-  - `hnnet-neuron.h`: definition of the generic `Neuron` abstraction
-  - `hnnet-nnet.h`: implementation of the generic `NNet` network
+    - `hnnet/types.h`: base types such as `Data`
+    - `hnnet/neuron.h`: definition of the generic `Neuron` abstraction
+    - `hnnet/nnet.h`: implementation of the generic `NNet` network
 - `examples/`: example implementations built on top of the generic framework
 - `data/`: datasets used by the examples
 - `scripts/`: helper scripts for generating or processing data
@@ -98,8 +98,8 @@ In other words, the framework is generic, and the perceptron implementation is j
 Here is a minimal example of how to create and train a network using a custom neuron type:
 
 ```cpp
-#include "hnnet-nnet.h"
-#include "hnnet-activations.h"
+#include "hnnet/nnet.h"
+#include "hnnet/builtin/activations.h"
 
 struct MyNeuron : public hNNet::Neuron {
     MyNeuron()

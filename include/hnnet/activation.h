@@ -1,5 +1,5 @@
 #pragma once
-#include "hnnet.h"
+#include "hnnet/types.h"
 
 namespace hNNet {
     //////////////////////

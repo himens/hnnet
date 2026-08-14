@@ -1,5 +1,5 @@
-#include "perceptron-neuron.h"
-#include "hnnet-nnet.h"
+#include "hnnet/builtin/perceptron-neuron.h"
+#include "hnnet/nnet.h"
 
 // Simple AND gate implementation using a perceptron neural network
 int main() {
@@ -9,17 +9,17 @@ int main() {
     using Gate = hNNet::NNet<InputData, OutputData>;
     // create net
     Gate gate;
-    const auto layer_x = gate.new_neurons<PerceptronNeuron>(3);
-    const auto y = gate.new_neuron<PerceptronNeuron>();
+    const auto layer_x = gate.new_neurons<hNNet::Builtin::PerceptronNeuron>(3);
+    const auto y = gate.new_neuron<hNNet::Builtin::PerceptronNeuron>();
     gate.connect(layer_x, y);
-    // tain net
+    // train net
     std::vector<Gate::TrainingData> training_samples = {
         {{1, 1, 1},  {1}},
         {{1, 0, 1}, {-1}},
         {{0, 1, 1}, {-1}},
         {{0, 0, 1}, {-1}}
     };
-    gate.train(training_samples);
+    //gate.train(training_samples);
 
     return 0;
 }

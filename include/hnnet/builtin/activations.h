@@ -1,5 +1,5 @@
 #pragma once
-#include "hnnet-activation.h"
+#include "hnnet/activation.h"
 
 namespace hNNet {
     ///////////////////////

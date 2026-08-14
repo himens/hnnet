@@ -1,5 +1,5 @@
 #pragma once
-#include "hnnet-activation.h"
+#include "hnnet/activation.h"
 
 // TODO: 1) To increase performance in receive_signal(), check on incoming connection can be removed --> receive_signal(const real_t signal)?
 

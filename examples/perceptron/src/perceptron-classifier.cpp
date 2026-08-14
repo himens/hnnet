@@ -1,6 +1,6 @@
 #include <fstream>
-#include "perceptron-neuron.h"
-#include "hnnet-nnet.h"
+#include "hnnet/builtin/perceptron-neuron.h"
+#include "hnnet/nnet.h"
 
 constexpr size_t nb_rows{9};
 constexpr size_t nb_columns{7};
@@ -94,8 +94,8 @@ int main() {
     using Classifier = hNNet::NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    const auto layer_in  = classifier.new_neurons<PerceptronNeuron>(nb_pixels);
-    const auto layer_out = classifier.new_neurons<PerceptronNeuron>(nb_letters);
+    const auto layer_in  = classifier.new_neurons<hNNet::Builtin::PerceptronNeuron>(nb_pixels);
+    const auto layer_out = classifier.new_neurons<hNNet::Builtin::PerceptronNeuron>(nb_letters);
     classifier.connect(layer_in, layer_out);
     // train net
     std::vector<LetterData> letters{};
@@ -106,7 +106,7 @@ int main() {
     for (const auto &[ch, pixels] : letters) {
         training_samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }
-    classifier.train(training_samples);
+    //classifier.train(training_samples);
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters_noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));
