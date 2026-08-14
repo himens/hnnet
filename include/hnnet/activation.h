@@ -18,4 +18,6 @@ namespace hNNet {
                 return (*this)(x);
             }
     };
+    template <typename T>
+        concept ActivationType = std::derived_from<T, Activation>;
 }

@@ -7,9 +7,10 @@ namespace hNNet {
         //////////////////////////
         // BackpropNeuron class //
         //////////////////////////
+        template <ActivationType Activation>
         class BackpropNeuron : public Neuron {
             public:
-                BackpropNeuron() : Neuron(std::make_unique<SigmoidActivation>()) {}
+                BackpropNeuron() : Neuron(std::make_unique<Activation>()) {}
             private:
                 // Learn from error
                 void learn(const real_t error) final {
