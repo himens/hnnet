@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <cmath>
+#include <random>
 
 namespace hNNet {
     using real_t   = std::float64_t;

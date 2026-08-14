@@ -2,6 +2,9 @@
 #include "hnnet-neuron.h"
 #include "timer.h"
 
+// TODO: 1) Define a SourceNeuron class for input neurons that can receive external data and broadcast it to the network.
+//          Add the requirement in_neurons to be SourceNeurons in NNet::feed() and NNet::train().
+
 namespace hNNet {
     ////////////////
     // NNet class //
@@ -64,34 +67,55 @@ namespace hNNet {
             void connect(Neuron* tx, Neuron* rx) {
                 connect(std::views::single(tx), std::views::single(rx));
             }
+            // Set weights to random values in the range [min, max]
+            void randomize_weights(const real_t min, const real_t max) {
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<real_t> dist(min, max);
+                for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                    conn->weight = dist(gen);
+                    std::println("NNet::randomize_weights: weight[{}]: {}", idx, conn->weight);
+                }
+            }    
             // Train net using a set of training samples
             void train(const std::vector<TrainingData> &training_samples) {
+                constexpr real_t error_threshold{5e-2};
+                constexpr size_t max_epochs{1'000'000};
                 auto in_neurons  = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
                 auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
-                constexpr size_t max_epochs{1000};
+                if (std::ranges::distance(in_neurons)  != std::tuple_size<InputData>::value or
+                    std::ranges::distance(out_neurons) != std::tuple_size<OutputData>::value) {
+                    throw std::invalid_argument("NNet::train: size error!");
+                }
                 size_t epoch{0};
                 bool converged{false};
-                std::println("NNet::train: ==================================");
-                std::println("NNet::train: Training net with {} samples...    ", training_samples.size());
-                std::println("NNet::train: ==================================");
                 Timer timer{};
+                std::println("NNet::train: ==================================");
+                std::println("NNet::train: Training net with {} samples...   ", training_samples.size());
+                std::println("NNet::train: ==================================");
                 timer.start();
                 while (not converged and (epoch <= max_epochs)) {
                     epoch++;
-                    if ((epoch < 10      and epoch % 1 == 0)    or
-                        (epoch < 100     and epoch % 10 == 0)   or
-                        (epoch < 1000    and epoch % 100 == 0)  or 
-                        (epoch < 10'000  and epoch % 1000 == 0) or
-                        (epoch < 100'000 and epoch % 10'000 == 0)) {
-                        std::println("NNet::train: Epoch: {}", epoch);
+                    if ((epoch < 10        and epoch % 1 == 0)      or
+                        (epoch < 100       and epoch % 10 == 0)     or
+                        (epoch < 1000      and epoch % 100 == 0)    or 
+                        (epoch < 10'000    and epoch % 1000 == 0)   or
+                        (epoch < 100'000   and epoch % 10'000 == 0) or
+                        (epoch < 1'000'000 and epoch % 100'000 == 0)) {
+                        //std::println("NNet::train: Epoch: {}", epoch);
                     }
-                    size_t num_learnings{0};
+                    real_t mean_squared_err{0.0};
                     for (const auto &sample : training_samples) {
-                        //std::println("Epoch: {}, inputs: {}, targets: {}", epoch, sample.inputs, sample.targets);
                         feed(in_neurons, sample.inputs);
-                        num_learnings += learn(out_neurons, sample.targets);
+                        for (const auto &[neuron, target] : std::views::zip(out_neurons, sample.targets)) {
+                            const auto error = (target - neuron->get_signal());
+                            neuron->learn(error);
+                            mean_squared_err += error * error;
+                        }
                     }
-                    converged = (num_learnings == training_samples.size());
+                    //mean_squared_err /= training_samples.size();
+                    converged = (mean_squared_err < error_threshold);
+                    std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
                 }
                 timer.stop();
                 if (converged) {
@@ -100,6 +124,9 @@ namespace hNNet {
                     for (const auto &[idx, conn] : _connections | std::views::enumerate) {
                         std::println("NNet::train: weight[{}]: {}", idx, conn->weight);
                     }
+                    auto targets = training_samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
+                    auto outputs = training_samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
+                    std::println("NNet::train: targets: {:::.3f}, outputs: {:::.3f}", targets, outputs);
                     std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                     std::println("NNet::train: epochs: {}", epoch);
                 }
@@ -116,7 +143,6 @@ namespace hNNet {
                 }
                 auto in_neurons  = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_in_connections().empty(); });
                 auto out_neurons = _neurons | std::views::filter([] (const auto &neuron) { return neuron->get_out_connections().empty(); });
-                //std::println("Infer from data: {}", data);
                 feed(in_neurons, data);
                 OutputData outputs;
                 for (const auto &[idx, neuron] : out_neurons | std::views::enumerate) {
@@ -135,21 +161,6 @@ namespace hNNet {
                         neuron->set_signal(input);
                         neuron->broadcast_signal();
                     }
-                }
-            // Learn from target data
-            template <NeuronView View>
-                bool learn(View out_neurons, const OutputData &targets) {
-                    if (std::ranges::distance(out_neurons) != targets.size()) {
-                        throw std::invalid_argument("NNet::learn: size error!");
-                    }
-                    bool learnt{false};            
-                    for (const auto &[neuron, target] : std::views::zip(out_neurons, targets)) {
-                        learnt = neuron->learn(target);
-                        if (not learnt) {
-                            break;
-                        }
-                    }            
-                    return learnt;
                 }
             // Data members
             bool _trained{false};

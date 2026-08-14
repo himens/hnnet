@@ -65,7 +65,7 @@ namespace hNNet {
                 return 0.0; // Derivative is not defined at x=0, but we can return 0 for practical purposes
             }
             // Data members
-            real_t threshold{0.0};
+            real_t threshold{0.2};
     };
     ////////////////////////
     // Sigmoid activation //
