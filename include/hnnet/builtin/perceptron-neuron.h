@@ -9,12 +9,13 @@ namespace hNNet {
         ////////////////////////////
         class PerceptronNeuron : public Neuron {
             public:
+                // Constructor
                 PerceptronNeuron() : Neuron(std::make_unique<PerceptronActivation>()) {}
             private:
                 // Learn from error
                 void learn(const real_t error) final {
                     static constexpr real_t rate{1.0};
-                    for (auto &conn : this->get_in_connections()) {
+                    for (const auto &conn : this->get_in_connections()) {
                         const auto learnt = (std::abs(error) < 1e-6);
                         if (learnt) {
                             return;
