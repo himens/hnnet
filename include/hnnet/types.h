@@ -20,7 +20,7 @@ namespace hNNet {
     using real32_t = std::float32_t;
     using int32_t  = std::int32_t;
     using size_t   = std::size_t;
-    using index_t  = std::size_t;
+    using index_t  = std::uint32_t;
 
     template <typename T>
         concept ValueType = std::same_as<T, real_t>   or 
@@ -31,7 +31,7 @@ namespace hNNet {
         requires (Size > 0)
         using Data = std::array<Type, Size>;
     template <typename T>
-        concept DataType = requires{ {std::tuple_size<T>::value}; } and std::same_as<T, Data<std::ranges::range_value_t<T>, std::tuple_size_v<T>>>;
+        concept DataType = requires{ {std::tuple_size_v<T>}; } and std::same_as<T, Data<std::ranges::range_value_t<T>, std::tuple_size_v<T>>>;
     template <typename T>
         concept IndexRange = std::ranges::range<T> and std::integral<std::ranges::range_value_t<T>>;
 }

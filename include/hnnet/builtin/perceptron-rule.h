@@ -7,8 +7,8 @@ namespace hNNet::Builtin {
             // Constructor
             explicit PerceptronRule(const real_t learning_rate = 1.0) : _learning_rate(learning_rate) {}
             // Learn from targets using the perceptron learning rule
-            template <NeuronType Neuron, DataType Input, DataType Output>
-                void learn(NNet<Neuron, Input, Output>& net, const typename NNet<Neuron, Input, Output>::OutputData& targets) const {
+            template <NNetType Net>
+                void learn(Net &net, const output_t<Net> &targets) const {
                     auto view = net.learning_view();
                     index_t itarget{0};
                     for (index_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {

@@ -1,5 +1,4 @@
 #pragma once
-#include "hnnet/types.h"
 #include "hnnet/neuron.h"
 #include "hnnet/learning-rule.h"
 #include "timer.h"
@@ -11,23 +10,24 @@ namespace hNNet {
     ////////////////
     // NNet class //
     ////////////////
-    template <NeuronType Neuron, DataType Input, DataType Output>
+    template <NeuronType Neuron, DataType InputData, DataType OutputData>
     class NNet {
         public:
             // Data types
-            using InputData = Input;
-            using OutputData = Output;
+            using neuron_type = Neuron;
+            using input_type = InputData;
+            using output_type = OutputData;
+            static constexpr size_t input_size{std::tuple_size_v<input_type>};
+            static constexpr size_t output_size{std::tuple_size_v<output_type>};
             struct TrainingSample {
-                InputData inputs;
-                OutputData targets;
+                input_type inputs;
+                output_type targets;
             };
             struct SynapticConn {
                 Neuron* const tx{nullptr};
                 Neuron* const rx{nullptr};
                 real_t weight{0.0};
             };
-            static constexpr size_t InputSize{std::tuple_size<InputData>::value};
-            static constexpr size_t OutputSize{std::tuple_size<OutputData>::value};
             ////////////////////////
             // LearningView class //
             ////////////////////////
@@ -137,7 +137,7 @@ namespace hNNet {
                     constexpr size_t max_epochs{1'000'000};
                     auto in_neurons  = _neurons | std::views::filter([&] (auto &neuron) { return _in_connections[neuron_index(&neuron)].empty(); })  | std::views::all;
                     auto out_neurons = _neurons | std::views::filter([&] (auto &neuron) { return _out_connections[neuron_index(&neuron)].empty(); }) | std::views::all;
-                    if ((std::ranges::distance(in_neurons) != InputSize) or (std::ranges::distance(out_neurons) != OutputSize)) {
+                    if ((std::ranges::distance(in_neurons) != input_size) or (std::ranges::distance(out_neurons) != output_size)) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }
                     size_t epoch{0};
@@ -221,7 +221,7 @@ namespace hNNet {
             // Inject input data into neurons
             template <NeuronView View>
                 void inject(const InputData &inputs, View neurons) {
-                    if (std::ranges::distance(neurons) != InputSize) {
+                    if (std::ranges::distance(neurons) != input_size) {
                         throw std::invalid_argument("NNet::inject: size error!");
                     }
                     for (const auto &[neuron, input] : std::views::zip(neurons, inputs)) {
@@ -259,4 +259,18 @@ namespace hNNet {
             std::vector<std::vector<index_t>> _in_connections{};
             std::vector<std::vector<index_t>> _out_connections{};
     };
+    template <typename T>
+        using neuron_t = T::neuron_type;
+    template <typename T>
+        using input_t = T::input_type;
+    template <typename T>
+        using output_t = T::output_type;
+    template<typename T>
+        constexpr std::size_t input_size_v = T::input_size;
+    template<typename T>
+        constexpr std::size_t output_size_v = T::output_size;
+    template <typename T>
+        concept NNetType = 
+            requires { typename T::neuron_type; typename T::input_type; typename T::output_type; } and 
+            std::derived_from<T, NNet<typename T::neuron_type, typename T::input_type, typename T::output_type>>;
 }

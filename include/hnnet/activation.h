@@ -3,10 +3,11 @@
 
 namespace hNNet {
     template <typename T>
-        concept ActivationType = requires(T activation, const real_t x) {
-            { activation(x) } -> std::same_as<real_t>;
-            { activation.derivative(x) } -> std::same_as<real_t>;
-        };
+        concept ActivationType = 
+            requires (T activation, const real_t x) {
+                { activation(x) } -> std::same_as<real_t>;
+                { activation.derivative(x) } -> std::same_as<real_t>;
+            };
     struct IdentityActivation {
         real_t operator()(const real_t x) const {
             return x;
