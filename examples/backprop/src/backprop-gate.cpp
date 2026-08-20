@@ -4,7 +4,6 @@
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
     // define net type
-    /*
     using namespace hNNet;
     using Gate = NNet<Neuron, Data<real_t, 7>, Data<real_t, 1>>;
     // create net
@@ -23,7 +22,7 @@ int main() {
         gate.connect(bias, neuron);
     }
     // train net
-    std::vector<Gate::TrainingData> training_samples = {
+    std::vector<Gate::TrainingSample> training_samples = {
         // binary
         {{1, 1, 1, 1, 1, 1, 1}, {0}},
         {{1, 0, 1, 1, 1, 1, 1}, {1}},
@@ -38,7 +37,6 @@ int main() {
     gate.randomize_weights(-0.5, +0.5);
     Builtin::BackpropRule rule;
     gate.train(training_samples, rule);
-    */
 
     return 0;
 }
