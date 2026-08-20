@@ -13,12 +13,13 @@ namespace hNNet {
     template <NeuronType Neuron, DataType InputData, DataType OutputData>
     class NNet {
         public:
-            // Data types
+            // Aliases and constants
             using neuron_type = Neuron;
             using input_type = InputData;
             using output_type = OutputData;
             static constexpr size_t input_size{std::tuple_size_v<InputData>};
             static constexpr size_t output_size{std::tuple_size_v<OutputData>};
+            // Data types
             struct TrainingSample {
                 InputData inputs;
                 OutputData targets;

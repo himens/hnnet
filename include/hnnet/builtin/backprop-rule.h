@@ -32,7 +32,7 @@ namespace hNNet::Builtin {
                     auto view = net.view();
                     reset(view.neuron_count());
                     index_t itarget{0};
-                    // Compute deltas for output neurons and back-propagate through the network
+                    // Compute deltas for output neurons and back-propagate through the net
                     for (index_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
                         if (not view.out_connections(ineuron).empty()) {
                             continue;

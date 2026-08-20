@@ -96,9 +96,9 @@ int main() {
     using Classifier = NNet<Neuron, InputData, OutputData>;
     // create net
     Classifier classifier;
-    const auto layer_in  = classifier.new_neurons(nb_pixels,  IdentityActivation{});
-    const auto layer_out = classifier.new_neurons(nb_letters, PerceptronActivation{});
-    classifier.connect(layer_in, layer_out);
+    const auto input_layer  = classifier.new_neurons(nb_pixels,  IdentityActivation{});
+    const auto output_layer = classifier.new_neurons(nb_letters, PerceptronActivation{});
+    classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};
     letters.append_range(read_letters("data/letters_train_1.txt"));

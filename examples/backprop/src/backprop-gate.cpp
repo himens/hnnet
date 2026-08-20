@@ -13,11 +13,11 @@ int main() {
     const auto output_layer = gate.new_neurons(1, SigmoidActivation{});
     gate.connect(input_layer, hidden_layer);
     gate.connect(hidden_layer, output_layer);
-    const auto hidden_biases = gate.new_neurons(4, SigmoidActivation{});
+    const auto hidden_biases = gate.new_neurons(4, IdentityActivation{});
     for (const auto &[bias, neuron] : std::views::zip(hidden_biases, hidden_layer)) {
         gate.connect(bias, neuron);
     }
-    const auto output_bias = gate.new_neurons(1, SigmoidActivation{});
+    const auto output_bias = gate.new_neurons(1, IdentityActivation{});
     for (const auto &[bias, neuron] : std::views::zip(output_bias, output_layer)) {
         gate.connect(bias, neuron);
     }

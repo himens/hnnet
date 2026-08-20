@@ -9,9 +9,9 @@ int main() {
     using Gate = NNet<Neuron, Data<int_t, 3>, Data<int_t, 1>>;
     // create net
     Gate gate;
-    const auto layer_x = gate.new_neurons(3, IdentityActivation{});
-    const auto y = gate.new_neuron(PerceptronActivation{});
-    gate.connect(layer_x, y);
+    const auto input_layer = gate.new_neurons(3, IdentityActivation{});
+    const auto output_layer = gate.new_neurons(1, PerceptronActivation{});
+    gate.connect(input_layer, output_layer);
     // train net
     std::vector<Gate::TrainingSample> samples = {
         {{1, 1, 1},  {1}},
