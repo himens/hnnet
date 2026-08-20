@@ -1,17 +1,22 @@
 # TODO
 
+## Fatto (rispetto a main)
+
+- [x] **Disaccoppiare il backpropagation dal tipo concreto del neurone**
+  - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi, l'attivazione è un `Activation` (variant) tenuto per valore in `Neuron`.
+  - La logica di apprendimento è stata estratta in `LearningRule` (`BackpropRule`, `PerceptronRule`) che opera su `NNet::View`/`Neuron` tramite un'interfaccia comune, senza `dynamic_cast`.
+  - Reti con attivazioni diverse per neurone sono già possibili.
+
+- [x] **Separare il calcolo dei gradienti dall'aggiornamento dei pesi**
+  - In `BackpropRule::learn()` i delta vengono calcolati e retro-propagati in un primo passaggio, l'aggiornamento dei pesi avviene in un secondo ciclo separato.
+  - Il learning rate è ora un parametro del costruttore di `BackpropRule`/`PerceptronRule`, non più hardcoded.
+  - Ancora da fare: batch/gradient accumulation e optimizer alternativi (momentum, adaptive rate) non sono ancora implementati, l'architettura lo permette ma manca lo stato persistente tra epoche (vedi sotto).
+
 ## Priorita alta
 
-- [ ] **Disaccoppiare il backpropagation dal tipo concreto del neurone**
-  - In `BackpropNeuron` la propagazione usa `dynamic_cast<BackpropNeuron*>`.
-  - Questo vincola una rete a usare la stessa specializzazione `BackpropNeuron<Activation>` nei neuroni collegati.
-  - Introdurre nella classe base `Neuron` un'interfaccia per ricevere un delta, così la propagazione dipende dal contratto comune e non dal tipo concreto.
-  - Rendere possibile una rete con attivazioni diverse nei vari layer, ad esempio `ReLU -> Sigmoid -> Linear`.
-
-- [ ] **Separare il calcolo dei gradienti dall'aggiornamento dei pesi**
-  - Attualmente ogni neurone aggiorna immediatamente i pesi durante la propagazione del delta.
-  - Separare raccolta del gradiente e aggiornamento permetterebbe di introdurre batch, gradient accumulation, momentum e optimizer diversi.
-  - Rendere il learning rate configurabile invece di mantenerlo hardcoded dentro `BackpropNeuron`.
+- [ ] **Introdurre stato persistente per la learning rule durante il training**
+  - `NNet::train()` copia la `LearningRule` per valore e la usa per riferimento non-const per tutta la sessione, quindi lo stato può già persistere tra epoche/sample.
+  - Manca però l'uso pratico di questa possibilità: implementare momentum e/o learning rate adattivo in `BackpropRule` per sfruttarla.
 
 ## Priorita media
 
@@ -21,8 +26,8 @@
   - Valutare API esplicite per registrare i neuroni di input e output oppure introdurre concetti distinti per source e output neuron.
 
 - [ ] **Gestire il bias come parte della rete, non come dato di training**
-  - L'attuale soluzione usa neuroni aggiuntivi e richiede di aggiungere valori costanti a `TrainingData`.
-  - È stata utile per testare il codice, ma rende i dati di input artificialmente più grandi e lega il dataset alla topologia interna.
+  - La classe `BiasNeuron` è stata rimossa, ma il problema di fondo resta: in `backprop-gate.cpp` i bias sono ancora neuroni di input a tutti gli effetti, e richiedono di aggiungere valori costanti (1) a ogni `TrainingSample.inputs` (es. `Data<real_t, 7>` per 2 input reali + 5 bias).
+  - Lega il dataset alla topologia interna e rende i dati di input artificialmente più grandi.
   - Introdurre una gestione del bias indipendente dai campioni di addestramento.
 
 - [ ] **Ridurre la dipendenza implicita dall'ordine di propagazione**
@@ -42,4 +47,4 @@
 
 ## Nota
 
-La classe `BiasNeuron` è considerata superflua e va eliminata. Il bias non dovrebbe richiedere l'aggiunta di elementi artificiali a `TrainingData`, ma essere modellato come proprietà della rete o del layer.
+La classe `BiasNeuron` è stata rimossa (rispetto a main), ma il bias è ancora modellato con neuroni ordinari collegati come input impliciti: il problema descritto sopra (bias non indipendente da `TrainingData`) non è ancora risolto, solo la classe dedicata è sparita.
