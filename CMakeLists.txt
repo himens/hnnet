@@ -11,6 +11,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-O3>)
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Riduce la verbosità dei messaggi di errore su concept/template annidati
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-diagnostics-show-template-tree>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fmax-errors=3>)
+endif()
+
 add_library(hnnet_lib INTERFACE)
 add_library(hnnet::hnnet ALIAS hnnet_lib)
 target_include_directories(hnnet_lib INTERFACE
