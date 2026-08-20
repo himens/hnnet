@@ -28,10 +28,10 @@ namespace hNNet {
                 Neuron* const rx{nullptr};
                 real_t weight{0.0};
             };
-            ////////////////////////
-            // LearningView class //
-            ////////////////////////
-            class LearningView {
+            ////////////////
+            // View class //
+            ////////////////
+            class View {
                 public:
                     size_t neuron_count() const {
                         return _net._neurons.size();
@@ -56,7 +56,7 @@ namespace hNNet {
                     }
                 private:
                     friend class NNet;
-                    explicit LearningView(NNet& net) : _net(net) {}
+                    explicit View(NNet& net) : _net(net) {}
                     NNet& _net;
             };
         public:
@@ -65,9 +65,9 @@ namespace hNNet {
                 _neurons.reserve(1000);  // Preallocate space for 1000 neurons
                 _connections.reserve(_neurons.capacity() * 10);  // Preallocate space for 10 connections each neuron    
             }
-            // Create a learning view of the net
-            LearningView learning_view() {
-                return LearningView(*this);
+            // Create a view of the net
+            View view() {
+                return View(*this);
             }
             // Create a single new neuron
             template <typename... Args>
@@ -132,7 +132,7 @@ namespace hNNet {
             // Train net using a set of training samples
             template <typename LearningRule>
                 requires LearningRuleType<LearningRule, NNet>
-                void train(const std::vector<TrainingSample> &samples, const LearningRule& rule) {
+                void train(const std::vector<TrainingSample> &samples, LearningRule rule) {
                     constexpr real_t error_threshold{5e-2};
                     constexpr size_t max_epochs{1'000'000};
                     auto in_neurons  = _neurons | std::views::filter([&] (auto &neuron) { return _in_connections[neuron_index(&neuron)].empty(); })  | std::views::all;
@@ -249,7 +249,7 @@ namespace hNNet {
             // Learn from targets using the selected learning rule
             template <typename LearningRule>
                 requires LearningRuleType<LearningRule, NNet>
-                void learn(const OutputData& targets, LearningRule& rule) {
+                void learn(const OutputData &targets, LearningRule &rule) {
                     rule.learn(*this, targets);
                 }
             // Data members
