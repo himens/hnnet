@@ -17,11 +17,11 @@ namespace hNNet {
             using neuron_type = Neuron;
             using input_type = InputData;
             using output_type = OutputData;
-            static constexpr size_t input_size{std::tuple_size_v<input_type>};
-            static constexpr size_t output_size{std::tuple_size_v<output_type>};
+            static constexpr size_t input_size{std::tuple_size_v<InputData>};
+            static constexpr size_t output_size{std::tuple_size_v<OutputData>};
             struct TrainingSample {
-                input_type inputs;
-                output_type targets;
+                InputData inputs;
+                OutputData targets;
             };
             struct SynapticConn {
                 Neuron* const tx{nullptr};
@@ -270,7 +270,5 @@ namespace hNNet {
     template<typename T>
         constexpr std::size_t output_size_v = T::output_size;
     template <typename T>
-        concept NNetType = 
-            requires { typename T::neuron_type; typename T::input_type; typename T::output_type; } and 
-            std::derived_from<T, NNet<typename T::neuron_type, typename T::input_type, typename T::output_type>>;
+        concept NNetType = std::derived_from<T, NNet<neuron_t<T>, input_t<T>, output_t<T>>>;
 }

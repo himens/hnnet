@@ -1,6 +1,8 @@
 #pragma once
 #include "hnnet/activation.h"
 
+// TODO: 1) Remove all Activation dependency from Neuron and simply add a real_t activate() to NeuronType concept?
+
 namespace hNNet {
     //////////////////
     // Neuron class //
