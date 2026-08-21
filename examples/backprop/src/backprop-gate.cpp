@@ -5,38 +5,31 @@
 int main() {
     // define net type
     using namespace hNNet;
-    using Gate = NNet<Neuron, Data<real_t, 7>, Data<real_t, 1>>;
+    using Gate = NNet<Data<real_t, 2>, Data<real_t, 1>>;
     // create net
     Gate gate;
-    const auto input_layer  = gate.new_neurons(2, IdentityActivation{});
-    const auto hidden_layer = gate.new_neurons(4, SigmoidActivation{});
-    const auto output_layer = gate.new_neurons(1, SigmoidActivation{});
+    const auto input_layer  = gate.new_neurons(2, NeuronType::input);
+    const auto hidden_layer = gate.new_neurons(4, NeuronType::hidden, SigmoidActivation{});
+    const auto output_layer = gate.new_neurons(1, NeuronType::output, SigmoidActivation{});
     gate.connect(input_layer, hidden_layer);
     gate.connect(hidden_layer, output_layer);
-    const auto hidden_biases = gate.new_neurons(4, IdentityActivation{});
-    for (const auto &[bias, neuron] : std::views::zip(hidden_biases, hidden_layer)) {
-        gate.connect(bias, neuron);
-    }
-    const auto output_bias = gate.new_neurons(1, IdentityActivation{});
-    for (const auto &[bias, neuron] : std::views::zip(output_bias, output_layer)) {
-        gate.connect(bias, neuron);
-    }
+    gate.add_bias(hidden_layer);
+    gate.add_bias(output_layer);
     // train net
-    std::vector<Gate::TrainingSample> training_samples = {
+    std::vector<Gate::TrainingSample> samples = {
         // binary
-        {{1, 1, 1, 1, 1, 1, 1}, {0}},
-        {{1, 0, 1, 1, 1, 1, 1}, {1}},
-        {{0, 1, 1, 1, 1, 1, 1}, {1}},
-        {{0, 0, 1, 1, 1, 1, 1}, {0}}
+        {{1, 1}, {0}},
+        {{1, 0}, {1}},
+        {{0, 1}, {1}},
+        {{0, 0}, {0}}
         // bipolar
-        //{{+1, +1, +1, +1, +1, +1, +1}, {-1}},
-        //{{+1, -1, +1, +1, +1, +1, +1}, {+1}},
-        //{{-1, +1, +1, +1, +1, +1, +1}, {+1}},
-        //{{-1, -1, +1, +1, +1, +1, +1}, {-1}}
+        //{{+1, +1}, {-1}},
+        //{{+1, -1}, {+1}},
+        //{{-1, +1}, {+1}},
+        //{{-1, -1}, {-1}}
     };
     gate.randomize_weights(-0.5, +0.5);
-    Builtin::BackpropRule rule;
-    gate.train(training_samples, rule);
+    gate.train(samples, Builtin::BackpropRule{0.2});
 
     return 0;
 }

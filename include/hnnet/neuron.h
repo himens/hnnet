@@ -7,11 +7,18 @@ namespace hNNet {
     //////////////////
     // Neuron class //
     //////////////////
+    enum class NeuronType { input, hidden, output, bias };
     class Neuron {
         public:
+            // Constructor
+            Neuron(const NeuronType type, const Activation &activation = IdentityActivation{}) : _type(type), _activation(activation) {}
             // Get neuron signal 
             real_t signal() const {
                 return _signal;
+            }
+            // Get neuron type
+            NeuronType type() const {
+                return _type;
             }
             // Get number of received signals
             size_t number_rx_signals() const {
@@ -32,14 +39,8 @@ namespace hNNet {
             }
             // Reset state before processing a new sample
             void reset() {
-                _signal = 0.0;
                 _number_rx_signals = 0;
                 _weighted_sum = 0.0;
-            }
-        public:
-            // Constructor
-            Neuron(const Activation &activation) {
-                _activation = std::move(activation);
             }
             // Get activation value and derivative
             real_t activation(const real_t x) const {
@@ -50,19 +51,14 @@ namespace hNNet {
             }
         private:
             // Data members
+            NeuronType _type;
             size_t _number_rx_signals{0};
             real_t _weighted_sum{0.0};
             real_t _signal{0.0};
             Activation _activation;
     };
     template <typename T>
-        concept NeuronType = std::derived_from<T, Neuron>;
-    template <typename T>
-        concept NeuronRange = std::ranges::range<T> and NeuronType<std::ranges::range_value_t<T>>;
+        concept NeuronRange = std::ranges::range<T> and std::same_as<std::ranges::range_value_t<T>, Neuron>;
     template <typename T>
         concept NeuronView = std::ranges::view<T> and NeuronRange<T>;
-    template <typename T>
-        concept NeuronPtr = std::indirectly_readable<std::decay_t<T>> and NeuronType<std::iter_value_t<std::decay_t<T>>>;
-    template <typename T>
-        concept NeuronPtrRange = std::ranges::range<T> and NeuronPtr<std::ranges::range_value_t<T>>;
 }

@@ -3,10 +3,10 @@
 hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model but to provide:
 
 - a generic neural network, `NNet`, whose template parameters define the type and size of the input and output data
-- a flexible base neuron abstraction, `Neuron`, whose behavior can be customized through virtual hooks
-- a simple training and inference loop that works once the network topology and neuron behavior are defined
+- a single concrete `Neuron` class, whose type (`input`, `hidden`, `output`, `bias`) and activation function are set when it is created
+- a `LearningRule` strategy (e.g. `Builtin::PerceptronRule`, `Builtin::BackpropRule`) that plugs into `NNet::train(...)` without requiring virtual dispatch on the neuron
 
-The perceptron code in the examples is only one concrete implementation of a neuron.
+The perceptron and backprop rules in `include/hnnet/builtin` are only two concrete learning strategies that can be plugged into the generic framework.
 
 ## Requirements
 
@@ -68,79 +68,68 @@ Classifier data representation details:
 
 - `include/`: library headers
     - `hnnet/types.h`: base types such as `Data`
-    - `hnnet/neuron.h`: definition of the generic `Neuron` abstraction
+    - `hnnet/activation.h`: `Activation` strategies (identity, step, sigmoid, ...)
+    - `hnnet/neuron.h`: definition of the `Neuron` class
+    - `hnnet/learning-rule.h`: `LearningRuleType` concept used by `NNet::train(...)`
     - `hnnet/nnet.h`: implementation of the generic `NNet` network
+    - `hnnet/builtin/`: built-in learning rules (`PerceptronRule`, `BackpropRule`)
 - `examples/`: example implementations built on top of the generic framework
 - `data/`: datasets used by the examples
 - `scripts/`: helper scripts for generating or processing data
 
 ## How the library is intended to be used
 
-The library is designed around two main pieces:
+The library is designed around three main pieces:
 
 1. `NNet<InputData, OutputData>`
     - defines the network input/output contract through `Data` types
-   - manages neuron creation and connections
-   - provides `train(...)` and `infer(...)` operations
+    - manages neuron creation and connections
+    - provides `train(...)` and `infer(...)` operations
 
 `InputData` and `OutputData` must satisfy `DataType`, so in practice you pass aliases based on `Data<ValueType, Size>`.
 
 2. `Neuron`
-   - provides the generic signal propagation and learning infrastructure
-    - owns an `Activation` strategy used to convert weighted sums into output signals
-    - exposes customizable virtual behavior through methods such as `update(...)`
-   - allows you to define your own neuron model by deriving from it
+    - a single concrete class: its `NeuronType` (`input`, `hidden`, `output`, `bias`) is set at creation and used by `NNet` to identify input/output neurons
+    - owns an `Activation` strategy (e.g. `SigmoidActivation`, `PerceptronActivation`) used to convert weighted sums into output signals
 
-In other words, the framework is generic, and the perceptron implementation is just one possible neuron model that can be plugged into it.
+3. `LearningRule` (e.g. `Builtin::PerceptronRule`, `Builtin::BackpropRule`)
+    - implements `learn(net, targets)` and is passed to `NNet::train(...)`
+    - lets you swap the learning algorithm without changing `Neuron` or `NNet`
 
 ## Basic usage example
 
-Here is a minimal example of how to create and train a network using a custom neuron type:
+Here is a minimal example of how to create and train a network (AND gate with a perceptron rule):
 
 ```cpp
 #include "hnnet/nnet.h"
-#include "hnnet/builtin/activations.h"
+#include "hnnet/builtin/perceptron-rule.h"
 
-struct MyNeuron : public hNNet::Neuron {
-    MyNeuron()
-        : hNNet::Neuron(std::make_unique<hNNet::BipolarStepActivation>()) {}
+using namespace hNNet;
+using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;
+Gate gate;
 
-    void learn(const hNNet::real_t error) override {
-        static constexpr real_t rate{1.0};
-        for (auto &conn : this->get_in_connections()) {
-             const auto target = error + this->get_signal();
-             conn->weight += rate * target * conn->tx->get_signal();
-        }
-    }
+const auto input_layer  = gate.new_neurons(2, NeuronType::input);
+const auto output_layer = gate.new_neurons(1, NeuronType::output, PerceptronActivation{});
+gate.connect(input_layer, output_layer);
+gate.add_bias(output_layer);
+
+std::vector<Gate::TrainingSample> samples = {
+    {{1, 1},  {1}},
+    {{1, 0}, {-1}},
+    {{0, 1}, {-1}},
+    {{0, 0}, {-1}}
 };
 
-using InputData = hNNet::Data<hNNet::int_t, 3>;
-using OutputData = hNNet::Data<hNNet::int_t, 1>;
-using Net = hNNet::NNet<InputData, OutputData>;
-Net net;
-
-const auto inputs = net.new_neurons<MyNeuron>(3);
-const auto output = net.new_neuron<MyNeuron>();
-
-net.connect(inputs, output);
-
-std::vector<Net::TrainingData> samples = {
-    {{1, 1, 1}, {1}},
-    {{1, 0, 1}, {-1}},
-    {{0, 1, 1}, {-1}},
-    {{0, 0, 1}, {-1}}
-};
-
-net.train(samples);
+gate.train(samples, Builtin::PerceptronRule{1.0});
 ```
 
 The main operations are:
 
-- `new_neuron<T>()`: creates a single neuron
-- `new_neurons<T>(n)`: creates `n` neurons
-- `connect(...)`: connects neurons to each other
-- `train(...)`: trains the network on the provided data
-- `infer(...)`: performs inference on new inputs
+- `new_neurons(n, type, activation)`: creates `n` neurons of the given `NeuronType` (and optional `Activation`, identity by default)
+- `connect(tx, rx)`: connects neurons to each other; each side can be a single `Neuron` or a range of neurons (all tx-rx pairs are connected)
+- `add_bias(neurons)`: creates and connects one bias neuron (constant signal 1.0) per neuron in the given range
+- `train(samples, rule)`: trains the network on the provided data using the given `LearningRule`
+- `infer(data)`: performs inference on new inputs
 
 During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with learned weights, elapsed time, and total epochs.
 
@@ -148,10 +137,9 @@ During `train(...)`, the current implementation prints epoch progress and, when 
 
 The main planned improvements are:
 
-- decouple backpropagation from the concrete neuron type
-- separate gradient calculation from weight updates
-- make inputs, outputs, and biases explicit parts of the network
-- add configurable training parameters and layer-building helpers
+- give the learning rules persistent state across epochs (momentum, adaptive learning rate)
+- reduce the implicit dependency on propagation order
+- add a layer/model abstraction and configurable training parameters
 
 See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.
 

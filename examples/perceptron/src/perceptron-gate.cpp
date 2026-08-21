@@ -6,20 +6,21 @@
 int main() {
     // define net type
     using namespace hNNet;
-    using Gate = NNet<Neuron, Data<int_t, 3>, Data<int_t, 1>>;
+    using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;
     // create net
     Gate gate;
-    const auto input_layer = gate.new_neurons(3, IdentityActivation{});
-    const auto output_layer = gate.new_neurons(1, PerceptronActivation{});
+    const auto input_layer  = gate.new_neurons(2, NeuronType::input);
+    const auto output_layer = gate.new_neurons(1, NeuronType::output, PerceptronActivation{});
     gate.connect(input_layer, output_layer);
+    gate.add_bias(output_layer);
     // train net
     std::vector<Gate::TrainingSample> samples = {
-        {{1, 1, 1},  {1}},
-        {{1, 0, 1}, {-1}},
-        {{0, 1, 1}, {-1}},
-        {{0, 0, 1}, {-1}}
+        {{1, 1},  {1}},
+        {{1, 0}, {-1}},
+        {{0, 1}, {-1}},
+        {{0, 0}, {-1}}
     };
-    gate.train(samples, Builtin::PerceptronRule{});
+    gate.train(samples, Builtin::PerceptronRule{1.0});
 
     return 0;
 }

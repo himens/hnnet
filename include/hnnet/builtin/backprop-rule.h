@@ -5,7 +5,7 @@ namespace hNNet::Builtin {
     class BackpropRule {
         public:
             // Constructor
-            explicit BackpropRule(const real_t learning_rate = 0.2) : _learning_rate(learning_rate) {}
+            explicit BackpropRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
             // Learn from targets using the back-propagation learning rule
             template <NNetType Net>
                 void learn(Net &net, const output_t<Net> &targets) {
@@ -33,10 +33,7 @@ namespace hNNet::Builtin {
                     reset(view.neuron_count());
                     index_t itarget{0};
                     // Compute deltas for output neurons and back-propagate through the net
-                    for (index_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
-                        if (not view.out_connections(ineuron).empty()) {
-                            continue;
-                        }
+                    for (const auto ineuron : view.out_neurons_indices()) {
                         const auto& neuron = view.neuron(ineuron);
                         const auto target = targets[itarget++];
                         const auto error = (target - neuron.signal());

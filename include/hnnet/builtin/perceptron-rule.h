@@ -5,16 +5,13 @@ namespace hNNet::Builtin {
     class PerceptronRule {
         public:
             // Constructor
-            explicit PerceptronRule(const real_t learning_rate = 1.0) : _learning_rate(learning_rate) {}
+            explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
             // Learn from targets using the perceptron learning rule
             template <NNetType Net>
                 void learn(Net &net, const output_t<Net> &targets) {
                     auto view = net.view();
                     index_t itarget{0};
-                    for (index_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
-                        if (not view.out_connections(ineuron).empty()) {
-                            continue;
-                        }
+                    for (const auto ineuron : view.out_neurons_indices()) {
                         const auto& neuron = view.neuron(ineuron);
                         const auto target = targets[itarget++];
                         const auto error = (target - neuron.signal());

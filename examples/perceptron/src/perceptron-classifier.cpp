@@ -93,11 +93,11 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 // Classify letters using the trained perceptron neural network
 int main() {
     // define net type
-    using Classifier = NNet<Neuron, InputData, OutputData>;
+    using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    const auto input_layer  = classifier.new_neurons(nb_pixels,  IdentityActivation{});
-    const auto output_layer = classifier.new_neurons(nb_letters, PerceptronActivation{});
+    const auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input);
+    const auto output_layer = classifier.new_neurons(nb_letters, NeuronType::output, PerceptronActivation{});
     classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};
@@ -108,7 +108,7 @@ int main() {
     for (const auto &[ch, pixels] : letters) {
         samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }
-    classifier.train(samples, Builtin::PerceptronRule{});
+    classifier.train(samples, Builtin::PerceptronRule{1.0});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters_noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));

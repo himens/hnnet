@@ -12,6 +12,19 @@
   - Il learning rate è ora un parametro del costruttore di `BackpropRule`/`PerceptronRule`, non più hardcoded.
   - Ancora da fare: batch/gradient accumulation e optimizer alternativi (momentum, adaptive rate) non sono ancora implementati, l'architettura lo permette ma manca lo stato persistente tra epoche (vedi sotto).
 
+- [x] **Rendere espliciti input, output e sorgenti della rete**
+  - I neuroni sono ora etichettati con `NeuronType` (`input`, `hidden`, `output`, `bias`), assegnato esplicitamente alla creazione con `new_neurons(...)`.
+  - `NNet::input_neurons()`/`output_neurons()` selezionano i neuroni per tipo e validano che il conteggio corrisponda a `input_size`/`output_size`.
+  - Non c'è più alcuna deduzione basata su connessioni entranti/uscenti.
+
+- [x] **Gestire il bias come parte della rete, non come dato di training**
+  - `NNet::add_bias(neurons)` crea un neurone di bias per ciascun neurone del range passato, lo collega e lo attiva con segnale costante 1.0.
+  - Il bias non è più parte di `TrainingSample.inputs`: la topologia della rete non influenza più la forma dei dati di training.
+
+- [x] **Unificare gli overload di `connect`**
+  - `NNet::connect(tx, rx)` accetta ora, per ciascun lato, sia un singolo `Neuron` sia un `NeuronRange`, tramite un'unica funzione template invece di quattro overload distinti.
+  - Internamente entrambi gli argomenti vengono uniformati a una view di `Neuron*` per riutilizzare la stessa logica di controllo/creazione delle connessioni.
+
 ## Priorita alta
 
 - [ ] **Introdurre stato persistente per la learning rule durante il training**
@@ -19,16 +32,6 @@
   - Manca però l'uso pratico di questa possibilità: implementare momentum e/o learning rate adattivo in `BackpropRule` per sfruttarla.
 
 ## Priorita media
-
-- [ ] **Rendere espliciti input, output e sorgenti della rete**
-  - Attualmente `NNet` identifica gli input come neuroni senza connessioni entranti e gli output come neuroni senza connessioni uscenti.
-  - Questa deduzione diventa ambigua in reti con rami, neuroni ausiliari o connessioni particolari.
-  - Valutare API esplicite per registrare i neuroni di input e output oppure introdurre concetti distinti per source e output neuron.
-
-- [ ] **Gestire il bias come parte della rete, non come dato di training**
-  - La classe `BiasNeuron` è stata rimossa, ma il problema di fondo resta: in `backprop-gate.cpp` i bias sono ancora neuroni di input a tutti gli effetti, e richiedono di aggiungere valori costanti (1) a ogni `TrainingSample.inputs` (es. `Data<real_t, 7>` per 2 input reali + 5 bias).
-  - Lega il dataset alla topologia interna e rende i dati di input artificialmente più grandi.
-  - Introdurre una gestione del bias indipendente dai campioni di addestramento.
 
 - [ ] **Ridurre la dipendenza implicita dall'ordine di propagazione**
   - Il conteggio dei delta ricevuti presume che ogni connessione produca esattamente un delta per ciclo.
@@ -47,4 +50,4 @@
 
 ## Nota
 
-La classe `BiasNeuron` è stata rimossa (rispetto a main), ma il bias è ancora modellato con neuroni ordinari collegati come input impliciti: il problema descritto sopra (bias non indipendente da `TrainingData`) non è ancora risolto, solo la classe dedicata è sparita.
+La classe `BiasNeuron` è stata rimossa (rispetto a main): il bias è ora gestito tramite `NNet::add_bias(...)`, indipendente dai dati di training.
