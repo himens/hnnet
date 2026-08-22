@@ -66,26 +66,6 @@ namespace hNNet {
             View view() {
                 return View(*this);
             }
-            // Get neurons of given type
-            auto neurons(const NeuronType type) {
-                return _neurons | std::views::filter([type] (const auto &neuron) { return neuron.type() == type; });
-            }
-            // Get input neurons
-            auto input_neurons() {
-                auto in_neurons = neurons(NeuronType::input);
-                if (std::ranges::distance(in_neurons) != input_size) {
-                    throw std::runtime_error("NNet::input_neurons: size error!");
-                }
-                return in_neurons;
-            }
-            // Get output neurons
-            auto output_neurons() { 
-                auto out_neurons = neurons(NeuronType::output);
-                if (std::ranges::distance(out_neurons) != output_size) {
-                    throw std::runtime_error("NNet::output_neurons: size error!");
-                }
-                return out_neurons;
-            }
             // Create new neurons (all constructed with the same arguments)
             template <typename... Args>
                 requires (std::constructible_from<Neuron, Args...>)
@@ -154,9 +134,12 @@ namespace hNNet {
                 void train(const std::vector<TrainingSample> &samples, LearningRule rule) {
                     constexpr real_t error_threshold{5e-2};
                     constexpr size_t max_epochs{1'000'000};
-                    auto in_neurons = input_neurons();
-                    auto out_neurons = output_neurons();
+                    auto in_neurons = neurons(NeuronType::input);
+                    auto out_neurons = neurons(NeuronType::output);
                     auto bias_neurons = neurons(NeuronType::bias);
+                    if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
+                        throw std::invalid_argument("NNet::train: input size error!");
+                    }
                     size_t epoch{0};
                     bool converged{false};
                     Timer timer{};
@@ -213,13 +196,17 @@ namespace hNNet {
                     std::println("NNet::infer: try to infer from an untrained net!");
                     return {};
                 }
-                auto in_neurons = input_neurons();
+                auto in_neurons = neurons(NeuronType::input);
+                auto out_neurons = neurons(NeuronType::output);
                 auto bias_neurons = neurons(NeuronType::bias);
+                if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
+                    throw std::invalid_argument("NNet::infer: input or output size error!");
+                }
                 reset();
                 inject(data, in_neurons);
                 broadcast(std::views::concat(bias_neurons, in_neurons));
                 OutputData outputs;
-                for (const auto &[idx, neuron] : output_neurons() | std::views::enumerate) {
+                for (const auto &[idx, neuron] : out_neurons | std::views::enumerate) {
                     outputs[idx] = neuron.signal(); 
                 }
                 return outputs;
@@ -272,6 +259,10 @@ namespace hNNet {
                 for (auto& neuron : _neurons) {
                     neuron.reset();
                 }
+            }
+            // Get neurons of given type
+            auto neurons(const NeuronType type) {
+                return _neurons | std::views::filter([type] (const auto &neuron) { return neuron.type() == type; });
             }
             // Data members
             bool _trained{false};
