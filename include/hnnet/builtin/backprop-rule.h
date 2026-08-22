@@ -33,8 +33,11 @@ namespace hNNet::Builtin {
                     reset(view.neuron_count());
                     index_t itarget{0};
                     // Compute deltas for output neurons and back-propagate through the net
-                    for (const auto ineuron : view.out_neurons_indices()) {
+                    for (size_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
                         const auto& neuron = view.neuron(ineuron);
+                        if (neuron.type() != NeuronType::output) {
+                            continue;  // Skip non-output neurons
+                        }
                         const auto target = targets[itarget++];
                         const auto error = (target - neuron.signal());
                         _deltas[ineuron] = error * neuron.activation_derivative(neuron.weighted_sum());

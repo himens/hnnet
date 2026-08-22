@@ -54,14 +54,6 @@ namespace hNNet {
                     index_t neuron_index(const Neuron* neuron) const {
                         return _net.neuron_index(neuron);
                     }
-                    // Get indices of input neurons
-                    auto in_neurons_indices() const {
-                        return _net.input_neurons() | std::views::transform([this] (const auto &neuron) { return neuron_index(&neuron); });
-                    }
-                    // Get indices of output neurons
-                    auto out_neurons_indices() const {
-                        return _net.output_neurons() | std::views::transform([this] (const auto &neuron) { return neuron_index(&neuron); });
-                    }
                 private:
                     friend class NNet;
                     explicit View(NNet& net) : _net(net) {}
