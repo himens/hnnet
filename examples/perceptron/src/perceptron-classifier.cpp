@@ -96,8 +96,8 @@ int main() {
     using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    const auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input);
-    const auto output_layer = classifier.new_neurons(nb_letters, NeuronType::output, PerceptronActivation{});
+    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input);
+    auto output_layer = classifier.new_neurons(nb_letters, NeuronType::output, PerceptronActivation{});
     classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};

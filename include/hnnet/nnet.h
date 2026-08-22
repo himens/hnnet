@@ -21,8 +21,8 @@ namespace hNNet {
                 OutputData targets;
             };
             struct SynapticConn {
-                Neuron* const tx{nullptr};
-                Neuron* const rx{nullptr};
+                index_t itx{0};
+                index_t irx{0};
                 real_t weight{0.0};
             };
             ////////////////
@@ -82,36 +82,30 @@ namespace hNNet {
                 requires (NeuronView<std::remove_cvref_t<Tx>> or std::same_as<std::remove_cvref_t<Tx>, Neuron>) and
                          (NeuronView<std::remove_cvref_t<Rx>> or std::same_as<std::remove_cvref_t<Rx>, Neuron>)
                 void connect(Tx &&tx_arg, Rx &&rx_arg) {
-                    auto to_neuron_ptrs = [] (auto &&arg) {
+                    auto to_neuron_index = [this] (auto &&arg) {
                         if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
-                            return std::views::single(&arg);
+                            return std::views::single(neuron_index(&arg));
                         } else {
-                            return std::forward<decltype(arg)>(arg) | std::views::transform([] (Neuron &neuron) { return &neuron; });
+                            return std::forward<decltype(arg)>(arg) | std::views::transform([this] (const Neuron &neuron) { return neuron_index(&neuron); });
                         }
                     };
-                    auto tx_neurons = to_neuron_ptrs(std::forward<Tx>(tx_arg));
-                    auto rx_neurons = to_neuron_ptrs(std::forward<Rx>(rx_arg));
-                    auto in_net = [&] (const Neuron *neuron) {
-                        return std::ranges::any_of(_neurons, [&] (const auto &net_neuron) { return (&net_neuron == neuron); });
-                    };
-                    if (not std::ranges::all_of(tx_neurons, in_net) or not std::ranges::all_of(rx_neurons, in_net)) {
-                        throw std::invalid_argument("NNet::connect: neurons not in net!");
-                    }
-                    for (const auto &[tx, rx] : std::views::cartesian_product(tx_neurons, rx_neurons)) {
-                        const auto found = std::ranges::any_of(_connections, [&] (const auto &conn) { return (conn.tx == tx) and (conn.rx == rx); });
+                    auto itxs = to_neuron_index(std::forward<Tx>(tx_arg));
+                    auto irxs = to_neuron_index(std::forward<Rx>(rx_arg));
+                    for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
+                        const auto found = std::ranges::any_of(_connections, [&] (const auto &conn) { return (conn.itx == itx) and (conn.irx == irx); });
                         if (found) {
                             throw std::invalid_argument("NNet::connect: duplicate connection!");
                         }
-                        _connections.emplace_back(tx, rx, 0.0);
-                        const auto iconn = _connections.size() - 1;
-                        _out_connections[neuron_index(tx)].emplace_back(iconn);
-                        _in_connections[neuron_index(rx)].emplace_back(iconn);
+                        const auto iconn = _connections.size();
+                        _connections.emplace_back(itx, irx, 0.0);
+                        _out_connections[itx].emplace_back(iconn);
+                        _in_connections[irx].emplace_back(iconn);
                     }
                 }
             // Connect neurons (zip)
-            template <NeuronView Tx, NeuronView Rx>
-                void zip_connect(Tx tx_neurons, Rx rx_neurons) {
-                    for (const auto &[tx, rx] : std::views::zip(tx_neurons, rx_neurons)) {
+            template <NeuronView TxView, NeuronView RxView>
+                void zip_connect(TxView itxs, RxView irxs) {
+                    for (const auto &[tx, rx] : std::views::zip(itxs, irxs)) {
                         connect(tx, rx);
                     }
                 }
@@ -238,12 +232,14 @@ namespace hNNet {
                     }
                 }
             void broadcast(const Neuron& neuron) {
-                for (const auto &iconn : _out_connections[neuron_index(&neuron)]) {
-                    auto& conn = _connections[iconn];
-                    conn.rx->receive_signal(neuron.signal() * conn.weight);
-                    if (conn.rx->number_rx_signals() == _in_connections[neuron_index(conn.rx)].size()) {
-                        conn.rx->activate();
-                        broadcast(*conn.rx);
+                const auto itx = neuron_index(&neuron);
+                for (const auto &iconn : _out_connections[itx]) {
+                    const auto &conn = _connections[iconn];
+                    auto &rx = _neurons[conn.irx];
+                    rx.receive_signal(neuron.signal() * conn.weight);
+                    if (rx.number_rx_signals() == _in_connections[conn.irx].size()) {
+                        rx.activate();
+                        broadcast(rx);
                     }
                 }
             }

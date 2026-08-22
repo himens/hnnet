@@ -8,9 +8,9 @@ int main() {
     using Gate = NNet<Data<real_t, 2>, Data<real_t, 1>>;
     // create net
     Gate gate;
-    const auto input_layer  = gate.new_neurons(2, NeuronType::input);
-    const auto hidden_layer = gate.new_neurons(4, NeuronType::hidden, SigmoidActivation{});
-    const auto output_layer = gate.new_neurons(1, NeuronType::output, SigmoidActivation{});
+    auto input_layer  = gate.new_neurons(2, NeuronType::input);
+    auto hidden_layer = gate.new_neurons(4, NeuronType::hidden, SigmoidActivation{});
+    auto output_layer = gate.new_neurons(1, NeuronType::output, SigmoidActivation{});
     gate.connect(input_layer, hidden_layer);
     gate.connect(hidden_layer, output_layer);
     gate.add_bias(hidden_layer);

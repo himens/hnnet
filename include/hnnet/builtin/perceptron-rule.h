@@ -23,7 +23,8 @@ namespace hNNet::Builtin {
                         }
                         for (const auto &iconn : view.in_connections(ineuron)) {
                             auto& conn = view.connection(iconn);
-                            conn.weight += _learning_rate * target * conn.tx->signal();
+                            const auto &tx = view.neuron(conn.itx);
+                            conn.weight += _learning_rate * target * tx.signal();
                         }
                     }
                 }

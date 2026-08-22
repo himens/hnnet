@@ -11,13 +11,13 @@ namespace hNNet::Builtin {
                 void learn(Net &net, const output_t<Net> &targets) {
                     // Backpropagate errors through the net
                     auto backprop_error = [&] (this auto&& self, Net::View &view, const index_t ineuron) -> void {
-                        for (const auto iconn : view.in_connections(ineuron)) {
+                        for (const auto &iconn : view.in_connections(ineuron)) {
                             const auto& conn = view.connection(iconn);
-                            const auto itx = view.neuron_index(conn.tx);
-                            _deltas[itx] += _deltas[ineuron] * conn.weight;
-                            if (++_number_rx_deltas[itx] == view.out_connections(itx).size()) {
-                                _deltas[itx] *= conn.tx->activation_derivative(conn.tx->weighted_sum());
-                                self(view, itx);
+                            _deltas[conn.itx] += _deltas[ineuron] * conn.weight;
+                            if (++_number_rx_deltas[conn.itx] == view.out_connections(conn.itx).size()) {
+                                const auto &tx = view.neuron(conn.itx);
+                                _deltas[conn.itx] *= tx.activation_derivative(tx.weighted_sum());
+                                self(view, conn.itx);
                             }
                         }
                     };
@@ -46,8 +46,8 @@ namespace hNNet::Builtin {
                     // Update weights for all connections
                     for (index_t iconn{0}; iconn < view.connection_count(); ++iconn) {
                          auto& conn = view.connection(iconn);
-                         const auto irx = view.neuron_index(conn.rx);
-                         conn.weight += _learning_rate * _deltas[irx] * conn.tx->signal();
+                         const auto &tx = view.neuron(conn.itx);
+                         conn.weight += _learning_rate * _deltas[conn.irx] * tx.signal();
                     }
                 }
         private:
