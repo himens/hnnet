@@ -178,8 +178,7 @@ namespace hNNet {
                         for (const auto &sample : samples) {
                             reset();
                             inject(sample.inputs, in_neurons);
-                            broadcast(bias_neurons);
-                            broadcast(in_neurons);
+                            broadcast(std::views::concat(bias_neurons, in_neurons));
                             learn(sample.targets, rule);
                             for (const auto &[neuron, target] : std::views::zip(out_neurons, sample.targets)) {
                                 const auto error = (target - neuron.signal());
@@ -218,8 +217,7 @@ namespace hNNet {
                 auto bias_neurons = neurons(NeuronType::bias);
                 reset();
                 inject(data, in_neurons);
-                broadcast(bias_neurons);
-                broadcast(in_neurons);
+                broadcast(std::views::concat(bias_neurons, in_neurons));
                 OutputData outputs;
                 for (const auto &[idx, neuron] : output_neurons() | std::views::enumerate) {
                     outputs[idx] = neuron.signal(); 
