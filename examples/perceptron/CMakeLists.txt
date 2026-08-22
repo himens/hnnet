@@ -2,10 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(hnnet-perceptron LANGUAGES CXX)
 
-set(CMAKE_CXX_COMPILER "/usr/bin/g++-16" CACHE STRING "C++ compiler" FORCE)
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Lo standard C++26 e il compilatore sono ereditati dal CMakeLists.txt radice.
 
 add_executable(hnnet-perceptron-gate
     src/perceptron-gate.cpp

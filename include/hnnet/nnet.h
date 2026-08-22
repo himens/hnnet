@@ -3,9 +3,6 @@
 #include "hnnet/learning-rule.h"
 #include "timer.h"
 
-// TODO: 1) Define a SourceNeuron class for input neurons that can receive external data and broadcast it to the network.
-//          Add the requirement input_neurons to be SourceNeurons in NNet::feed() and NNet::train().
-
 namespace hNNet {
     ////////////////
     // NNet class //

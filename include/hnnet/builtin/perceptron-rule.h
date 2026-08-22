@@ -11,7 +11,7 @@ namespace hNNet::Builtin {
                 void learn(Net &net, const output_t<Net> &targets) {
                     auto view = net.view();
                     index_t itarget{0};
-                    for (size_t ineuron{0}; ineuron < view.neurons_count(); ++ineuron) {
+                    for (size_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
                         const auto& neuron = view.neuron(ineuron);
                         if (neuron.type() != NeuronType::output) {
                             continue;  // Skip non-output neurons
