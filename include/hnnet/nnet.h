@@ -77,10 +77,10 @@ namespace hNNet {
                     }
                     return _neurons | std::views::drop(_neurons.size() - number) | std::views::take(number);
                 }
-            // Connect neurons: each side can be a single Neuron or a NeuronRange
+            // Connect neurons (cartesian product)
             template <typename Tx, typename Rx>
-                requires (NeuronRange<Tx> or std::same_as<std::remove_cvref_t<Tx>, Neuron>) and
-                         (NeuronRange<Rx> or std::same_as<std::remove_cvref_t<Rx>, Neuron>)
+                requires (NeuronView<std::remove_cvref_t<Tx>> or std::same_as<std::remove_cvref_t<Tx>, Neuron>) and
+                         (NeuronView<std::remove_cvref_t<Rx>> or std::same_as<std::remove_cvref_t<Rx>, Neuron>)
                 void connect(Tx &&tx_arg, Rx &&rx_arg) {
                     auto to_neuron_ptrs = [] (auto &&arg) {
                         if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
@@ -108,12 +108,19 @@ namespace hNNet {
                         _in_connections[neuron_index(rx)].emplace_back(iconn);
                     }
                 }
+            // Connect neurons (zip)
+            template <NeuronView Tx, NeuronView Rx>
+                void zip_connect(Tx tx_neurons, Rx rx_neurons) {
+                    for (const auto &[tx, rx] : std::views::zip(tx_neurons, rx_neurons)) {
+                        connect(tx, rx);
+                    }
+                }
             // Add bias to neurons
             template <NeuronView View>
                 void add_bias(View neurons) {
                     auto bias_neurons = new_neurons(std::ranges::distance(neurons), NeuronType::bias);
-                    for (const auto &[bias, neuron] : std::views::zip(bias_neurons, neurons)) {
-                        connect(bias, neuron);
+                    zip_connect(bias_neurons, neurons);
+                    for (auto &bias : bias_neurons) {
                         bias.receive_signal(1.0);
                         bias.activate();
                     }
