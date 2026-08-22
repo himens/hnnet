@@ -138,7 +138,7 @@ namespace hNNet {
                     auto out_neurons = neurons(NeuronType::output);
                     auto bias_neurons = neurons(NeuronType::bias);
                     if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
-                        throw std::invalid_argument("NNet::train: input size error!");
+                        throw std::invalid_argument("NNet::train: size error!");
                     }
                     size_t epoch{0};
                     bool converged{false};
@@ -200,7 +200,7 @@ namespace hNNet {
                 auto out_neurons = neurons(NeuronType::output);
                 auto bias_neurons = neurons(NeuronType::bias);
                 if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
-                    throw std::invalid_argument("NNet::infer: input or output size error!");
+                    throw std::invalid_argument("NNet::infer: size error!");
                 }
                 reset();
                 inject(data, in_neurons);
@@ -215,7 +215,7 @@ namespace hNNet {
             // Inject input data into neurons
             template <NeuronView View>
                 void inject(const InputData &inputs, View neurons) {
-                    if (std::ranges::distance(neurons) != input_size) {
+                    if (std::ranges::distance(neurons) != std::ranges::distance(inputs)) {
                         throw std::invalid_argument("NNet::inject: size error!");
                     }
                     for (const auto &[neuron, input] : std::views::zip(neurons, inputs)) {
