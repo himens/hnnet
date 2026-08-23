@@ -7,7 +7,7 @@
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_classes{10};
 constexpr size_t nb_hidden{50};
-constexpr size_t nb_training_samples{100};
+constexpr size_t nb_training_samples{500};
 
 using namespace hNNet;
 struct DigitData {
@@ -75,8 +75,8 @@ int main() {
     // create net
     Classifier classifier;
     auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input);
-    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, ReLUActivation{});
-    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, ReLUActivation{});
+    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, SigmoidActivation{});
+    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, SigmoidActivation{});
     classifier.connect(input_layer, hidden_layer);
     classifier.connect(hidden_layer, output_layer);
     // train net
@@ -86,7 +86,7 @@ int main() {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
     }
     classifier.randomize_weights(-0.5, 0.5);
-    classifier.train(samples, Builtin::BackpropRule{0.1, 0.9});
+    classifier.train(samples, Builtin::BackpropRule{0.2, 0.9});
     // use net (inference)
     size_t error_count{0};
     for (const auto &[label, pixels] : digits) {
