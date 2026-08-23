@@ -133,7 +133,7 @@ namespace hNNet {
             template <typename LearningRule>
                 requires LearningRuleType<LearningRule, NNet>
                 void train(const std::vector<TrainingSample> &samples, LearningRule rule) {
-                    constexpr real_t error_threshold{5e-2};
+                    constexpr real_t error_threshold{1e-2};
                     constexpr size_t max_epochs{1'000'000};
                     auto in_neurons = neurons(NeuronType::input);
                     auto out_neurons = neurons(NeuronType::output);
@@ -144,6 +144,8 @@ namespace hNNet {
                     size_t epoch{0};
                     bool converged{false};
                     Timer timer{};
+                    //std::random_device rd{};
+                    //std::mt19937 gen{rd()};
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", samples.size());
                     std::println("NNet::train: ==================================");
@@ -159,6 +161,7 @@ namespace hNNet {
                             std::println("NNet::train: Epoch: {}", epoch);
                         }
                         real_t mean_squared_err{0.0};
+                        //std::ranges::shuffle(samples, gen);
                         for (const auto &sample : samples) {
                             reset();
                             inject(sample.inputs, in_neurons);
@@ -169,9 +172,9 @@ namespace hNNet {
                                 mean_squared_err += error * error;
                             }
                         }
-                        //mean_squared_err /= samples.size();
+                        mean_squared_err /= samples.size();
                         converged = (mean_squared_err < error_threshold);
-                        //std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
+                        std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
                     }
                     timer.stop();
                     if (converged) {
