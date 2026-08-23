@@ -6,8 +6,9 @@
 
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_classes{10};
-constexpr size_t nb_hidden{50};
-constexpr size_t nb_training_samples{500};
+constexpr size_t nb_hidden{100};
+constexpr size_t nb_training_samples{10000};
+constexpr size_t batch_size{nb_training_samples};
 
 using namespace hNNet;
 struct DigitData {
@@ -79,14 +80,17 @@ int main() {
     auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, SigmoidActivation{});
     classifier.connect(input_layer, hidden_layer);
     classifier.connect(hidden_layer, output_layer);
-    // train net
+    // read train data
     const auto digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
-    std::vector<Classifier::TrainingSample> samples;
-    for (const auto &[label, pixels] : digits) {
-        samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
+    // train net
+    classifier.randomize_weights(-0.1, 0.1);
+    for (size_t i = 0; i < (nb_training_samples / batch_size); ++i) {
+        std::vector<Classifier::TrainingSample> samples;
+        for (const auto &[label, pixels] : digits | std::views::drop(i * batch_size) | std::views::take(batch_size)) {
+            samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
+        }
+        classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
     }
-    classifier.randomize_weights(-0.5, 0.5);
-    classifier.train(samples, Builtin::BackpropRule{0.2, 0.9});
     // use net (inference)
     size_t error_count{0};
     for (const auto &[label, pixels] : digits) {
