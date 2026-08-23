@@ -101,16 +101,16 @@ int main() {
     classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};
-    letters.append_range(read_letters("data/letters_train_1.txt"));
-    letters.append_range(read_letters("data/letters_train_2.txt"));
-    letters.append_range(read_letters("data/letters_train_3.txt"));
+    letters.append_range(read_letters("data/letters/train_1.txt"));
+    letters.append_range(read_letters("data/letters/train_2.txt"));
+    letters.append_range(read_letters("data/letters/train_3.txt"));
     std::vector<Classifier::TrainingSample> samples;
     for (const auto &[ch, pixels] : letters) {
         samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }
     classifier.train(samples, Builtin::PerceptronRule{1.0});
     // use net (inference)
-    for (const auto &[ch, pixels] : read_letters("data/letters_noisy_1.txt")) {
+    for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));
         std::println("Expected letter = {}, classifier response = {}", ch, decode(outputs));
     }

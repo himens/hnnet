@@ -91,7 +91,7 @@ LETTERS = {
     ],
 }
 
-OUTPUT_DIR = Path("../data")
+OUTPUT_DIR = Path("data/letters")
 NUM_FONTS = 3
 NOISY_PER_LETTER = 5
 FLIP_PROB = 0.05
@@ -178,7 +178,7 @@ def main():
     fonts.append(thin)
     # Save train files
     for idx, font in enumerate(fonts, start=1):
-        fname_txt = OUTPUT_DIR / f"letters_train_{idx}.txt"
+        fname_txt = OUTPUT_DIR / f"train_{idx}.txt"
         with fname_txt.open('w', encoding='utf-8') as ft:
             for letter in sorted(font.keys()):
                 rows = font[letter]
@@ -188,7 +188,7 @@ def main():
                 ft.write("\n")
     # Generate noisy samples per font
     for idx, font in enumerate(fonts, start=1):
-        fname_txt = OUTPUT_DIR / f"letters_noisy_{idx}.txt"
+        fname_txt = OUTPUT_DIR / f"noisy_{idx}.txt"
         with fname_txt.open('w', encoding='utf-8') as ft:
             for letter in sorted(font.keys()):
                 noisy = perturb(font[letter])

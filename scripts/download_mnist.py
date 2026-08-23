@@ -10,7 +10,7 @@ import argparse
 import urllib.request
 from pathlib import Path
 
-OUTPUT_DIR = Path("../data/mnist")
+OUTPUT_DIR = Path("data/mnist")
 TRAIN_URL = "https://data.pjreddie.com/files/mnist_train.csv"
 TEST_URL  = "https://data.pjreddie.com/files/mnist_test.csv"
 FULL_TRAIN_SAMPLES = 60000
