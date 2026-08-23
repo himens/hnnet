@@ -75,7 +75,7 @@ namespace hNNet {
     };
     struct ReLUActivation {
         real_t operator()(const real_t x) const {
-            return std::max(offset, x);
+            return std::max(static_cast<real_t>(0.0), x - offset);
         }
         real_t derivative(const real_t x) const {
             return x > offset ? 1.0 : 0.0;
