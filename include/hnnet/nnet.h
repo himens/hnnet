@@ -126,7 +126,7 @@ namespace hNNet {
                 std::uniform_real_distribution<real_t> dist(min, max);
                 for (const auto &[idx, conn] : _connections | std::views::enumerate) {
                     conn.weight = dist(gen);
-                    std::println("NNet::randomize_weights: weight[{}]: {}", idx, conn.weight);
+                    //std::println("NNet::randomize_weights: weight[{}]: {}", idx, conn.weight);
                 }
             }    
             // Train net using a set of training samples
@@ -177,12 +177,12 @@ namespace hNNet {
                     if (converged) {
                         _trained = true;
                         std::println("NNet::train: Training summary:");
-                        for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                            std::println("NNet::train: weight[{}]: {}", idx, conn.weight);
-                        }
-                        auto targets = samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
-                        auto outputs = samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
-                        std::println("NNet::train: targets: {}, outputs: {}", targets, outputs);
+                        //for (const auto &[idx, conn] : _connections | std::views::enumerate) {
+                        //    std::println("NNet::train: weight[{}]: {}", idx, conn.weight);
+                        //}
+                        //auto targets = samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
+                        //auto outputs = samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
+                        //std::println("NNet::train: targets: {}, outputs: {}", targets, outputs);
                         std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                         std::println("NNet::train: epochs: {}", epoch);
                     }
