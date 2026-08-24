@@ -29,8 +29,8 @@ def download_samples(url: str, dest: Path, nb_samples: int) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Download MNIST dataset (CSV format).")
-    parser.add_argument("--train-samples", type=int, default=100, help="number of training samples to download")
-    parser.add_argument("--test-samples", type=int, default=0, help="number of test samples to download")
+    parser.add_argument("--train-samples", type=int, default=10000, help="number of training samples to download")
+    parser.add_argument("--test-samples", type=int, default=1000, help="number of test samples to download")
     parser.add_argument("--all", action="store_true", help="download the full dataset (60000 train, 10000 test)")
     args = parser.parse_args()
 

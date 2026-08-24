@@ -71,9 +71,9 @@ namespace hNNet {
                 requires (std::constructible_from<Neuron, Args...>)
                 auto new_neurons(const size_t number, Args &&...args) {
                     for (size_t i{0}; i < number; ++i) {
-                        _neurons.emplace_back(std::forward<Args>(args)...);
-                        _in_connections.emplace_back();
-                        _out_connections.emplace_back();
+                        _neurons.push_back({std::forward<Args>(args)...});
+                        _in_connections.push_back({});
+                        _out_connections.push_back({});
                     }
                     return _neurons | std::views::drop(_neurons.size() - number) | std::views::take(number);
                 }
@@ -97,9 +97,9 @@ namespace hNNet {
                             throw std::invalid_argument("NNet::connect: duplicate connection!");
                         }
                         const auto iconn = _connections.size();
-                        _connections.emplace_back(itx, irx, 0.0);
-                        _out_connections[itx].emplace_back(iconn);
-                        _in_connections[irx].emplace_back(iconn);
+                        _connections.push_back({.itx = itx, .irx = irx, .weight = 0.0});
+                        _out_connections[itx].push_back(iconn);
+                        _in_connections[irx].push_back(iconn);
                     }
                 }
             // Connect neurons (zip)
@@ -112,20 +112,16 @@ namespace hNNet {
             // Add bias to neurons
             template <NeuronView View>
                 void add_bias(View neurons) {
-                    auto bias_neurons = new_neurons(std::ranges::distance(neurons), NeuronType::bias);
-                    zip_connect(bias_neurons, neurons);
-                    for (auto &bias : bias_neurons) {
-                        bias.receive_signal(1.0);
-                        bias.activate();
-                    }
+                    auto bias = new_neurons(1, NeuronType::bias);
+                    connect(bias, neurons);
+                    bias.front().receive_signal(1.0);
+                    bias.front().activate();
                 }
             // Set weights to random values in the range [min, max]
             void randomize_weights(const real_t min, const real_t max) {
-                std::random_device rd;
-                std::mt19937 gen(rd());
                 std::uniform_real_distribution<real_t> dist(min, max);
                 for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                    conn.weight = dist(gen);
+                    conn.weight = dist(random_generator());
                     //std::println("NNet::randomize_weights: weight[{}]: {}", idx, conn.weight);
                 }
             }    
@@ -144,8 +140,6 @@ namespace hNNet {
                     size_t epoch{0};
                     bool converged{false};
                     Timer timer{};
-                    //std::random_device rd{};
-                    //std::mt19937 gen{rd()};
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", samples.size());
                     std::println("NNet::train: ==================================");
@@ -161,7 +155,7 @@ namespace hNNet {
                             std::println("NNet::train: Epoch: {}", epoch);
                         }
                         real_t mean_squared_err{0.0};
-                        //std::ranges::shuffle(samples, gen);
+                        //std::ranges::shuffle(samples, random_generator()); -- samples must be not const!
                         for (const auto &sample : samples) {
                             reset();
                             inject(sample.inputs, in_neurons);
@@ -183,9 +177,6 @@ namespace hNNet {
                         //for (const auto &[idx, conn] : _connections | std::views::enumerate) {
                         //    std::println("NNet::train: weight[{}]: {}", idx, conn.weight);
                         //}
-                        //auto targets = samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
-                        //auto outputs = samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
-                        //std::println("NNet::train: targets: {}, outputs: {}", targets, outputs);
                         std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                         std::println("NNet::train: epochs: {}", epoch);
                     }
@@ -269,6 +260,12 @@ namespace hNNet {
             // Get neurons of given type
             auto neurons(const NeuronType type) {
                 return _neurons | std::views::filter([type] (const auto &neuron) { return neuron.type() == type; });
+            }
+            // Get random generator
+            std::mt19937& random_generator() {
+                static std::random_device rd;
+                static thread_local std::mt19937 gen(rd());
+                return gen;
             }
             // Data members
             bool _trained{false};
