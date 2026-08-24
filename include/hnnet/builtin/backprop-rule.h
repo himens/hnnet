@@ -12,12 +12,12 @@ namespace hNNet::Builtin {
                     // Backpropagate errors through the net
                     auto backprop_error = [&] (this auto&& self, Net::View &view, const index_t ineuron) -> void {
                         for (const auto &iconn : view.in_connections(ineuron)) {
-                            const auto& conn = view.connection(iconn);
-                            _deltas[conn.itx] += _deltas[ineuron] * conn.weight;
-                            if (++_number_rx_deltas[conn.itx] == view.out_connections(conn.itx).size()) {
-                                const auto &tx = view.neuron(conn.itx);
-                                _deltas[conn.itx] *= tx.activation_derivative(tx.weighted_sum());
-                                self(view, conn.itx);
+                            const auto itx = view.itx(iconn);
+                            _deltas[itx] += _deltas[ineuron] * view.weight(iconn);
+                            if (++_number_rx_deltas[itx] == view.out_connections(itx).size()) {
+                                const auto &tx = view.neuron(itx);
+                                _deltas[itx] *= tx.activation_derivative(tx.weighted_sum());
+                                self(view, itx);
                             }
                         }
                     };
@@ -48,11 +48,12 @@ namespace hNNet::Builtin {
                     }
                     // Update weights for all connections
                     for (index_t iconn{0}; iconn < view.connection_count(); ++iconn) {
-                         auto& conn = view.connection(iconn);
-                         const auto &tx = view.neuron(conn.itx);
-                         const auto weight = conn.weight;
-                         conn.weight +=  (_learning_rate * _deltas[conn.irx] * tx.signal()) + (_momentum * _dweights[iconn]);
-                        _dweights[iconn] = (conn.weight - weight);  // Store the weight change for momentum
+                         const auto irx = view.irx(iconn);
+                         const auto &tx = view.neuron(view.itx(iconn));
+                         auto &weight = view.weight(iconn);
+                         const auto old_weight = weight;
+                         weight += (_learning_rate * _deltas[irx] * tx.signal()) + (_momentum * _dweights[iconn]);
+                        _dweights[iconn] = (weight - old_weight);  // Store the weight change for momentum
                     }
                 }
         private:

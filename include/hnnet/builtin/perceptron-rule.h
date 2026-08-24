@@ -22,9 +22,8 @@ namespace hNNet::Builtin {
                             continue;  // No update needed if the error is negligible
                         }
                         for (const auto &iconn : view.in_connections(ineuron)) {
-                            auto& conn = view.connection(iconn);
-                            const auto &tx = view.neuron(conn.itx);
-                            conn.weight += _learning_rate * target * tx.signal();
+                            const auto &tx = view.neuron(view.itx(iconn));
+                            view.weight(iconn) += _learning_rate * target * tx.signal();
                         }
                     }
                 }

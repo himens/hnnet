@@ -20,11 +20,6 @@ namespace hNNet {
                 InputData inputs;
                 OutputData targets;
             };
-            struct SynapticConn {
-                index_t itx{0};
-                index_t irx{0};
-                real_t weight{0.0};
-            };
             ////////////////
             // View class //
             ////////////////
@@ -34,7 +29,7 @@ namespace hNNet {
                         return _net._neurons.size();
                     }
                     size_t connection_count() const {
-                        return _net._connections.size();
+                        return _net._itxs.size();
                     }
                     const Neuron& neuron(const index_t index) const {
                         return _net._neurons[index];
@@ -45,8 +40,15 @@ namespace hNNet {
                     const auto& out_connections(const index_t index) const {
                         return _net._out_connections[index];
                     }
-                    SynapticConn& connection(const index_t index) {
-                        return _net._connections[index];
+                    // Transmitting/receiving neuron index and weight for a given connection
+                    index_t itx(const index_t iconn) const {
+                        return _net._itxs[iconn];
+                    }
+                    index_t irx(const index_t iconn) const {
+                        return _net._irxs[iconn];
+                    }
+                    real_t& weight(const index_t iconn) {
+                        return _net._weights[iconn];
                     }
                     index_t neuron_index(const Neuron* neuron) const {
                         return _net.neuron_index(neuron);
@@ -60,7 +62,9 @@ namespace hNNet {
             // Constructor
             NNet() {
                 _neurons.reserve(1000);
-                _connections.reserve(_neurons.capacity() * 10);
+                _itxs.reserve(_neurons.capacity() * 10);
+                _irxs.reserve(_neurons.capacity() * 10);
+                _weights.reserve(_neurons.capacity() * 10);
             }
             // Create a view of the net
             View view() {
@@ -92,14 +96,16 @@ namespace hNNet {
                     auto itxs = to_neuron_index(std::forward<Tx>(tx_arg));
                     auto irxs = to_neuron_index(std::forward<Rx>(rx_arg));
                     for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                        const auto found = std::ranges::any_of(_connections, [&] (const auto &conn) { return (conn.itx == itx) and (conn.irx == irx); });
+                        const auto found = std::ranges::any_of(_out_connections[itx], [&] (const auto iconn) { return _irxs[iconn] == irx; });
                         if (found) {
                             throw std::invalid_argument("NNet::connect: duplicate connection!");
                         }
-                        const auto iconn = _connections.size();
-                        _connections.push_back({.itx = itx, .irx = irx, .weight = 0.0});
-                        _out_connections[itx].push_back(iconn);
+                        _itxs.push_back(itx);
+                        _irxs.push_back(irx);
+                        _weights.push_back(0.0);
+                        const auto iconn = _itxs.size() - 1;
                         _in_connections[irx].push_back(iconn);
+                        _out_connections[itx].push_back(iconn);
                     }
                 }
             // Connect neurons (zip)
@@ -120,9 +126,8 @@ namespace hNNet {
             // Set weights to random values in the range [min, max]
             void randomize_weights(const real_t min, const real_t max) {
                 std::uniform_real_distribution<real_t> dist(min, max);
-                for (const auto &[idx, conn] : _connections | std::views::enumerate) {
-                    conn.weight = dist(random_generator());
-                    //std::println("NNet::randomize_weights: weight[{}]: {}", idx, conn.weight);
+                for (auto &weight : _weights) {
+                    weight = dist(random_generator());
                 }
             }    
             // Train net using a set of training samples
@@ -161,7 +166,7 @@ namespace hNNet {
                             inject(sample.inputs, in_neurons);
                             broadcast(std::views::concat(bias_neurons, in_neurons));
                             learn(sample.targets, rule);
-                            for (const auto &[neuron, target] : std::views::zip(out_neurons, sample.targets)) {
+                            for (const auto &[neuron, target] : std::views::zip(out_neurons, sample.targets)) { // delegate err computation to learning rule??
                                 const auto error = (target - neuron.signal());
                                 mean_squared_err += error * error;
                             }
@@ -228,10 +233,10 @@ namespace hNNet {
             void broadcast(const Neuron& neuron) {
                 const auto itx = neuron_index(&neuron);
                 for (const auto &iconn : _out_connections[itx]) {
-                    const auto &conn = _connections[iconn];
-                    auto &rx = _neurons[conn.irx];
-                    rx.receive_signal(neuron.signal() * conn.weight);
-                    if (rx.number_rx_signals() == _in_connections[conn.irx].size()) {
+                    const auto irx = _irxs[iconn];
+                    auto &rx = _neurons[irx];
+                    rx.receive_signal(neuron.signal() * _weights[iconn]);
+                    if (rx.number_rx_signals() == _in_connections[irx].size()) {
                         rx.activate();
                         broadcast(rx);
                     }
@@ -270,7 +275,9 @@ namespace hNNet {
             // Data members
             bool _trained{false};
             std::vector<Neuron> _neurons{};
-            std::vector<SynapticConn> _connections{};
+            std::vector<index_t> _itxs{};
+            std::vector<index_t> _irxs{};
+            std::vector<real_t> _weights{};
             std::vector<std::vector<index_t>> _in_connections{};
             std::vector<std::vector<index_t>> _out_connections{};
     };
