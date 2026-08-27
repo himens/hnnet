@@ -9,6 +9,7 @@ namespace hNNet::Builtin {
             // Learn from targets using the back-propagation learning rule
             template <NNetType Net>
                 void learn(Net &net, const output_t<Net> &targets) {
+                    /*
                     // Backpropagate errors through the net
                     auto backprop_error = [&] (this auto&& self, Net::View &view, const index_t ineuron) -> void {
                         for (const auto &iconn : view.in_connections(ineuron)) {
@@ -55,6 +56,7 @@ namespace hNNet::Builtin {
                          weight += (_learning_rate * _deltas[irx] * tx.signal()) + (_momentum * _dweights[iconn]);
                         _dweights[iconn] = (weight - old_weight);  // Store the weight change for momentum
                     }
+                    */
                 }
         private:
             // Data members    

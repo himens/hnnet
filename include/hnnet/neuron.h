@@ -18,27 +18,28 @@ namespace hNNet {
             NeuronType type() const {
                 return _type;
             }
-            // Get number of received signals
-            size_t number_rx_signals() const {
-                return _number_rx_signals;
-            }
             // Get weighted sum
             real_t weighted_sum() const {
                 return _weighted_sum;
             }
+            // Check whether the neuron has already been activated
+            bool activated() const {
+                return _activated;
+            }
+            // Set the (already complete) weighted sum for this neuron
+            void set_weighted_sum(const real_t weighted_sum) {
+                _weighted_sum = weighted_sum;
+            }
             // Activate neuron (calculate activation value)
             void activate() {
                 _signal = activation(_weighted_sum);
-            }
-            // Receive signal from synaptic connection
-            void receive_signal(const real_t signal) {
-                _weighted_sum += signal;
-                _number_rx_signals++;
+                _activated = true;
             }
             // Reset state before processing a new sample
             void reset() {
-                _number_rx_signals = 0;
                 _weighted_sum = 0.0;
+                _signal = 0.0;
+                _activated = false;
             }
             // Get activation value and derivative
             real_t activation(const real_t x) const {
@@ -50,9 +51,9 @@ namespace hNNet {
         private:
             // Data members
             NeuronType _type;
-            size_t _number_rx_signals{0};
             real_t _weighted_sum{0.0};
             real_t _signal{0.0};
+            bool _activated{false};
             Activation _activation;
     };
     template <typename T>

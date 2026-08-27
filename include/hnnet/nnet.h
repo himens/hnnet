@@ -2,6 +2,8 @@
 #include "hnnet/neuron.h"
 #include "hnnet/learning-rule.h"
 #include "timer.h"
+#include <numeric>
+#include <omp.h>
 
 namespace hNNet {
     ////////////////
@@ -33,12 +35,6 @@ namespace hNNet {
                     }
                     const Neuron& neuron(const index_t index) const {
                         return _net._neurons[index];
-                    }
-                    const auto& in_connections(const index_t index) const {
-                        return _net._in_connections[index];
-                    }
-                    const auto& out_connections(const index_t index) const {
-                        return _net._out_connections[index];
                     }
                     // Transmitting/receiving neuron index and weight for a given connection
                     index_t itx(const index_t iconn) const {
@@ -76,8 +72,6 @@ namespace hNNet {
                 auto new_neurons(const size_t number, Args &&...args) {
                     for (size_t i{0}; i < number; ++i) {
                         _neurons.push_back({std::forward<Args>(args)...});
-                        _in_connections.push_back({});
-                        _out_connections.push_back({});
                     }
                     return _neurons | std::views::drop(_neurons.size() - number) | std::views::take(number);
                 }
@@ -96,16 +90,13 @@ namespace hNNet {
                     auto itxs = to_neuron_index(std::forward<Tx>(tx_arg));
                     auto irxs = to_neuron_index(std::forward<Rx>(rx_arg));
                     for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                        const auto found = std::ranges::any_of(_out_connections[itx], [&] (const auto iconn) { return _irxs[iconn] == irx; });
-                        if (found) {
-                            throw std::invalid_argument("NNet::connect: duplicate connection!");
-                        }
+                        //const auto found = std::ranges::any_of(std::views::iota(index_t{0}, static_cast<index_t>(_itxs.size())), [&] (const auto iconn) { return _itxs[iconn] == itx and _irxs[iconn] == irx; });
+                        //if (found) {
+                        //    throw std::invalid_argument("NNet::connect: duplicate connection!");
+                        //}
                         _itxs.push_back(itx);
                         _irxs.push_back(irx);
                         _weights.push_back(0.0);
-                        const auto iconn = _itxs.size() - 1;
-                        _in_connections[irx].push_back(iconn);
-                        _out_connections[itx].push_back(iconn);
                     }
                 }
             // Connect neurons (zip)
@@ -120,9 +111,43 @@ namespace hNNet {
                 void add_bias(View neurons) {
                     auto bias = new_neurons(1, NeuronType::bias);
                     connect(bias, neurons);
-                    bias.front().receive_signal(1.0);
+                    bias.front().set_weighted_sum(1.0);
                     bias.front().activate();
                 }
+            // Sort connections by (irx, itx) and build per-receiver partitions; call after all connect()/add_bias()
+            void prepare() {
+                std::println("NNet::prepare: preparing net...");
+                Timer timer{};
+                timer.start();
+                const auto connection_count = _itxs.size();
+                std::vector<index_t> order(connection_count);
+                std::iota(order.begin(), order.end(), 0);
+                std::ranges::sort(order, [this] (const index_t lhs, const index_t rhs) { return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
+                std::vector<index_t> sorted_itxs(connection_count);
+                std::vector<index_t> sorted_irxs(connection_count);
+                std::vector<real_t> sorted_weights(connection_count);
+                for (size_t i{0}; i < connection_count; ++i) {
+                    const auto old_index = order[i];
+                    sorted_itxs[i] = _itxs[old_index];
+                    sorted_irxs[i] = _irxs[old_index];
+                    sorted_weights[i] = _weights[old_index];
+                }
+                _itxs = std::move(sorted_itxs);
+                _irxs = std::move(sorted_irxs);
+                _weights = std::move(sorted_weights);
+                // Each contiguous block sharing the same irx becomes a partition
+                _partitions.clear();
+                size_t begin{0};
+                while (begin < _irxs.size()) {
+                    const auto irx = _irxs[begin];
+                    size_t end{begin + 1};
+                    while (end < _irxs.size() and _irxs[end] == irx) ++end;
+                    _partitions.push_back({.irx = irx, .begin = begin, .end = end});
+                    begin = end;
+                }
+                timer.stop();
+                std::println("NNet::prepare: net prepared in {}s.", timer.get_elapsed_time_s());
+            }
             // Set weights to random values in the range [min, max]
             void randomize_weights(const real_t min, const real_t max) {
                 std::uniform_real_distribution<real_t> dist(min, max);
@@ -136,20 +161,22 @@ namespace hNNet {
                 void train(const std::vector<TrainingSample> &samples, LearningRule rule) {
                     constexpr real_t error_threshold{1e-2};
                     constexpr size_t max_epochs{1'000'000};
+                    size_t epoch{0};
+                    bool converged{false};
                     auto in_neurons = neurons(NeuronType::input);
                     auto out_neurons = neurons(NeuronType::output);
-                    auto bias_neurons = neurons(NeuronType::bias);
                     if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }
-                    size_t epoch{0};
-                    bool converged{false};
-                    Timer timer{};
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", samples.size());
                     std::println("NNet::train: ==================================");
+                    Timer timer{};
                     timer.start();
+                    prepare();
                     while (not converged and (epoch <= max_epochs)) {
+                        Timer epoch_timer{};
+                        epoch_timer.start();
                         epoch++;
                         if ((epoch < 10        and epoch % 1 == 0)      or
                             (epoch < 100       and epoch % 10 == 0)     or
@@ -164,16 +191,17 @@ namespace hNNet {
                         for (const auto &sample : samples) {
                             reset();
                             inject(sample.inputs, in_neurons);
-                            broadcast(std::views::concat(bias_neurons, in_neurons));
+                            broadcast();
                             learn(sample.targets, rule);
                             for (const auto &[neuron, target] : std::views::zip(out_neurons, sample.targets)) { // delegate err computation to learning rule??
                                 const auto error = (target - neuron.signal());
                                 mean_squared_err += error * error;
                             }
                         }
+                        epoch_timer.stop();
                         mean_squared_err /= samples.size();
                         converged = (mean_squared_err < error_threshold);
-                        std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
+                        std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}", epoch, epoch_timer.get_elapsed_time_s(), mean_squared_err);
                     }
                     timer.stop();
                     if (converged) {
@@ -198,13 +226,12 @@ namespace hNNet {
                 }
                 auto in_neurons = neurons(NeuronType::input);
                 auto out_neurons = neurons(NeuronType::output);
-                auto bias_neurons = neurons(NeuronType::bias);
                 if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
                     throw std::invalid_argument("NNet::infer: size error!");
                 }
                 reset();
                 inject(data, in_neurons);
-                broadcast(std::views::concat(bias_neurons, in_neurons));
+                broadcast();
                 OutputData outputs;
                 for (const auto &[idx, neuron] : out_neurons | std::views::enumerate) {
                     outputs[idx] = neuron.signal(); 
@@ -212,6 +239,12 @@ namespace hNNet {
                 return outputs;
             }
         private:
+            // A partition is a contiguous block of connections sharing the same irx (a sparse matrix row)
+            struct Partition {
+                index_t irx;
+                size_t begin;
+                size_t end;
+            };
             // Inject input data into neurons
             template <NeuronView View>
                 void inject(const InputData &inputs, View neurons) {
@@ -219,28 +252,53 @@ namespace hNNet {
                         throw std::invalid_argument("NNet::inject: size error!");
                     }
                     for (const auto &[neuron, input] : std::views::zip(neurons, inputs)) {
-                        neuron.receive_signal(input);
+                        neuron.set_weighted_sum(input);
                         neuron.activate();
                     }
                 }
-            // Broadcast neuron signals through the network
-            template <NeuronView View>
-                void broadcast(View neurons) {
-                    for (auto &neuron : neurons) {
-                        broadcast(neuron);
-                    }
+            // Broadcast signals through the network using the partitions built by prepare()
+            void broadcast() {
+                _partition_processed.assign(_partitions.size(), false);
+                broadcast_partitions();
+            }
+            // Repeatedly scan not-yet-processed partitions until no more progress is made
+            void broadcast_partitions() {
+                std::vector<size_t> ready_partitions;
+                for (const auto &[i, partition] : _partitions | std::views::enumerate) {
+                    if (not _partition_processed[i] and std::ranges::all_of(std::views::iota(partition.begin, partition.end), [this] (const size_t iconn) { return _neurons[_itxs[iconn]].activated(); })) ready_partitions.push_back(i);
                 }
-            void broadcast(const Neuron& neuron) {
-                const auto itx = neuron_index(&neuron);
-                for (const auto &iconn : _out_connections[itx]) {
-                    const auto irx = _irxs[iconn];
-                    auto &rx = _neurons[irx];
-                    rx.receive_signal(neuron.signal() * _weights[iconn]);
-                    if (rx.number_rx_signals() == _in_connections[irx].size()) {
-                        rx.activate();
-                        broadcast(rx);
-                    }
+                #pragma omp parallel for num_threads(omp_get_max_threads())
+                for (size_t i = 0; i < ready_partitions.size(); ++i) {
+                    broadcast(_partitions[ready_partitions[i]]);
                 }
+                bool progress{false};
+                for (const auto i : ready_partitions) {
+                    _partition_processed[i] = true;
+                    progress = true;
+                }
+                if (progress) {
+                    broadcast_partitions();
+                    return;
+                }
+                const bool all_processed = std::ranges::all_of(_partition_processed, [] (const bool processed) { return processed; });
+                if (not all_processed) {
+                    throw std::runtime_error("NNet::broadcast: unable to complete propagation (cycle or unreachable neuron)!");
+                }
+            }
+            // Process a single partition (a receiver's row); returns true if it was ready and got activated
+            bool broadcast(const Partition &partition) {
+                const bool ready = std::ranges::all_of(std::views::iota(partition.begin, partition.end), [this] (const size_t iconn) { return _neurons[_itxs[iconn]].activated(); });
+                if (not ready) {
+                    return false;
+                }
+                real_t weighted_sum{0.0};
+                for (size_t iconn = partition.begin; iconn < partition.end; ++iconn) {
+                    weighted_sum += _weights[iconn] * _neurons[_itxs[iconn]].signal();
+                }
+                auto &receiver = _neurons[partition.irx];
+                receiver.set_weighted_sum(weighted_sum);
+                receiver.activate();
+                return true;
             }
             // Learn from targets using the selected learning rule
             template <typename LearningRule>
@@ -278,8 +336,8 @@ namespace hNNet {
             std::vector<index_t> _itxs{};
             std::vector<index_t> _irxs{};
             std::vector<real_t> _weights{};
-            std::vector<std::vector<index_t>> _in_connections{};
-            std::vector<std::vector<index_t>> _out_connections{};
+            std::vector<Partition> _partitions{};
+            std::vector<bool> _partition_processed{};
     };
     template <typename T>
         using input_t = T::input_type;

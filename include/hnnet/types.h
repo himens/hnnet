@@ -13,6 +13,7 @@
 #include <cmath>
 #include <random>
 #include <variant>
+#include <omp.h>
 
 namespace hNNet {
     using real_t   = std::float64_t;
