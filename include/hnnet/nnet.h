@@ -150,6 +150,8 @@ namespace hNNet {
                     std::println("NNet::train: ==================================");
                     timer.start();
                     while (not converged and (epoch <= max_epochs)) {
+                        Timer epoch_timer;
+                        epoch_timer.start();
                         epoch++;
                         if ((epoch < 10        and epoch % 1 == 0)      or
                             (epoch < 100       and epoch % 10 == 0)     or
@@ -171,9 +173,10 @@ namespace hNNet {
                                 mean_squared_err += error * error;
                             }
                         }
+                        epoch_timer.stop();
                         mean_squared_err /= samples.size();
                         converged = (mean_squared_err < error_threshold);
-                        std::println("NNet::train: epoch: {}, mean squared error: {:.6f}", epoch, mean_squared_err);
+                        std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}", epoch, epoch_timer.get_elapsed_time_s(), mean_squared_err);
                     }
                     timer.stop();
                     if (converged) {

@@ -6,9 +6,9 @@
 
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_classes{10};
-constexpr size_t nb_hidden{100};
+constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60000};
-constexpr size_t nb_test_samples{10000};
+constexpr size_t nb_test_samples{0};
 constexpr size_t batch_size{nb_training_samples};
 
 using namespace hNNet;
