@@ -23,9 +23,9 @@ namespace hNNet::Builtin {
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
                         }
-                        for (const auto &iconn : std::views::iota(partition.begin, partition.end)) {
-                            const auto &tx = view.neuron(view.itx(iconn));
-                            view.weight(iconn) += _learning_rate * target * tx.signal();
+                        for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                            const auto &tx = view.neuron(view.itx(icon));
+                            view.weight(icon) += _learning_rate * target * tx.signal();
                         }
                     }
                 }
