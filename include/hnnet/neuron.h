@@ -26,6 +26,10 @@ namespace hNNet {
             real_t weighted_sum() const {
                 return _weighted_sum;
             }
+            // Get the activation function
+            const Activation*  activation() const {
+                return _activation.get();
+            }
             // Check whether the neuron has already been activated
             bool activated() const {
                 return _activated;

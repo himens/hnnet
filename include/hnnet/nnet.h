@@ -78,6 +78,7 @@ namespace hNNet {
                 // Create new neurons
                 template <ActivationType Activation>
                     auto new_neurons(const size_t number, const NeuronType &type, const Activation &activation) {
+                        _trained = false;
                         for (size_t i{0}; i < number; ++i) {
                             _neurons.push_back({type, std::make_unique<Activation>(activation)});
                         }
@@ -88,6 +89,7 @@ namespace hNNet {
                     requires (NeuronView<std::remove_cvref_t<TxType>> or std::same_as<std::remove_cvref_t<TxType>, Neuron>) and
                              (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
                     void connect(TxType &&tx_arg, RxType &&rx_arg) {
+                        _trained = false;
                         auto to_neuron_index = [this] (auto &&arg) {
                             if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
                                 return std::views::single(neuron_index(&arg));
@@ -225,25 +227,10 @@ namespace hNNet {
                             neuron.activate(input);
                         }
                     }
-                // Broadcast signals through the net using the partitions
+                // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
-                    auto all_processed = [&] (NeuronView auto neurons) { 
-                        return std::ranges::all_of(neurons, [&] (const auto &neuron) { return neuron.activated(); });
-                    };
-                    //auto ready = [&] (const Partition &partition) {
-                    //    auto iconns = std::views::iota(partition.begin, partition.end);
-                    //    return std::ranges::all_of(iconns, [&] (const auto &iconn) { return _neurons[_itxs[iconn]].activated(); });
-                    //};
-                    //_partition_processed.assign(_partitions.size(), false);
-                    auto out_neurons = neurons(NeuronType::output);
-                    while (not all_processed(out_neurons)) {
-                        for (const auto &[i, partition] : _partitions | std::views::enumerate) {
-                            //if (_partition_processed[i] or not ready(partition)) {
-                            //    continue;
-                            //}
-                            broadcast(partition);
-                            //_partition_processed[i] = true;
-                        }
+                    for (const auto &partition : _partitions) {
+                        broadcast(partition);
                     }
                 }
                 // Process a single partition
@@ -251,7 +238,7 @@ namespace hNNet {
                     real_t weighted_sum{0.0};
                     size_t iconn{partition.begin};
                     for (; (iconn + register_size) <= partition.end; iconn += register_size) {
-                        weighted_sum +=  _weights[iconn]     * _neurons[_itxs[iconn]].signal() +
+                        weighted_sum +=  _weights[iconn]     * _neurons[_itxs[iconn]].signal()
                                        + _weights[iconn + 1] * _neurons[_itxs[iconn + 1]].signal()
                                        + _weights[iconn + 2] * _neurons[_itxs[iconn + 2]].signal()
                                        + _weights[iconn + 3] * _neurons[_itxs[iconn + 3]].signal();
@@ -262,7 +249,7 @@ namespace hNNet {
                     auto &receiver = _neurons[partition.irx];
                     receiver.activate(weighted_sum);
                 }
-                // Sort connections by (irx, itx) and build per-receiver partitions
+                // Sort connections by (irx, itx), build per-receiver partitions and order them topologically
                 void prepare() {
                     const auto connection_count = _itxs.size();
                     std::vector<index_t> order(connection_count);
@@ -295,14 +282,46 @@ namespace hNNet {
                         _partitions.push_back({.irx = irx, .begin = begin, .end = end});
                         begin = end;
                     }
+                    // Topologically order partitions (Kahn's algorithm) so a single sequential pass suffices
+                    const auto neuron_count = _neurons.size();
+                    std::vector<size_t> in_degree(neuron_count, 0);
+                    for (const auto &partition : _partitions) {
+                        in_degree[partition.irx] = partition.end - partition.begin;
+                    }
+                    std::vector<std::vector<index_t>> out_adjacency(neuron_count);
+                    for (index_t iconn{0}; iconn < static_cast<index_t>(_itxs.size()); ++iconn) {
+                        out_adjacency[_itxs[iconn]].push_back(_irxs[iconn]);
+                    }
+                    std::vector<size_t> topo_rank(neuron_count, 0);
+                    std::vector<index_t> ready;
+                    for (index_t neuron{0}; neuron < static_cast<index_t>(neuron_count); ++neuron) {
+                        if (in_degree[neuron] == 0) {
+                            ready.push_back(neuron);
+                        }
+                    }
+                    size_t processed_count{0};
+                    while (not ready.empty()) {
+                        const auto neuron = ready.back();
+                        ready.pop_back();
+                        topo_rank[neuron] = processed_count++;
+                        for (const auto downstream : out_adjacency[neuron]) {
+                            if (--in_degree[downstream] == 0) {
+                                ready.push_back(downstream);
+                            }
+                        }
+                    }
+                    if (processed_count != neuron_count) {
+                        throw std::runtime_error("NNet::prepare: net contains a cycle, topological order does not exist!");
+                    }
+                    std::ranges::sort(_partitions, [&] (const auto &lhs, const auto &rhs) { return topo_rank[lhs.irx] < topo_rank[rhs.irx]; });
+                    //for (const auto partition : _partitions) {                                                                                 
+                    //    std::println("irx: {}, begin: {}, end: {}", partition.irx, partition.begin, partition.end);                            
+                    //    for (const auto &iconn : std::views::iota(partition.begin, partition.end)) {                                           
+                    //        std::println("irx: {}, itx: {}", _irxs[iconn], _itxs[iconn]);                                                      
+                    //    }                                                                                                                      
+                    //}    
                     timer.stop();
                     std::println("NNet::prepare: net prepared in {}s.", timer.get_elapsed_time_s());
-                    //for (const auto partition : _partitions) {
-                    //    std::println("irx: {}, begin: {}, end: {}", partition.irx, partition.begin, partition.end);
-                    //    for (const auto &iconn : std::views::iota(partition.begin, partition.end)) {
-                    //        std::println("irx: {}, itx: {}", _irxs[iconn], _itxs[iconn]);
-                    //    }
-                    //}
                 }
                 // Learn from targets using the selected learning rule
                 template <typename LearningRule>
@@ -343,7 +362,7 @@ namespace hNNet {
                 std::vector<index_t> _irxs{};
                 std::vector<real_t> _weights{};
                 std::vector<Partition> _partitions{};
-                std::vector<bool> _partition_processed{};
+
         };
     template <typename T>
         using input_t = T::input_type;
