@@ -23,8 +23,8 @@ struct DigitData {
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
 InputData encode(const std::array<int_t, nb_pixels> &pixels) {
     InputData data{};
-    for (const auto &[idx, pixel] : pixels | std::views::enumerate) {
-        data[idx] = static_cast<real_t>(pixel) / 255.0;
+    for (const auto &[ipx, pixel] : pixels | std::views::enumerate) {
+        data[ipx] = static_cast<real_t>(pixel) / 255.0;
     }
     return data;
 }

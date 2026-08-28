@@ -13,19 +13,22 @@ namespace hNNet::Builtin {
                     if (view.partitions().size() != output_size_v<Net>) {
                         throw std::runtime_error("PerceptronRule::learn: invalid net!");
                     }
-                    for (const auto &[i, partition] : view.partitions() | std::views::enumerate) {
-                        const auto &rx = view.neuron(partition.irx);
-                        if (rx.type() != NeuronType::output) {
-                            throw std::runtime_error("PerceptronRule::learn: invalid rx!");
-                        }
-                        const auto target = targets[i];
-                        const auto error = (target - rx.signal());
+                    for (const auto &iout: view.iout_neurons()) {
+                        const auto &out_neuron = view.neuron(iout);
+                        const auto target = targets[iout];
+                        const auto error = (target - out_neuron.signal());
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
                         }
-                        for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
-                            const auto &tx = view.neuron(view.itx(icon));
-                            view.weight(icon) += _learning_rate * target * tx.signal();
+                        // Find the partition corresponding to this output neuron (irx == inr)
+                        for (const auto &partition : view.partitions()) {
+                            if (partition.irx != iout) {
+                                continue;
+                            }
+                            for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                                const auto &tx = view.neuron(view.itx(icon));
+                                view.weight(icon) += _learning_rate * target * tx.signal();
+                            }
                         }
                     }
                 }

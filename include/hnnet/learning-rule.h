@@ -6,6 +6,6 @@ namespace hNNet {
         concept LearningRuleType = 
             requires { typename Net::output_type; } and 
             requires (Rule& rule, Net& net, const typename Net::output_type& targets) { 
-                { rule.learn(net, targets) } -> std::same_as<void>;
+                { rule.learn(net, targets) } -> std::same_as<real_t>;
             };
 }
