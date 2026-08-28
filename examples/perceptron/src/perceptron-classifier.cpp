@@ -1,5 +1,5 @@
 #include <fstream>
-#include "hnnet/activation.h"
+#include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/perceptron-rule.h"
 #include "hnnet/nnet.h"
 
@@ -10,12 +10,13 @@ constexpr size_t nb_letters{26};
 
 using namespace hNNet;
 using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
+using InputData  = Data<int_t, nb_pixels>;
+using OutputData = Data<int_t, nb_letters>;
+
 struct LetterData {
     char character{'\0'};
     Pixels pixels{};
 };
-using InputData  = Data<int_t, nb_pixels>;
-using OutputData = Data<int_t, nb_letters>;
 
 // Encode pixel grid
 InputData encode(const Pixels &pixels) {
@@ -81,7 +82,6 @@ std::vector<LetterData> read_letters(const std::string &filename) {
                 }
             }
             letters.push_back(letter);
-            //std::println("read_letter: letter: {}, inputs: {}, outputs: {}", letter, data.inputs, data.outputs);
         }
     }
     if (letters.empty()) {
@@ -96,8 +96,8 @@ int main() {
     using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input);
-    auto output_layer = classifier.new_neurons(nb_letters, NeuronType::output, PerceptronActivation{});
+    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  Builtin::IdentityActivation{});
+    auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, Builtin::PerceptronActivation{});
     classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};

@@ -30,12 +30,9 @@ namespace hNNet {
             bool activated() const {
                 return _activated;
             }
-            // Set the (already complete) weighted sum for this neuron
-            void set_weighted_sum(const real_t weighted_sum) {
-                _weighted_sum = weighted_sum;
-            }
             // Activate neuron (calculate activation value)
-            void activate() {
+            void activate(const real_t weighted_sum) {
+                _weighted_sum = weighted_sum;
                 _signal = (*_activation)(_weighted_sum);
                 _activated = true;
             }

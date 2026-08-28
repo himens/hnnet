@@ -12,12 +12,13 @@ constexpr size_t nb_test_samples{0};
 constexpr size_t batch_size{nb_training_samples};
 
 using namespace hNNet;
+using InputData  = Data<real_t, nb_pixels>;
+using OutputData = Data<real_t, nb_classes>;
+
 struct DigitData {
     int_t label{0};
     std::array<int_t, nb_pixels> pixels{};
 };
-using InputData  = Data<real_t, nb_pixels>;
-using OutputData = Data<real_t, nb_classes>;
 
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
 InputData encode(const std::array<int_t, nb_pixels> &pixels) {
