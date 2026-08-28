@@ -1,6 +1,6 @@
 #include <fstream>
 #include <sstream>
-#include "hnnet/activation.h"
+#include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/backprop-rule.h"
 #include "hnnet/nnet.h"
 
@@ -75,9 +75,9 @@ int main() {
     using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input);
-    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, SigmoidActivation{});
-    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, SigmoidActivation{});
+    auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input, Builtin::IdentityActivation{});
+    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, Builtin::SigmoidActivation{});
+    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, Builtin::SigmoidActivation{});
     classifier.connect(input_layer, hidden_layer);
     classifier.connect(hidden_layer, output_layer);
     // read train and test samples

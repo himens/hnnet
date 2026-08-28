@@ -9,7 +9,11 @@ namespace hNNet {
     class Neuron {
         public:
             // Constructor
-            Neuron(const NeuronType type, const Activation &activation = IdentityActivation{}) : _type(type), _activation(activation) {}
+            Neuron(const NeuronType type, std::unique_ptr<Activation> activation) : _type(type), _activation(std::move(activation)) {
+                if (_activation == nullptr) {
+                    throw std::invalid_argument("Neuron::Neuron: invalid activation!");
+                }
+            }
             // Get neuron signal 
             real_t signal() const {
                 return _signal;
@@ -32,7 +36,7 @@ namespace hNNet {
             }
             // Activate neuron (calculate activation value)
             void activate() {
-                _signal = activation(_weighted_sum);
+                _signal = (*_activation)(_weighted_sum);
                 _activated = true;
             }
             // Reset state before processing a new sample
@@ -41,20 +45,13 @@ namespace hNNet {
                 _signal = 0.0;
                 _activated = false;
             }
-            // Get activation value and derivative
-            real_t activation(const real_t x) const {
-                return std::visit([&] (const auto& activation) { return activation(x); }, _activation);
-            }
-            real_t activation_derivative(const real_t x) const {
-                return std::visit([&] (const auto& activation) { return activation.derivative(x); }, _activation);
-            }
         private:
             // Data members
             NeuronType _type;
             real_t _weighted_sum{0.0};
             real_t _signal{0.0};
             bool _activated{false};
-            Activation _activation;
+            std::unique_ptr<Activation> _activation{nullptr};
     };
     template <typename T>
         concept NeuronRange = std::ranges::range<T> and std::same_as<std::ranges::range_value_t<T>, Neuron>;

@@ -9,7 +9,6 @@ namespace hNNet::Builtin {
             // Learn from targets using the perceptron learning rule
             template <NNetType Net>
                 void learn(Net &net, const output_t<Net> &targets) {
-                    /*
                     auto view = net.view();
                     index_t itarget{0};
                     for (size_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
@@ -22,12 +21,11 @@ namespace hNNet::Builtin {
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
                         }
-                        for (const auto &iconn : view.in_connections(ineuron)) {
-                            const auto &tx = view.neuron(view.itx(iconn));
-                            view.weight(iconn) += _learning_rate * target * tx.signal();
-                        }
+                        //for (const auto &iconn : view.in_connections(ineuron)) {
+                        //    const auto &tx = view.neuron(view.itx(iconn));
+                        //    view.weight(iconn) += _learning_rate * target * tx.signal();
+                        //}
                     }
-                    */
                 }
         private:
             // Data members
