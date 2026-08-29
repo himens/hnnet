@@ -34,14 +34,16 @@ namespace hNNet::Builtin {
                             _deltas[itx] += _deltas[partition.irx] * view.weight(icon);
                         }
                     }
-                    // update weights for all connections
-                    for (index_t icon{0}; icon < view.connection_count(); ++icon) {
-                        const auto irx = view.irx(icon);
-                        const auto &tx = view.neuron(view.itx(icon));
-                        auto &weight = view.weight(icon);
-                        const auto old_weight = weight;
-                        weight += (_learning_rate * _deltas[irx] * tx.signal()) + (_momentum * _dweights[icon]);
-                        _dweights[icon] = (weight - old_weight);  // Store the weight change for momentum
+                    // connections in a partition share their receiver and therefore its delta
+                    for (const auto &partition : view.partitions()) {
+                        const auto scaled_delta = _learning_rate * _deltas[partition.irx];
+                        #pragma omp simd
+                        for (size_t icon = partition.begin; icon < partition.end; ++icon) {
+                            const auto change = scaled_delta * view.neuron(view.itx(icon)).signal()
+                                              + _momentum * _dweights[icon];
+                            view.weight(icon) += change;
+                            _dweights[icon] = change;
+                        }
                     }
                     return squared_error;
                 }
