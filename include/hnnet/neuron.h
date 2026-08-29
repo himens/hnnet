@@ -30,28 +30,21 @@ namespace hNNet {
             const Activation*  activation() const {
                 return _activation.get();
             }
-            // Check whether the neuron has already been activated
-            bool activated() const {
-                return _activated;
-            }
             // Activate neuron (calculate activation value)
             void activate(const real_t weighted_sum) {
                 _weighted_sum = weighted_sum;
                 _signal = (*_activation)(_weighted_sum);
-                _activated = true;
             }
             // Reset state before processing a new sample
             void reset() {
                 _weighted_sum = 0.0;
                 _signal = 0.0;
-                _activated = false;
             }
         private:
             // Data members
             NeuronType _type;
             real_t _weighted_sum{0.0};
             real_t _signal{0.0};
-            bool _activated{false};
             std::unique_ptr<Activation> _activation{nullptr};
     };
     template <typename T>
