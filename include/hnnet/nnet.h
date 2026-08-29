@@ -89,14 +89,14 @@ namespace hNNet {
                              (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
                     void connect(TxType &&tx_neurons, RxType &&rx_neurons) {
                         _trained = false;
+                        auto index = [&] (const Neuron* neuron) {
+                            const auto index = static_cast<index_t>(neuron - _neurons.data());
+                            if (index >= _neurons.size()) {
+                                throw std::invalid_argument("NNet::connect::index: invalid index!");
+                            }
+                            return index;
+                        };
                         auto to_index = [&] (auto &&arg) {
-                            auto index = [&] (const Neuron* neuron) {
-                                const auto index = static_cast<index_t>(neuron - _neurons.data());
-                                if (index >= _neurons.size()) {
-                                    throw std::invalid_argument("NNet::connect::to_index::index: invalid index!");
-                                }
-                                return index;
-                            };
                             if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
                                 return std::views::single(index(&arg));
                             }
@@ -288,14 +288,14 @@ namespace hNNet {
                         begin = end;
                     }
                     // save indices of output neurons
+                    const auto neuron_count = _neurons.size();
                     _iout_neurons.clear();
-                    for (index_t inr{0}; inr < static_cast<index_t>(_neurons.size()); ++inr) {
+                    for (index_t inr{0}; inr < neuron_count; ++inr) {
                         if (_neurons[inr].type() == NeuronType::output) {
                             _iout_neurons.push_back(inr);
                         }
                     }
                     // topologically order partitions (Kahn's algorithm)
-                    const auto neuron_count = _neurons.size();
                     std::vector<std::vector<index_t>> irxs(neuron_count);
                     for (index_t icon{0}; icon < static_cast<index_t>(_itxs.size()); ++icon) {
                         irxs[_itxs[icon]].push_back(_irxs[icon]);

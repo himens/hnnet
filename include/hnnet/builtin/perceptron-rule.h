@@ -14,9 +14,8 @@ namespace hNNet::Builtin {
                         throw std::runtime_error("PerceptronRule::learn: invalid net!");
                     }
                     real_t squared_error{0};
-                    for (const auto &iout: view.iout_neurons()) {
+                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                         const auto &out_neuron = view.neuron(iout);
-                        const auto target = targets[iout];
                         const auto error = (target - out_neuron.signal());
                         squared_error += error * error;
                         if (std::abs(error) < 1e-6) {

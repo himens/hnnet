@@ -16,9 +16,9 @@ namespace hNNet::Builtin {
                     }
                     // seed output deltas with the error already scaled by the activation derivative
                     real_t squared_error{0.0};
-                    for (const auto &iout : view.iout_neurons()) {
+                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                         const auto &out_neuron = view.neuron(iout);
-                        const auto error = (targets[iout] - out_neuron.signal());
+                        const auto error = (target - out_neuron.signal());
                         squared_error += error * error;
                         _deltas[iout] = error * out_neuron.activation()->derivative(out_neuron.weighted_sum());
                     }
