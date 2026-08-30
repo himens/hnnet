@@ -107,10 +107,8 @@ namespace hNNet {
                         auto itxs = to_index(std::forward<TxType>(tx_neurons));
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            // review... 
-                            const auto found = std::ranges::any_of(std::views::iota(index_t{0}, static_cast<index_t>(_itxs.size())),
-                                                                   [&] (const auto icon) { return _itxs[icon] == itx and _irxs[icon] == irx; });
-                            if (found) {
+                            if (std::ranges::any_of(_itxs, [&] (const auto &net_itx) { return (net_itx == itx); }) and
+                                std::ranges::any_of(_itxs, [&] (const auto &net_irx) { return (net_irx == irx); })) {
                                 throw std::invalid_argument("NNet::connect: duplicate connection!");
                             }
                             _itxs.push_back(itx);
@@ -256,18 +254,17 @@ namespace hNNet {
                 }
                 // Sort connections by (irx, itx), build per-receiver partitions and order them topologically
                 void prepare() {
-                    auto order = [&] (const auto &lhs, const auto &rhs) { 
-                        return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); 
-                    };
-                    const auto connection_count = _itxs.size();
-                    std::vector<index_t> sorted_itxs(connection_count);
-                    std::vector<index_t> sorted_irxs(connection_count);
-                    std::vector<index_t> sorted_icons(connection_count);
-                    std::ranges::iota(sorted_icons, 0);
                     Timer timer;
                     std::println("NNet::prepare: preparing net...");
                     timer.start();
-                    std::ranges::sort(sorted_icons, order);
+                    // sort connections per irx and itx
+                    const auto connection_count = _itxs.size();
+                    std::vector<index_t> sorted_icons(connection_count);
+                    std::ranges::iota(sorted_icons, 0);
+                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs) {
+                                      return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
+                    std::vector<index_t> sorted_itxs(connection_count);
+                    std::vector<index_t> sorted_irxs(connection_count);
                     for (size_t icon{0}; icon < connection_count; ++icon) {
                         const auto &sorted_icon = sorted_icons[icon];
                         sorted_itxs[icon] = _itxs[sorted_icon];
