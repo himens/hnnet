@@ -107,8 +107,9 @@ namespace hNNet {
                         auto itxs = to_index(std::forward<TxType>(tx_neurons));
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            if (std::ranges::any_of(_itxs, [&] (const auto &net_itx) { return (net_itx == itx); }) and
-                                std::ranges::any_of(_itxs, [&] (const auto &net_irx) { return (net_irx == irx); })) {
+                            const auto found = std::ranges::any_of(std::views::iota(0ul, _irxs.size()), [&] (const auto &icon)
+                                                                   { return (_itxs[icon] == itx) and (_irxs[icon]) == irx; });
+                            if (found) {
                                 throw std::invalid_argument("NNet::connect: duplicate connection!");
                             }
                             _itxs.push_back(itx);
@@ -261,8 +262,8 @@ namespace hNNet {
                     const auto connection_count = _itxs.size();
                     std::vector<index_t> sorted_icons(connection_count);
                     std::ranges::iota(sorted_icons, 0);
-                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs) {
-                                      return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
+                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs)
+                                      { return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
                     std::vector<index_t> sorted_itxs(connection_count);
                     std::vector<index_t> sorted_irxs(connection_count);
                     for (size_t icon{0}; icon < connection_count; ++icon) {
