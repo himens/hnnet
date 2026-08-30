@@ -249,8 +249,8 @@ namespace hNNet {
                     for (; icon < partition.end; icon++) {
                         weighted_sum += _weights[icon] * _neurons[_itxs[icon]].signal();
                     }
-                    auto &receiver = _neurons[partition.irx];
-                    receiver.activate(weighted_sum);
+                    auto &rx = _neurons[partition.irx];
+                    rx.activate(weighted_sum);
                 }
                 // Sort connections by (irx, itx), build per-receiver partitions and order them topologically
                 void prepare() {
