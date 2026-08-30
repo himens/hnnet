@@ -26,12 +26,13 @@ namespace hNNet::Builtin {
                     // by the time a partition's irx is reached, all its downstream contributions are collected
                     for (const auto &partition : view.partitions() | std::views::reverse) {
                         const auto &rx = view.neuron(partition.irx);
+                        auto &delta_rx = _deltas[partition.irx];
                         if (rx.type() != NeuronType::output) {
-                            _deltas[partition.irx] *= rx.activation()->derivative(rx.weighted_sum());
+                            delta_rx *= rx.activation()->derivative(rx.weighted_sum());
                         }
                         for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
                             const auto itx = view.itx(icon);
-                            _deltas[itx] += _deltas[partition.irx] * view.weight(icon);
+                            _deltas[itx] += delta_rx * view.weight(icon);
                         }
                     }
                     // update weights for all connections

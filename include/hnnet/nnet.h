@@ -253,7 +253,7 @@ namespace hNNet {
                     auto &rx = _neurons[partition.irx];
                     rx.activate(weighted_sum);
                 }
-                // Sort connections by (irx, itx), build per-receiver partitions and order them topologically
+                // Prepare net (build partitions, order them topologically, ...)
                 void prepare() {
                     Timer timer;
                     std::println("NNet::prepare: preparing net...");
