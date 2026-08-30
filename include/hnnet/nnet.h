@@ -88,7 +88,6 @@ namespace hNNet {
                     requires (NeuronView<std::remove_cvref_t<TxType>> or std::same_as<std::remove_cvref_t<TxType>, Neuron>) and
                              (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
                     void connect(TxType &&tx_neurons, RxType &&rx_neurons) {
-                        _trained = false;
                         auto index = [&] (const Neuron* neuron) {
                             const auto index = static_cast<index_t>(neuron - _neurons.data());
                             if (index >= _neurons.size()) {
@@ -104,6 +103,7 @@ namespace hNNet {
                                 return std::forward<decltype(arg)>(arg) | std::views::transform([&] (const auto &neuron) { return index(&neuron); });
                             }
                         };
+                        _trained = false;
                         auto itxs = to_index(std::forward<TxType>(tx_neurons));
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
@@ -147,12 +147,12 @@ namespace hNNet {
                         constexpr size_t max_epochs{1'000'000};
                         size_t epoch{0};
                         bool converged{false};
-                        Timer timer{};
                         auto in_neurons = neurons(NeuronType::input);
                         auto out_neurons = neurons(NeuronType::output);
                         if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
                             throw std::invalid_argument("NNet::train: size error!");
                         }
+                        Timer timer{};
                         std::println("NNet::train: ==================================");
                         std::println("NNet::train: Training net with {} samples...   ", samples.size());
                         std::println("NNet::train: ==================================");
@@ -256,25 +256,25 @@ namespace hNNet {
                 }
                 // Sort connections by (irx, itx), build per-receiver partitions and order them topologically
                 void prepare() {
+                    auto order = [&] (const auto &lhs, const auto &rhs) { 
+                        return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); 
+                    };
                     const auto connection_count = _itxs.size();
-                    std::vector<index_t> order(connection_count);
                     std::vector<index_t> sorted_itxs(connection_count);
                     std::vector<index_t> sorted_irxs(connection_count);
-                    std::vector<real_t> sorted_weights(connection_count);
-                    Timer timer{};
+                    std::vector<index_t> sorted_icons(connection_count);
+                    std::ranges::iota(sorted_icons, 0);
+                    Timer timer;
                     std::println("NNet::prepare: preparing net...");
                     timer.start();
-                    std::iota(order.begin(), order.end(), 0);
-                    std::ranges::sort(order, [&] (const auto &lhs, const auto &rhs) { return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
-                    for (size_t i{0}; i < connection_count; ++i) {
-                        const auto &old_index = order[i];
-                        sorted_itxs[i] = _itxs[old_index];
-                        sorted_irxs[i] = _irxs[old_index];
-                        sorted_weights[i] = _weights[old_index];
+                    std::ranges::sort(sorted_icons, order);
+                    for (size_t icon{0}; icon < connection_count; ++icon) {
+                        const auto &sorted_icon = sorted_icons[icon];
+                        sorted_itxs[icon] = _itxs[sorted_icon];
+                        sorted_irxs[icon] = _irxs[sorted_icon];
                     }
                     _itxs = std::move(sorted_itxs);
                     _irxs = std::move(sorted_irxs);
-                    _weights = std::move(sorted_weights);
                     // each contiguous block sharing the same irx becomes a partition
                     _partitions.clear();
                     size_t begin{0};
