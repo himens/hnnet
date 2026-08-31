@@ -320,9 +320,9 @@ namespace hNNet {
                         index_t icol{0};
                         for (; (icol + register_size) <= block.tx_count; icol += register_size) {
                             weighted_sum +=  _weights[row_offset + icol]     * _neurons[block.tx_begin + icol].signal()
-                                + _weights[row_offset + icol + 1] * _neurons[block.tx_begin + icol + 1].signal()
-                                + _weights[row_offset + icol + 2] * _neurons[block.tx_begin + icol + 2].signal()
-                                + _weights[row_offset + icol + 3] * _neurons[block.tx_begin + icol + 3].signal();
+                                           + _weights[row_offset + icol + 1] * _neurons[block.tx_begin + icol + 1].signal()
+                                           + _weights[row_offset + icol + 2] * _neurons[block.tx_begin + icol + 2].signal()
+                                           + _weights[row_offset + icol + 3] * _neurons[block.tx_begin + icol + 3].signal();
                         }
                         //#pragma omp simd reduction(+:weighted_sum)
                         for (; icol < block.tx_count; ++icol) {
