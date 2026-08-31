@@ -17,6 +17,7 @@ namespace hNNet {
                 using output_type = OutputData;
                 static constexpr size_t input_size{std::tuple_size_v<InputData>};
                 static constexpr size_t output_size{std::tuple_size_v<OutputData>};
+                static constexpr index_t no_block{std::numeric_limits<index_t>::max()};
                 // Data types
                 struct TrainingSample {
                     InputData inputs;
@@ -70,9 +71,6 @@ namespace hNNet {
                         index_t block_id(const size_t ipart) const {
                             return _net._partition_block_id[ipart];
                         }
-                        index_t no_dense_block() const {
-                            return NNet::no_block;
-                        }
                     private:
                         friend class NNet;
                         explicit View(NNet& net) : _net(net) {}
@@ -123,8 +121,8 @@ namespace hNNet {
                         auto itxs = to_index(std::forward<TxType>(tx_neurons));
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            const auto found = std::ranges::any_of(std::views::iota(0ul, _irxs.size()), [&] (const auto &icon)
-                                    { return (_itxs[icon] == itx) and (_irxs[icon]) == irx; });
+                            const auto found = std::ranges::any_of(std::views::iota(0ul, _irxs.size()), [&] (const auto &icon) {
+                                                                   return (_itxs[icon] == itx) and (_irxs[icon] == irx); });
                             if (found) {
                                 throw std::invalid_argument("NNet::connect: duplicate connection!");
                             }
@@ -196,7 +194,8 @@ namespace hNNet {
                             epoch_timer.stop();
                             mean_squared_error /= samples.size();
                             converged = (mean_squared_error < error_threshold);
-                            std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}", epoch, epoch_timer.get_elapsed_time_s(), mean_squared_error);
+                            std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}",
+                                         epoch, epoch_timer.get_elapsed_time_s(), mean_squared_error);
                         }
                         timer.stop();
                         if (converged) {
@@ -285,17 +284,15 @@ namespace hNNet {
                     }
                 // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
-                    size_t ipart{0};
-                    while (ipart < _partitions.size()) {
+                    for (index_t ipart{0}; ipart < _partitions.size(); ipart++) {
                         const auto block_id = _partition_block_id[ipart];
                         if (block_id != no_block) {
                             const auto &block = _dense_blocks[block_id];
                             broadcast(block);
-                            ipart += block.rx_count;  // dense block members are contiguous: skip them all at once
+                            ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                             continue;
                         }
                         broadcast(_partitions[ipart]);
-                        ++ipart;
                     }
                 }
                 // Process a single partition
@@ -308,6 +305,7 @@ namespace hNNet {
                                        + _weights[icon + 2] * _neurons[_itxs[icon + 2]].signal()
                                        + _weights[icon + 3] * _neurons[_itxs[icon + 3]].signal();
                     }
+                    //#pragma omp simd reduction(+:weighted_sum)
                     for (; icon < partition.end; icon++) {
                         weighted_sum += _weights[icon] * _neurons[_itxs[icon]].signal();
                     }
@@ -319,9 +317,16 @@ namespace hNNet {
                     for (index_t irow{0}; irow < block.rx_count; ++irow) {
                         real_t weighted_sum{0.0};
                         const auto row_offset = block.weight_offset + irow * block.tx_count;
-                        #pragma omp simd reduction(+:weighted_sum)
-                        for (index_t icol = 0; icol < block.tx_count; ++icol) {
-                            weighted_sum += _weights[row_offset + icol] * _neurons[block.tx_begin + icol].signal();
+                        index_t icol{0};
+                        for (; (icol + register_size) <= block.tx_count; icol += register_size) {
+                            weighted_sum +=  _weights[row_offset + icol]     * _neurons[block.tx_begin + icol].signal()
+                                + _weights[row_offset + icol + 1] * _neurons[block.tx_begin + icol + 1].signal()
+                                + _weights[row_offset + icol + 2] * _neurons[block.tx_begin + icol + 2].signal()
+                                + _weights[row_offset + icol + 3] * _neurons[block.tx_begin + icol + 3].signal();
+                        }
+                        //#pragma omp simd reduction(+:weighted_sum)
+                        for (; icol < block.tx_count; ++icol) {
+                            weighted_sum +=  _weights[row_offset + icol] * _neurons[block.tx_begin + icol].signal();
                         }
                         auto &rx = _neurons[block.rx_begin + irow];
                         rx.activate(weighted_sum);
@@ -336,8 +341,8 @@ namespace hNNet {
                     const auto connection_count = _itxs.size();
                     std::vector<index_t> sorted_icons(connection_count);
                     std::ranges::iota(sorted_icons, 0);
-                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs)
-                                      { return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
+                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs) {
+                                      return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
                     std::vector<index_t> sorted_itxs(connection_count);
                     std::vector<index_t> sorted_irxs(connection_count);
                     std::vector<real_t> sorted_weights(connection_count);
@@ -426,6 +431,11 @@ namespace hNNet {
                         if (members.size() < 2) {
                             continue;  // no gain grouping a single receiver
                         }
+                        const auto [min_ipart, max_ipart] = std::ranges::minmax(members);
+                        if ((max_ipart - min_ipart + 1) != members.size()) {
+                            continue; // must be contiguous partitions (in topo order)
+                        }
+                        // sort members per increasing irx and check rx indices and tx indices are contiguous
                         std::ranges::sort(members, [&] (const auto &lhs, const auto &rhs) { return _partitions[lhs].irx < _partitions[rhs].irx; });
                         auto contiguous = true;
                         for (size_t i{1}; i < members.size(); ++i) {
@@ -437,14 +447,9 @@ namespace hNNet {
                             }
                         }
                         if (not contiguous) {
-                            continue;  // rx indices or underlying storage are not contiguous: keep the generic edge path
-                        }
-                        // members must also occupy a contiguous run of positions in the topo-sorted _partitions vector,
-                        // otherwise a reverse-topo consumer (e.g. backprop) could not safely process the whole block at once
-                        const auto [min_ipart, max_ipart] = std::ranges::minmax(members);
-                        if ((max_ipart - min_ipart + 1) != members.size()) {
                             continue;
                         }
+                        // add dense block
                         const auto &first = _partitions[members.front()];
                         const auto block_id = static_cast<index_t>(_dense_blocks.size());
                         _dense_blocks.push_back({
@@ -458,8 +463,8 @@ namespace hNNet {
                             _partition_block_id[imember] = block_id;
                         }
                     }
-                    std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
                     timer.stop();
+                    std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
                     std::println("NNet::prepare: net prepared in {}s", timer.get_elapsed_time_s());
                 }
                 // Learn from targets using the selected learning rule
@@ -487,7 +492,6 @@ namespace hNNet {
                     return gen;
                 }
                 // Data members
-                static constexpr index_t no_block{std::numeric_limits<index_t>::max()};
                 bool _trained{false};
                 std::vector<Neuron> _neurons{};
                 std::vector<index_t> _itxs{};

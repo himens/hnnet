@@ -22,14 +22,13 @@ namespace hNNet::Builtin {
                         squared_error += error * error;
                         _deltas[iout] = error * out_neuron.activation()->derivative(out_neuron.weighted_sum());
                     }
-                    // partitions are already in topological order: walking them backwards guarantees that,
-                    // by the time a partition's irx is reached, all its downstream contributions are collected
-                    const auto &partitions = view.partitions();
-                    size_t ipart{partitions.size()};
-                    while (ipart > 0) {
-                        --ipart;
-                        const auto block_id = view.block_id(ipart);
-                        if (block_id != view.no_dense_block()) {
+                    // partitions are already in topological order: walk them backwards
+                    const auto partitions = view.partitions();
+                    auto reversed_partitions = partitions | std::views::reverse;
+                    for (index_t ipart{0}; ipart < reversed_partitions.size(); ipart++) {
+                        const auto &partition = reversed_partitions[ipart];
+                        const auto block_id = view.block_id(reversed_partitions.size() - ipart - 1);
+                        if (block_id != Net::no_block) {
                             const auto &block = view.dense_blocks()[block_id];
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {
                                 const auto irx = block.rx_begin + irow;
@@ -39,16 +38,14 @@ namespace hNNet::Builtin {
                                     delta_rx *= rx.activation()->derivative(rx.weighted_sum());
                                 }
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
-                                // row-major sweep, same access pattern as broadcast(): equivalent to a W^T * delta product without transposing storage
                                 #pragma omp simd
                                 for (index_t icol = 0; icol < block.tx_count; ++icol) {
                                     _deltas[block.tx_begin + icol] += delta_rx * view.weight(row_offset + icol);
                                 }
                             }
-                            ipart -= (block.rx_count - 1);  // dense block members are contiguous: skip them all at once
+                            ipart += block.rx_count - 1;
                             continue;
                         }
-                        const auto &partition = partitions[ipart];
                         const auto &rx = view.neuron(partition.irx);
                         auto &delta_rx = _deltas[partition.irx];
                         if (rx.type() != NeuronType::output) {
@@ -59,26 +56,25 @@ namespace hNNet::Builtin {
                             _deltas[itx] += delta_rx * view.weight(icon);
                         }
                     }
-                    // update weights: dense blocks as a rank-1 (outer product) update, the rest via the generic edge path
-                    ipart = 0;
-                    while (ipart < partitions.size()) {
+                    // update weights
+                    for (index_t ipart{0}; ipart < partitions.size(); ipart++) {
+                        const auto &partition = partitions[ipart];
                         const auto block_id = view.block_id(ipart);
-                        if (block_id != view.no_dense_block()) {
+                        if (block_id != Net::no_block) {
                             const auto &block = view.dense_blocks()[block_id];
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {
                                 const auto scaled_delta = _learning_rate * _deltas[block.rx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 #pragma omp simd
                                 for (index_t icol = 0; icol < block.tx_count; ++icol) {
-                                    const auto dweight = (scaled_delta * view.neuron(block.tx_begin + icol).signal()) + (_momentum * _dweights[row_offset + icol]);
+                                    const auto dweight = scaled_delta * view.neuron(block.tx_begin + icol).signal() + (_momentum * _dweights[row_offset + icol]);
                                     view.weight(row_offset + icol) += dweight;
                                     _dweights[row_offset + icol] = dweight;
                                 }
                             }
-                            ipart += block.rx_count;  // dense block members are contiguous: skip them all at once
+                            ipart += block.rx_count - 1;
                             continue;
                         }
-                        const auto &partition = partitions[ipart];
                         for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
                             const auto irx = view.irx(icon); // indirection
                             const auto &tx = view.neuron(view.itx(icon)); // indirection
@@ -86,7 +82,6 @@ namespace hNNet::Builtin {
                             view.weight(icon) += dweight;
                             _dweights[icon] = dweight;
                         }
-                        ++ipart;
                     }
                     return squared_error;
                 }
