@@ -69,7 +69,7 @@ namespace hNNet {
                             return _net._dense_blocks;
                         }
                         index_t block_id(const size_t ipart) const {
-                            return _net._partition_block_id[ipart];
+                            return _net._block_ids[ipart];
                         }
                     private:
                         friend class NNet;
@@ -285,7 +285,7 @@ namespace hNNet {
                 // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
                     for (index_t ipart{0}; ipart < _partitions.size(); ipart++) {
-                        const auto block_id = _partition_block_id[ipart];
+                        const auto block_id = _block_ids[ipart];
                         if (block_id != no_block) {
                             const auto &block = _dense_blocks[block_id];
                             broadcast(block);
@@ -408,7 +408,7 @@ namespace hNNet {
                     std::ranges::sort(_partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.irx] < topo_ranks[rhs.irx]; });
                     // group partitions sharing the exact same (contiguous) source range into dense blocks
                     _dense_blocks.clear();
-                    _partition_block_id.assign(_partitions.size(), no_block);
+                    _block_ids.assign(_partitions.size(), no_block);
                     UnionFind union_find(_partitions.size());
                     std::unordered_map<std::pair<index_t, size_t>, index_t, SignatureHash> signature_owner;
                     for (index_t ipart{0}; ipart < _partitions.size(); ++ipart) {
@@ -460,7 +460,7 @@ namespace hNNet {
                             .weight_offset = first.begin,
                         });
                         for (const auto &imember : members) {
-                            _partition_block_id[imember] = block_id;
+                            _block_ids[imember] = block_id;
                         }
                     }
                     timer.stop();
@@ -500,7 +500,7 @@ namespace hNNet {
                 std::vector<real_t> _weights{};
                 std::vector<Partition> _partitions{};
                 std::vector<DenseBlock> _dense_blocks{};
-                std::vector<index_t> _partition_block_id{};
+                std::vector<index_t> _block_ids{};
         };
     template <typename T>
         using input_t = T::input_type;
