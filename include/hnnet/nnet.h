@@ -431,15 +431,19 @@ namespace hNNet {
                         for (size_t i{1}; i < members.size(); ++i) {
                             const auto &prev = _partitions[members[i - 1]];
                             const auto &curr = _partitions[members[i]];
-                            // same topo_rank is required so that a reverse-topo consumer (e.g. backprop) can
-                            // safely process the whole block as soon as it reaches any one of its members
-                            if ((curr.irx != prev.irx + 1) or (curr.begin != prev.end) or (topo_ranks[curr.irx] != topo_ranks[prev.irx])) {
+                            if ((curr.irx != prev.irx + 1) or (curr.begin != prev.end)) {
                                 contiguous = false;
                                 break;
                             }
                         }
                         if (not contiguous) {
-                            continue;  // rx indices, storage or topological rank are not uniform: keep the generic edge path
+                            continue;  // rx indices or underlying storage are not contiguous: keep the generic edge path
+                        }
+                        // members must also occupy a contiguous run of positions in the topo-sorted _partitions vector,
+                        // otherwise a reverse-topo consumer (e.g. backprop) could not safely process the whole block at once
+                        const auto [min_ipart, max_ipart] = std::ranges::minmax(members);
+                        if ((max_ipart - min_ipart + 1) != members.size()) {
+                            continue;
                         }
                         const auto &first = _partitions[members.front()];
                         const auto block_id = static_cast<index_t>(_dense_blocks.size());
