@@ -14,6 +14,7 @@
 #include <random>
 #include <memory>
 #include <omp.h>
+#include "timer.h"
 
 namespace hNNet {
     constexpr size_t register_size{4};

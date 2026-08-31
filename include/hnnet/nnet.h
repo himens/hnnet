@@ -2,9 +2,6 @@
 #include "hnnet/neuron.h"
 #include "hnnet/learning-rule.h"
 #include "hnnet/builtin/activations.h"
-#include "timer.h"
-#include <numeric>
-#include <omp.h>
 
 namespace hNNet {
     ////////////////
@@ -267,9 +264,9 @@ namespace hNNet {
                     std::vector<index_t> sorted_itxs(connection_count);
                     std::vector<index_t> sorted_irxs(connection_count);
                     for (size_t icon{0}; icon < connection_count; ++icon) {
-                        const auto &sorted_icon = sorted_icons[icon];
-                        sorted_itxs[icon] = _itxs[sorted_icon];
-                        sorted_irxs[icon] = _irxs[sorted_icon];
+                        const auto &old_icon = sorted_icons[icon];
+                        sorted_itxs[icon] = _itxs[old_icon];
+                        sorted_irxs[icon] = _irxs[old_icon];
                     }
                     _itxs = std::move(sorted_itxs);
                     _irxs = std::move(sorted_irxs);
@@ -295,7 +292,7 @@ namespace hNNet {
                     }
                     // topologically order partitions (Kahn's algorithm)
                     std::vector<std::vector<index_t>> irxs(neuron_count);
-                    for (index_t icon{0}; icon < static_cast<index_t>(_itxs.size()); ++icon) {
+                    for (index_t icon{0}; icon < _itxs.size(); ++icon) {
                         irxs[_itxs[icon]].push_back(_irxs[icon]);
                     }
                     std::vector<size_t> visits_left(neuron_count, 0);
@@ -303,7 +300,7 @@ namespace hNNet {
                         visits_left[partition.irx] = partition.end - partition.begin;
                     }
                     std::vector<index_t> visited_queue;
-                    for (index_t inr{0}; inr < static_cast<index_t>(neuron_count); ++inr) {
+                    for (index_t inr{0}; inr < neuron_count; ++inr) {
                         if (visits_left[inr] == 0) {
                             visited_queue.push_back(inr);
                         }
@@ -336,7 +333,7 @@ namespace hNNet {
                 // Learn from targets using the selected learning rule
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
-                    real_t learn(const OutputData &targets, LearningRule &rule) {
+                    [[nodiscard]] real_t learn(const OutputData &targets, LearningRule &rule) {
                         return rule.learn(*this, targets);
                     }
                 // Reset all neurons in the net
