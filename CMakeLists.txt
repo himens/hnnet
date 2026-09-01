@@ -10,11 +10,6 @@ add_library(hnnet_lib INTERFACE)
 add_library(hnnet::hnnet ALIAS hnnet_lib)
 target_include_directories(hnnet_lib INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-option(HNNET_PROFILE "Enable internal timing instrumentation for broadcast/learn (for local benchmarking)" OFF)
-if(HNNET_PROFILE)
-    target_compile_definitions(hnnet_lib INTERFACE HNNET_PROFILE)
-endif()
-
 add_subdirectory(utility)
 target_link_libraries(hnnet_lib INTERFACE utility::utility)
 

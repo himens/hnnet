@@ -165,9 +165,6 @@ namespace hNNet {
                             throw std::invalid_argument("NNet::train: size error!");
                         }
                         Timer timer{};
-#ifdef HNNET_PROFILE
-                        Timer broadcast_timer{};
-#endif
                         std::println("NNet::train: ==================================");
                         std::println("NNet::train: Training net with {} samples...   ", samples.size());
                         std::println("NNet::train: ==================================");
@@ -190,13 +187,7 @@ namespace hNNet {
                             for (const auto &sample : samples) {
                                 reset();
                                 inject(sample.inputs, in_neurons);
-#ifdef HNNET_PROFILE
-                                broadcast_timer.start();
-#endif
                                 broadcast();
-#ifdef HNNET_PROFILE
-                                broadcast_timer.stop();
-#endif
                                 mean_squared_error += learn(sample.targets, rule);
                             }
                             epoch_timer.stop();
@@ -204,9 +195,6 @@ namespace hNNet {
                             converged = (mean_squared_error < error_threshold);
                             std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}",
                                          epoch, epoch_timer.get_elapsed_time_s(), mean_squared_error);
-#ifdef HNNET_PROFILE
-                            std::println("NNet::train: cumulative broadcast time: {}s", broadcast_timer.get_elapsed_time_s());
-#endif
                         }
                         timer.stop();
                         if (converged) {
