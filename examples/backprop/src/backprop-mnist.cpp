@@ -1,6 +1,6 @@
 #include <fstream>
 #include <sstream>
-#include "hnnet/activation.h"
+#include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/backprop-rule.h"
 #include "hnnet/nnet.h"
 
@@ -12,18 +12,19 @@ constexpr size_t nb_test_samples{0};
 constexpr size_t batch_size{nb_training_samples};
 
 using namespace hNNet;
+using InputData  = Data<real_t, nb_pixels>;
+using OutputData = Data<real_t, nb_classes>;
+
 struct DigitData {
     int_t label{0};
     std::array<int_t, nb_pixels> pixels{};
 };
-using InputData  = Data<real_t, nb_pixels>;
-using OutputData = Data<real_t, nb_classes>;
 
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
 InputData encode(const std::array<int_t, nb_pixels> &pixels) {
     InputData data{};
-    for (const auto &[idx, pixel] : pixels | std::views::enumerate) {
-        data[idx] = static_cast<real_t>(pixel) / 255.0;
+    for (const auto &[ipx, pixel] : pixels | std::views::enumerate) {
+        data[ipx] = static_cast<real_t>(pixel) / 255.0;
     }
     return data;
 }
@@ -75,9 +76,9 @@ int main() {
     using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input);
-    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, SigmoidActivation{});
-    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, SigmoidActivation{});
+    auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input, Builtin::IdentityActivation{});
+    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, Builtin::SigmoidActivation{});
+    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, Builtin::SigmoidActivation{});
     classifier.connect(input_layer, hidden_layer);
     classifier.connect(hidden_layer, output_layer);
     // read train and test samples
@@ -91,6 +92,9 @@ int main() {
     // train net
     classifier.randomize_weights(-0.1, 0.1);
     classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
+#ifdef HNNET_PROFILE
+    Builtin::BackpropRule::print_profile();
+#endif
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};

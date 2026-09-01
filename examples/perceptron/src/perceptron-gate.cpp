@@ -1,4 +1,4 @@
-#include "hnnet/activation.h"
+#include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/perceptron-rule.h"
 #include "hnnet/nnet.h"
 
@@ -9,8 +9,8 @@ int main() {
     using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;
     // create net
     Gate gate;
-    auto input_layer  = gate.new_neurons(2, NeuronType::input);
-    auto output_layer = gate.new_neurons(1, NeuronType::output, PerceptronActivation{});
+    auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
+    auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::PerceptronActivation{});
     gate.connect(input_layer, output_layer);
     gate.add_bias(output_layer);
     // train net

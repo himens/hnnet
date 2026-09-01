@@ -12,9 +12,13 @@
 #include <string>
 #include <cmath>
 #include <random>
-#include <variant>
+#include <memory>
+#include <omp.h>
+#include "timer.h"
 
 namespace hNNet {
+    constexpr size_t register_size{4};
+
     using real_t   = std::float64_t;
     using int_t    = std::int64_t;
     using real32_t = std::float32_t;

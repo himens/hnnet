@@ -21,6 +21,11 @@ add_subdirectory(examples/backprop)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(hnnet_lib INTERFACE -Wfatal-errors)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+        target_compile_options(hnnet_lib INTERFACE -mcpu=native)
+    else()
+        target_compile_options(hnnet_lib INTERFACE -march=native)
+    endif()
 endif()
 
 message(STATUS "hnnet library configured successfully")

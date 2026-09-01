@@ -8,60 +8,88 @@ namespace hNNet::Builtin {
             explicit BackpropRule(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {}
             // Learn from targets using the back-propagation learning rule
             template <NNetType Net>
-                void learn(Net &net, const output_t<Net> &targets) {
-                    // Backpropagate errors through the net
-                    auto backprop_error = [&] (this auto&& self, Net::View &view, const index_t ineuron) -> void {
-                        for (const auto &iconn : view.in_connections(ineuron)) {
-                            const auto itx = view.itx(iconn);
-                            _deltas[itx] += _deltas[ineuron] * view.weight(iconn);
-                            if (++_number_rx_deltas[itx] == view.out_connections(itx).size()) {
-                                const auto &tx = view.neuron(itx);
-                                _deltas[itx] *= tx.activation_derivative(tx.weighted_sum());
-                                self(view, itx);
-                            }
-                        }
-                    };
-                    // Reset internal data
-                    auto reset = [&] (const size_t neuron_count, const size_t connection_count) {
-                        _number_rx_deltas.clear();
-                        _number_rx_deltas.resize(neuron_count);
-                        _deltas.clear();
-                        _deltas.resize(neuron_count);
-                        if (_dweights.empty()) {
-                            _dweights.resize(connection_count);
-                            std::ranges::fill(_dweights, 0.0);
-                        }
-                    };
+                real_t learn(Net &net, const output_t<Net> &targets) {
                     auto view = net.view();
-                    reset(view.neuron_count(), view.connection_count());
-                    index_t itarget{0};
-                    // Compute deltas for output neurons and back-propagate through the net
-                    for (size_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
-                        const auto& neuron = view.neuron(ineuron);
-                        if (neuron.type() != NeuronType::output) {
-                            continue;  // Skip non-output neurons
+                    _deltas.assign(view.neuron_count(), 0.0);
+                    if (_dweights.empty()) {
+                        _dweights.resize(view.connection_count(), 0.0);
+                    }
+                    // seed output deltas with the error already scaled by the activation derivative
+                    real_t squared_error{0.0};
+                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
+                        const auto &out_neuron = view.neuron(iout);
+                        const auto error = (target - view.signal(iout));
+                        squared_error += error * error;
+                        _deltas[iout] = error * out_neuron.activation()->derivative(out_neuron.weighted_sum());
+                    }
+                    // partitions are already in topological order: walk them backwards
+                    const auto partitions = view.partitions();
+                    auto reversed_partitions = partitions | std::views::reverse;
+                    for (index_t ipart{0}; ipart < reversed_partitions.size(); ipart++) {
+                        const auto &partition = reversed_partitions[ipart];
+                        const auto block_id = view.block_id(reversed_partitions.size() - ipart - 1);
+                        if (block_id != Net::no_block) {
+                            const auto &block = view.dense_blocks()[block_id];
+                            for (index_t irow{0}; irow < block.rx_count; ++irow) {
+                                const auto irx = block.rx_begin + irow;
+                                const auto &rx = view.neuron(irx);
+                                auto &delta_rx = _deltas[irx];
+                                if (rx.type() != NeuronType::output) {
+                                    delta_rx *= rx.activation()->derivative(rx.weighted_sum());
+                                }
+                                //#pragma omp simd
+                                const auto row_offset = block.weight_offset + irow * block.tx_count;
+                                for (index_t icol = 0; icol < block.tx_count; ++icol) {
+                                    _deltas[block.tx_begin + icol] += delta_rx * view.weight(row_offset + icol);
+                                }
+                            }
+                            ipart += block.rx_count - 1;
+                            continue;
                         }
-                        const auto target = targets[itarget++];
-                        const auto error = (target - neuron.signal());
-                        _deltas[ineuron] = error * neuron.activation_derivative(neuron.weighted_sum());
-                        backprop_error(view, ineuron);
+                        const auto &rx = view.neuron(partition.irx);
+                        auto &delta_rx = _deltas[partition.irx];
+                        if (rx.type() != NeuronType::output) {
+                            delta_rx *= rx.activation()->derivative(rx.weighted_sum());
+                        }
+                        for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                            const auto itx = view.itx(icon);
+                            _deltas[itx] += delta_rx * view.weight(icon);
+                        }
                     }
-                    // Update weights for all connections
-                    for (index_t iconn{0}; iconn < view.connection_count(); ++iconn) {
-                         const auto irx = view.irx(iconn);
-                         const auto &tx = view.neuron(view.itx(iconn));
-                         auto &weight = view.weight(iconn);
-                         const auto old_weight = weight;
-                         weight += (_learning_rate * _deltas[irx] * tx.signal()) + (_momentum * _dweights[iconn]);
-                        _dweights[iconn] = (weight - old_weight);  // Store the weight change for momentum
+                    // update weights
+                    for (index_t ipart{0}; ipart < partitions.size(); ipart++) {
+                        const auto &partition = partitions[ipart];
+                        const auto block_id = view.block_id(ipart);
+                        if (block_id != Net::no_block) {
+                            const auto &block = view.dense_blocks()[block_id];
+                            for (index_t irow{0}; irow < block.rx_count; ++irow) {
+                                const auto scaled_delta = _learning_rate * _deltas[block.rx_begin + irow];
+                                const auto row_offset = block.weight_offset + irow * block.tx_count;
+                                //#pragma omp simd
+                                for (index_t icol = 0; icol < block.tx_count; ++icol) {
+                                    const auto dweight = scaled_delta * view.signal(block.tx_begin + icol) + (_momentum * _dweights[row_offset + icol]);
+                                    view.weight(row_offset + icol) += dweight;
+                                    _dweights[row_offset + icol] = dweight;
+                                }
+                            }
+                            ipart += block.rx_count - 1;
+                            continue;
+                        }
+                        for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                            const auto irx = view.irx(icon); // indirection
+                            const auto itx = view.itx(icon); // indirection
+                            const auto dweight = (_learning_rate * _deltas[irx] * view.signal(itx)) + (_momentum * _dweights[icon]);
+                            view.weight(icon) += dweight;
+                            _dweights[icon] = dweight;
+                        }
                     }
+                    return squared_error;
                 }
         private:
-            // Data members    
+            // Data members
             real_t _learning_rate{0.0};
             real_t _momentum{0.0};
             std::vector<real_t> _deltas{};
             std::vector<real_t> _dweights{};
-            std::vector<size_t> _number_rx_deltas{};
     };
 }

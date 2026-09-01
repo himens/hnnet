@@ -9,51 +9,37 @@ namespace hNNet {
     class Neuron {
         public:
             // Constructor
-            Neuron(const NeuronType type, const Activation &activation = IdentityActivation{}) : _type(type), _activation(activation) {}
-            // Get neuron signal 
-            real_t signal() const {
-                return _signal;
+            Neuron(const NeuronType type, std::unique_ptr<Activation> activation) : _type(type), _activation(std::move(activation)) {
+                if (_activation == nullptr) {
+                    throw std::invalid_argument("Neuron::Neuron: invalid activation!");
+                }
             }
             // Get neuron type
             NeuronType type() const {
                 return _type;
             }
-            // Get number of received signals
-            size_t number_rx_signals() const {
-                return _number_rx_signals;
-            }
             // Get weighted sum
             real_t weighted_sum() const {
                 return _weighted_sum;
             }
-            // Activate neuron (calculate activation value)
-            void activate() {
-                _signal = activation(_weighted_sum);
+            // Get the activation function
+            const Activation*  activation() const {
+                return _activation.get();
             }
-            // Receive signal from synaptic connection
-            void receive_signal(const real_t signal) {
-                _weighted_sum += signal;
-                _number_rx_signals++;
+            // Activate neuron (calculate activation value), returns the computed signal
+            real_t activate(const real_t weighted_sum) {
+                _weighted_sum = weighted_sum;
+                return (*_activation)(_weighted_sum);
             }
             // Reset state before processing a new sample
             void reset() {
-                _number_rx_signals = 0;
                 _weighted_sum = 0.0;
-            }
-            // Get activation value and derivative
-            real_t activation(const real_t x) const {
-                return std::visit([&] (const auto& activation) { return activation(x); }, _activation);
-            }
-            real_t activation_derivative(const real_t x) const {
-                return std::visit([&] (const auto& activation) { return activation.derivative(x); }, _activation);
             }
         private:
             // Data members
             NeuronType _type;
-            size_t _number_rx_signals{0};
             real_t _weighted_sum{0.0};
-            real_t _signal{0.0};
-            Activation _activation;
+            std::unique_ptr<Activation> _activation{nullptr};
     };
     template <typename T>
         concept NeuronRange = std::ranges::range<T> and std::same_as<std::ranges::range_value_t<T>, Neuron>;

@@ -8,24 +8,30 @@ namespace hNNet::Builtin {
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
             // Learn from targets using the perceptron learning rule
             template <NNetType Net>
-                void learn(Net &net, const output_t<Net> &targets) {
+                real_t learn(Net &net, const output_t<Net> &targets) {
                     auto view = net.view();
-                    index_t itarget{0};
-                    for (size_t ineuron{0}; ineuron < view.neuron_count(); ++ineuron) {
-                        const auto& neuron = view.neuron(ineuron);
-                        if (neuron.type() != NeuronType::output) {
-                            continue;  // Skip non-output neurons
-                        }
-                        const auto target = targets[itarget++];
-                        const auto error = (target - neuron.signal());
+                    if (view.partitions().size() != output_size_v<Net>) {
+                        throw std::runtime_error("PerceptronRule::learn: invalid net!");
+                    }
+                    real_t squared_error{0};
+                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
+                        const auto error = (target - view.signal(iout));
+                        squared_error += error * error;
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
                         }
-                        for (const auto &iconn : view.in_connections(ineuron)) {
-                            const auto &tx = view.neuron(view.itx(iconn));
-                            view.weight(iconn) += _learning_rate * target * tx.signal();
+                        // Find the partition corresponding to this output neuron (irx == inr)
+                        for (const auto &partition : view.partitions()) {
+                            if (partition.irx != iout) {
+                                continue;
+                            }
+                            for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                                const auto itx = view.itx(icon);
+                                view.weight(icon) += _learning_rate * target * view.signal(itx);
+                            }
                         }
                     }
+                    return squared_error;
                 }
         private:
             // Data members
