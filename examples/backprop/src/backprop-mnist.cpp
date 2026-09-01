@@ -7,8 +7,8 @@
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_classes{10};
 constexpr size_t nb_hidden{128};
-constexpr size_t nb_training_samples{60000};
-constexpr size_t nb_test_samples{0};
+constexpr size_t nb_training_samples{60'000};
+constexpr size_t nb_test_samples{10'000};
 constexpr size_t batch_size{nb_training_samples};
 
 using namespace hNNet;
@@ -92,9 +92,6 @@ int main() {
     // train net
     classifier.randomize_weights(-0.1, 0.1);
     classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
-#ifdef HNNET_PROFILE
-    Builtin::BackpropRule::print_profile();
-#endif
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
