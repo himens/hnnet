@@ -25,6 +25,9 @@ namespace hNNet::Builtin {
                     // partitions are already in topological order: walk them backwards
                     const auto partitions = view.partitions();
                     auto reversed_partitions = partitions | std::views::reverse;
+#ifdef HNNET_PROFILE
+                    delta_timer().start();
+#endif
                     for (index_t ipart{0}; ipart < reversed_partitions.size(); ipart++) {
                         const auto &partition = reversed_partitions[ipart];
                         const auto block_id = view.block_id(reversed_partitions.size() - ipart - 1);
@@ -56,6 +59,10 @@ namespace hNNet::Builtin {
                             _deltas[itx] += delta_rx * view.weight(icon);
                         }
                     }
+#ifdef HNNET_PROFILE
+                    delta_timer().stop();
+                    update_timer().start();
+#endif
                     // update weights
                     for (index_t ipart{0}; ipart < partitions.size(); ipart++) {
                         const auto &partition = partitions[ipart];
@@ -83,9 +90,29 @@ namespace hNNet::Builtin {
                             _dweights[icon] = dweight;
                         }
                     }
+#ifdef HNNET_PROFILE
+                    update_timer().stop();
+#endif
                     return squared_error;
                 }
+#ifdef HNNET_PROFILE
+            // Print cumulative time spent in the backward delta pass and in the weight update pass (shared across all instances/copies)
+            static void print_profile() {
+                std::println("BackpropRule::learn: cumulative delta time: {}s, cumulative update time: {}s",
+                             delta_timer().get_elapsed_time_s(), update_timer().get_elapsed_time_s());
+            }
+#endif
         private:
+#ifdef HNNET_PROFILE
+            static Timer& delta_timer() {
+                static Timer timer;
+                return timer;
+            }
+            static Timer& update_timer() {
+                static Timer timer;
+                return timer;
+            }
+#endif
             // Data members
             real_t _learning_rate{0.0};
             real_t _momentum{0.0};

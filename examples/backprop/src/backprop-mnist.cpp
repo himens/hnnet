@@ -92,6 +92,9 @@ int main() {
     // train net
     classifier.randomize_weights(-0.1, 0.1);
     classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
+#ifdef HNNET_PROFILE
+    Builtin::BackpropRule::print_profile();
+#endif
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
