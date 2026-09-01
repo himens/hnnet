@@ -18,7 +18,7 @@ namespace hNNet::Builtin {
                     real_t squared_error{0.0};
                     for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                         const auto &out_neuron = view.neuron(iout);
-                        const auto error = (target - out_neuron.signal());
+                        const auto error = (target - view.signal(iout));
                         squared_error += error * error;
                         _deltas[iout] = error * out_neuron.activation()->derivative(out_neuron.weighted_sum());
                     }
@@ -67,7 +67,7 @@ namespace hNNet::Builtin {
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 #pragma omp simd
                                 for (index_t icol = 0; icol < block.tx_count; ++icol) {
-                                    const auto dweight = scaled_delta * view.neuron(block.tx_begin + icol).signal() + (_momentum * _dweights[row_offset + icol]);
+                                    const auto dweight = scaled_delta * view.signal(block.tx_begin + icol) + (_momentum * _dweights[row_offset + icol]);
                                     view.weight(row_offset + icol) += dweight;
                                     _dweights[row_offset + icol] = dweight;
                                 }
@@ -77,8 +77,8 @@ namespace hNNet::Builtin {
                         }
                         for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
                             const auto irx = view.irx(icon); // indirection
-                            const auto &tx = view.neuron(view.itx(icon)); // indirection
-                            const auto dweight = (_learning_rate * _deltas[irx] * tx.signal()) + (_momentum * _dweights[icon]);
+                            const auto itx = view.itx(icon); // indirection
+                            const auto dweight = (_learning_rate * _deltas[irx] * view.signal(itx)) + (_momentum * _dweights[icon]);
                             view.weight(icon) += dweight;
                             _dweights[icon] = dweight;
                         }

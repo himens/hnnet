@@ -15,8 +15,7 @@ namespace hNNet::Builtin {
                     }
                     real_t squared_error{0};
                     for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
-                        const auto &out_neuron = view.neuron(iout);
-                        const auto error = (target - out_neuron.signal());
+                        const auto error = (target - view.signal(iout));
                         squared_error += error * error;
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
@@ -27,8 +26,8 @@ namespace hNNet::Builtin {
                                 continue;
                             }
                             for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
-                                const auto &tx = view.neuron(view.itx(icon));
-                                view.weight(icon) += _learning_rate * target * tx.signal();
+                                const auto itx = view.itx(icon);
+                                view.weight(icon) += _learning_rate * target * view.signal(itx);
                             }
                         }
                     }

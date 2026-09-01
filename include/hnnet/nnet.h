@@ -71,6 +71,9 @@ namespace hNNet {
                         index_t block_id(const size_t ipart) const {
                             return _net._block_ids[ipart];
                         }
+                        real_t signal(const index_t index) const {
+                            return _net._signals[index];
+                        }
                     private:
                         friend class NNet;
                         explicit View(NNet& net) : _net(net) {}
@@ -80,6 +83,7 @@ namespace hNNet {
                 // Constructor
                 NNet() {
                     _neurons.reserve(1000);
+                    _signals.reserve(_neurons.capacity());
                     _itxs.reserve(_neurons.capacity() * 10);
                     _irxs.reserve(_neurons.capacity() * 10);
                     _weights.reserve(_neurons.capacity() * 10);
@@ -94,6 +98,7 @@ namespace hNNet {
                         _trained = false;
                         for (size_t i{0}; i < number; ++i) {
                             _neurons.push_back({type, std::make_unique<Activation>(activation)});
+                            _signals.push_back(0.0);
                         }
                         return _neurons | std::views::drop(_neurons.size() - number) | std::views::take(number);
                 }
@@ -102,19 +107,12 @@ namespace hNNet {
                     requires (NeuronView<std::remove_cvref_t<TxType>> or std::same_as<std::remove_cvref_t<TxType>, Neuron>) and
                              (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
                     void connect(TxType &&tx_neurons, RxType &&rx_neurons) {
-                        auto index = [&] (const Neuron* neuron) {
-                            const auto index = static_cast<index_t>(neuron - _neurons.data());
-                            if (index >= _neurons.size()) {
-                                throw std::invalid_argument("NNet::connect::index: invalid index!");
-                            }
-                            return index;
-                        };
                         auto to_index = [&] (auto &&arg) {
                             if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
-                                return std::views::single(index(&arg));
+                                return std::views::single(index_of(arg));
                             }
                             else {
-                                return std::forward<decltype(arg)>(arg) | std::views::transform([&] (const auto &neuron) { return index(&neuron); });
+                                return std::forward<decltype(arg)>(arg) | std::views::transform([&] (const auto &neuron) { return index_of(neuron); });
                             }
                         };
                         _trained = false;
@@ -143,7 +141,8 @@ namespace hNNet {
                     void add_bias(View neurons) {
                         auto bias = new_neurons(1, NeuronType::bias, Builtin::IdentityActivation{});
                         connect(bias, neurons);
-                        bias.front().activate(1.0);
+                        auto &bias_neuron = bias.front();
+                        _signals[index_of(bias_neuron)] = bias_neuron.activate(1.0);
                     }
                 // Set weights to random values in the range [min, max]
                 void randomize_weights(const real_t min, const real_t max) {
@@ -231,7 +230,7 @@ namespace hNNet {
                     broadcast();
                     OutputData outputs;
                     for (const auto &[iout, out_neuron] : out_neurons | std::views::enumerate) {
-                        outputs[iout] = out_neuron.signal(); 
+                        outputs[iout] = _signals[index_of(out_neuron)];
                     }
                     return outputs;
                 }
@@ -279,9 +278,17 @@ namespace hNNet {
                             throw std::invalid_argument("NNet::inject: size error!");
                         }
                         for (const auto &[neuron, input] : std::views::zip(neurons, inputs)) {
-                            neuron.activate(input);
+                            _signals[index_of(neuron)] = neuron.activate(input);
                         }
                     }
+                // Compute the flat index of a neuron in _neurons
+                index_t index_of(const Neuron &neuron) const {
+                    const auto index = static_cast<index_t>(&neuron - _neurons.data());
+                    if (index >= _neurons.size()) {
+                        throw std::invalid_argument("NNet::index_of: invalid index!");
+                    }
+                    return index;
+                }
                 // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
                     for (index_t ipart{0}; ipart < _partitions.size(); ipart++) {
@@ -300,17 +307,16 @@ namespace hNNet {
                     real_t weighted_sum{0.0};
                     size_t icon{partition.begin};
                     for (; (icon + register_size) <= partition.end; icon += register_size) {
-                        weighted_sum +=  _weights[icon]     * _neurons[_itxs[icon]].signal()
-                                       + _weights[icon + 1] * _neurons[_itxs[icon + 1]].signal()
-                                       + _weights[icon + 2] * _neurons[_itxs[icon + 2]].signal()
-                                       + _weights[icon + 3] * _neurons[_itxs[icon + 3]].signal();
+                        weighted_sum +=  _weights[icon]     * _signals[_itxs[icon]]
+                                       + _weights[icon + 1] * _signals[_itxs[icon + 1]]
+                                       + _weights[icon + 2] * _signals[_itxs[icon + 2]]
+                                       + _weights[icon + 3] * _signals[_itxs[icon + 3]];
                     }
                     //#pragma omp simd reduction(+:weighted_sum)
                     for (; icon < partition.end; icon++) {
-                        weighted_sum += _weights[icon] * _neurons[_itxs[icon]].signal();
+                        weighted_sum += _weights[icon] * _signals[_itxs[icon]];
                     }
-                    auto &rx = _neurons[partition.irx];
-                    rx.activate(weighted_sum);
+                    _signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
                 }
                 // Process a dense block: all its receivers share the exact same source range, hence a pure matrix-vector product
                 void broadcast(const DenseBlock &block) {
@@ -319,17 +325,16 @@ namespace hNNet {
                         const auto row_offset = block.weight_offset + irow * block.tx_count;
                         index_t icol{0};
                         for (; (icol + register_size) <= block.tx_count; icol += register_size) {
-                            weighted_sum +=  _weights[row_offset + icol]     * _neurons[block.tx_begin + icol].signal()
-                                           + _weights[row_offset + icol + 1] * _neurons[block.tx_begin + icol + 1].signal()
-                                           + _weights[row_offset + icol + 2] * _neurons[block.tx_begin + icol + 2].signal()
-                                           + _weights[row_offset + icol + 3] * _neurons[block.tx_begin + icol + 3].signal();
+                            weighted_sum +=  _weights[row_offset + icol]     * _signals[block.tx_begin + icol]
+                                           + _weights[row_offset + icol + 1] * _signals[block.tx_begin + icol + 1]
+                                           + _weights[row_offset + icol + 2] * _signals[block.tx_begin + icol + 2]
+                                           + _weights[row_offset + icol + 3] * _signals[block.tx_begin + icol + 3];
                         }
                         //#pragma omp simd reduction(+:weighted_sum)
                         for (; icol < block.tx_count; ++icol) {
-                            weighted_sum +=  _weights[row_offset + icol] * _neurons[block.tx_begin + icol].signal();
+                            weighted_sum +=  _weights[row_offset + icol] * _signals[block.tx_begin + icol];
                         }
-                        auto &rx = _neurons[block.rx_begin + irow];
-                        rx.activate(weighted_sum);
+                        _signals[block.rx_begin + irow] = _neurons[block.rx_begin + irow].activate(weighted_sum);
                     }
                 }
                 // Prepare net (build partitions, order them topologically, ...)
@@ -475,9 +480,10 @@ namespace hNNet {
                     }
                 // Reset all neurons in the net
                 void reset() {
-                    for (auto& neuron : _neurons) {
-                        if (neuron.type() != NeuronType::bias) {
-                            neuron.reset();
+                    for (index_t inr{0}; inr < _neurons.size(); ++inr) {
+                        if (_neurons[inr].type() != NeuronType::bias) {
+                            _neurons[inr].reset();
+                            _signals[inr] = 0.0;
                         }
                     }
                 }
@@ -494,6 +500,7 @@ namespace hNNet {
                 // Data members
                 bool _trained{false};
                 std::vector<Neuron> _neurons{};
+                std::vector<real_t> _signals{};
                 std::vector<index_t> _itxs{};
                 std::vector<index_t> _irxs{};
                 std::vector<index_t> _iout_neurons{};
