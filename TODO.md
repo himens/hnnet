@@ -1,20 +1,20 @@
 # TODO
 
-## Fatto (rispetto a main)
+## Fatto
 
 - [x] **Disaccoppiare il backpropagation dal tipo concreto del neurone**
-  - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi, l'attivazione è un `Activation` (variant) tenuto per valore in `Neuron`.
-  - La logica di apprendimento è stata estratta in `LearningRule` (`BackpropRule`, `PerceptronRule`) che opera su `NNet::View`/`Neuron` tramite un'interfaccia comune, senza `dynamic_cast`.
+  - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi e ogni neurone possiede un'istanza polimorfica di `Activation`.
+  - La logica di apprendimento è estratta nelle learning rule (`BackpropRule`, `PerceptronRule`), che operano su `NNet::View`/`Neuron`.
   - Reti con attivazioni diverse per neurone sono già possibili.
 
 - [x] **Separare il calcolo dei gradienti dall'aggiornamento dei pesi**
   - In `BackpropRule::learn()` i delta vengono calcolati e retro-propagati in un primo passaggio, l'aggiornamento dei pesi avviene in un secondo ciclo separato.
   - Il learning rate è ora un parametro del costruttore di `BackpropRule`/`PerceptronRule`, non più hardcoded.
-  - Ancora da fare: batch/gradient accumulation e optimizer alternativi (momentum, adaptive rate) non sono ancora implementati, l'architettura lo permette ma manca lo stato persistente tra epoche (vedi sotto).
+  - `BackpropRule` mantiene anche lo stato del momentum. Restano da implementare batch/gradient accumulation e optimizer adattivi.
 
 - [x] **Rendere espliciti input, output e sorgenti della rete**
   - I neuroni sono ora etichettati con `NeuronType` (`input`, `hidden`, `output`, `bias`), assegnato esplicitamente alla creazione con `new_neurons(...)`.
-  - `NNet::input_neurons()`/`output_neurons()` selezionano i neuroni per tipo e validano che il conteggio corrisponda a `input_size`/`output_size`.
+  - `NNet::train()` e `NNet::infer()` selezionano i neuroni per tipo e validano che il conteggio corrisponda a `input_size`/`output_size`.
   - Non c'è più alcuna deduzione basata su connessioni entranti/uscenti.
 
 - [x] **Gestire il bias come parte della rete, non come dato di training**
@@ -23,20 +23,24 @@
 
 - [x] **Unificare gli overload di `connect`**
   - `NNet::connect(tx, rx)` accetta ora, per ciascun lato, sia un singolo `Neuron` sia un `NeuronRange`, tramite un'unica funzione template invece di quattro overload distinti.
-  - Internamente entrambi gli argomenti vengono uniformati a una view di `Neuron*` per riutilizzare la stessa logica di controllo/creazione delle connessioni.
+  - Internamente entrambi gli argomenti vengono uniformati a una view di indici per riutilizzare la stessa logica di controllo/creazione delle connessioni.
+
+- [x] **Compilare la topologia per il forward/backward pass**
+  - Prima del training, `prepare()` ordina le connessioni per receiver, costruisce partition contigue e le ordina topologicamente; reti cicliche vengono rifiutate.
+  - Partition dense compatibili vengono riconosciute come `DenseBlock` e percorse come prodotti matrice-vettore con pesi e segnali contigui.
+
+- [x] **Separare i segnali dalla struttura del neurone**
+  - I segnali vivono in `NNet::_signals`, un `std::vector<real_t>` allineato agli indici dei neuroni; `Neuron` conserva soltanto metadati, attivazione e weighted sum.
 
 ## Priorita alta
 
-- [ ] **Introdurre stato persistente per la learning rule durante il training**
-  - `NNet::train()` copia la `LearningRule` per valore e la usa per riferimento non-const per tutta la sessione, quindi lo stato può già persistere tra epoche/sample.
-  - Manca però l'uso pratico di questa possibilità: implementare momentum e/o learning rate adattivo in `BackpropRule` per sfruttarla.
+- [ ] **Introdurre mini-batch e gradient accumulation**
+  - Accumulare gradienti per un batch di sample e aggiornare i pesi una volta per batch.
+  - Separare completamente lo stato per-sample (segnali, weighted sum e delta) dalla topologia, in modo da poter rappresentare buffer `batch × neuroni` e sfruttare kernel densi.
 
-## Priorita media
-
-- [ ] **Ridurre la dipendenza implicita dall'ordine di propagazione**
-  - Il conteggio dei delta ricevuti presume che ogni connessione produca esattamente un delta per ciclo.
-  - Documentare e validare le assunzioni su rete aciclica, connessioni stabili e propagazione completa.
-  - Gestire esplicitamente eventuali topologie non supportate.
+- [ ] **Aggiungere optimizer adattivi**
+  - Implementare Adam come primo optimizer adattivo; valutare RMSProp e RPROP in seguito.
+  - Gli optimizer devono mantenere stato per peso e funzionare sia con SGD sia con mini-batch.
 
 ## Priorita bassa
 
@@ -48,50 +52,33 @@
   - Rendere configurabili soglia di errore, numero massimo di epoche, learning rate e strategia di aggiornamento.
   - Valutare metriche e callback separati dal logging diretto su stdout.
 
-## Performance (accesso memoria, cache, parallelizzazione)
-
-Principio guida: il progetto punta a un framework generico (topologia a grafo arbitraria, attivazioni per-neurone, bias come neuroni normali) ma anche performante. Il tradeoff va cercato ottimizzando la rappresentazione *interna* usata nel hot path, senza sacrificare la generalità dell'API (`connect()` libero, tipi di neurone, attivazioni miste). Dove la generalità impone un costo strutturale non banale (es. dispatch per-attivazione, stato per-sample condiviso con la rete), va valutato caso per caso se e come disaccoppiarlo, anche a costo di un cambio architetturale più profondo.
-
-- [ ] **Sostituire le adjacency list `vector<vector<index_t>>` con un formato CSR**
-  - `_in_connections`/`_out_connections` allocano un vettore separato per neurone: frammentazione e cache-miss ad ogni attraversamento del grafo.
-  - Usare un formato compressed-sparse-row (un unico buffer contiguo + vettore di offset) elimina le allocazioni per-neurone e migliora la località.
-  - Problema pratico: oggi gli archi vengono aggiunti incrementalmente da `connect()`/`zip_connect()`/`add_bias()` in ordine arbitrario di neurone, mentre un CSR vero è naturalmente immutabile una volta costruito (inserire un arco "in mezzo" richiederebbe spostare tutto il buffer).
-  - Approccio pragmatico a due fasi: durante la costruzione accumulare gli archi in una edge-list di appoggio economica (`vector<pair<index_t /*nodo*/, index_t /*iconn*/>>`, append-only, O(1) per inserimento); poi, prima di `train()`/`infer()`, un `compile()` una tantum calcola gli offset per neurone con un prefix-sum e riempie il buffer piatto con un counting sort O(V+E). Il costo di compattazione si paga una sola volta in fase di setup (dove già oggi si paga l'O(n²) del controllo duplicati), non ad ogni epoca/sample.
-  - Da adattare anche `View::in_connections`/`out_connections`, che oggi tornano `const vector<index_t>&`, per restituire uno `std::span<const index_t>` sul buffer compilato.
-
-- [ ] **Eliminare la doppia indirezione nell'attraversamento del grafo**
-  - Oggi ogni arco richiede: indice in `_in_connections`/`_out_connections` -> lookup in `_connections` -> `(itx, irx, weight)`.
-  - Valutare di colocare `(indice/puntatore vicino, weight)` direttamente nelle adjacency list per un solo accesso in memoria per arco.
+## Performance
 
 - [ ] **Rendere O(1) il controllo di connessione duplicata in `connect()`**
   - Attualmente `std::ranges::any_of` scansiona tutte le connessioni esistenti per ogni nuova coppia (tx, rx): O(n²) nella costruzione di layer densi.
   - Sostituire con una hash set su `(itx, irx)`.
 
-- [ ] **Precalcolare e riutilizzare l'ordine topologico di attivazione**
-  - L'ordine con cui i neuroni si attivano viene riscoperto a runtime (via conteggio dei segnali ricevuti) ad ogni singolo sample, sia in `broadcast` che in `backprop_error`.
-  - Se la topologia è fissa tra un'epoca e l'altra, calcolare l'ordine una sola volta e riusarlo evita il lavoro ripetuto e apre la porta a cicli non ricorsivi.
+- [ ] **Ottimizzare i kernel dei dense block sulla base del profiling**
+  - La baseline Release per MNIST (60k sample, rete 784→128→10) è circa 6s per epoca: forward ~1.1s, backprop delta ~1.9s, update pesi ~3.0s.
+  - Il loop del delta dense è più veloce senza `#pragma omp simd`; le direttive SIMD e l'unrolling manuale vanno mantenuti solo dove il benchmark dimostra un vantaggio.
+  - Valutare layout, blocking e riduzione del traffico read-modify-write nel passo di update prima di introdurre rappresentazioni duplicate dei pesi.
 
-- [ ] **Convertire `broadcast`/`backprop_error` da ricorsione a iterazione esplicita**
-  - La ricorsione con branching dipendente dai dati impedisce vettorizzazione/inlining e rischia stack overflow su reti profonde.
-  - Un attraversamento iterativo (coda/worklist, o meglio ancora un ordine topologico precalcolato) sarebbe più prevedibile e veloce.
-
-- [ ] **Ridurre il dispatch dinamico per-neurone sull'attivazione**
-  - Ogni `activate()`/`activation_derivative()` passa da `std::visit` su `Neuron::_activation`.
-  - Raggruppare i neuroni per tipo di attivazione (o per layer) permetterebbe di applicare la funzione in batch su dati contigui, evitando il dispatch ripetuto.
-
-- [ ] **Separare stato per-sample da topologia/pesi per abilitare il parallelismo**
-  - Lo stato di attivazione (`_weighted_sum`, `_signal`, `_number_rx_signals`) vive dentro lo stesso `Neuron` che rappresenta la rete condivisa: impossibile elaborare più sample in parallelo (mini-batch, multi-thread) senza duplicare l'intera rete.
-  - Estrarre lo stato per-sample in una struttura separata (indicizzata per neurone) renderebbe il forward/backward pass rientrante e parallelizzabile su sample o thread.
+- [ ] **Ridurre il dispatch di attivazione nei batch densi**
+  - `Neuron` conserva un puntatore polimorfico a `Activation`; il dispatch avviene una volta per neurone attivato.
+  - Raggruppare neuroni/layer per attivazione può rendere possibile applicare la funzione in batch su dati contigui.
 
 ## Stress test / Benchmark
 
-- [ ] **Aggiungere un esempio/benchmark su MNIST con una rete più grande**
-  - Gli esempi attuali (gate logici, lettere 9×7) sono troppo piccoli per far emergere i problemi di performance sopra elencati (ricorsione profonda, O(n²) in `connect()`, cache locality delle adjacency list).
-  - MNIST (784 input, uno o più hidden layer, 10 output) darebbe una rete di dimensioni realistiche per misurare tempo di setup della topologia, tempo per epoca e per inferenza, prima e dopo ogni ottimizzazione.
-  - Utile anche per validare in modo empirico (non solo teorico) l'impatto di ciascuna voce della sezione Performance.
-  - Target/baseline di riferimento (letteratura, non specifici di `hnnet`): un MLP 784→hidden→10 arriva tipicamente al 95-98% di accuratezza in 10-30 epoche; su CPU con implementazione a matrici dense (BLAS/SIMD) un'epoca su 60k sample è dell'ordine di 1-3s, quindi training completo in decine di secondi/pochi minuti. `hnnet`, essendo push-based su grafo (dispatch per-arco, `std::visit` per attivazione, niente operazioni matriciali), va misurato: è atteso un gap significativo (probabilmente un ordine di grandezza o più) rispetto a questi tempi, ed è proprio quel gap che il benchmark deve quantificare.
+- [x] **Aggiungere un esempio MNIST con una rete più grande**
+  - `examples/backprop/src/backprop-mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
 
-## Report di profiling (backprop-mnist, 2026-08-24)
+- [ ] **Rendere riproducibili i benchmark di performance**
+  - Registrare configurazione CPU, compilatore, flag Release e seed del generatore casuale.
+  - Misurare più epoch e riportare mediana o media, separando setup della topologia, forward, delta e weight update.
+
+## Report di profiling storico (backprop-mnist, 2026-08-24)
+
+Questo report descrive l'implementazione precedente, basata su adjacency list e propagazione ricorsiva. I risultati non sono direttamente confrontabili con la versione corrente a partition/dense block; resta come traccia della procedura Callgrind.
 
 Contesto: si sospettava che `BackpropRule::learn()` (in `backprop-rule.h`) fosse il collo di
 bottiglia del training MNIST (~6 minuti per l'intero dataset, 60k campioni, rete 784→100→10).

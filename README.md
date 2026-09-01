@@ -10,11 +10,9 @@ The perceptron and backprop rules in `include/hnnet/builtin` are only two concre
 
 ## Requirements
 
-- CMake 3.16 or newer
+- CMake 4.4 or newer
 - g++ 16
-- C++23
-
-The project is already configured to use the compiler `/usr/bin/g++-16`.
+- C++26
 
 ## Build
 
@@ -29,9 +27,9 @@ The executables are generated in the `build/bin` folder.
 
 Notes on current build configuration:
 
-- the project uses `/usr/bin/g++-16` and C++23
-- on GNU/Clang toolchains, CMake enables `-O3` for C++ compilation
-- examples link against the interface target `hnnet::hnnet_lib` (which also links `utility::utility`)
+- use `-DCMAKE_BUILD_TYPE=Release` for optimized builds
+- on GNU/Clang toolchains CMake enables `-march=native` (or `-mcpu=native` on ARM)
+- examples link against the interface target `hnnet::hnnet`
 
 ## Running the examples
 
@@ -108,8 +106,8 @@ using namespace hNNet;
 using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;
 Gate gate;
 
-const auto input_layer  = gate.new_neurons(2, NeuronType::input);
-const auto output_layer = gate.new_neurons(1, NeuronType::output, PerceptronActivation{});
+auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
+auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::PerceptronActivation{});
 gate.connect(input_layer, output_layer);
 gate.add_bias(output_layer);
 
@@ -125,20 +123,22 @@ gate.train(samples, Builtin::PerceptronRule{1.0});
 
 The main operations are:
 
-- `new_neurons(n, type, activation)`: creates `n` neurons of the given `NeuronType` (and optional `Activation`, identity by default)
+- `new_neurons(n, type, activation)`: creates `n` neurons of the given `NeuronType` and activation function
 - `connect(tx, rx)`: connects neurons to each other; each side can be a single `Neuron` or a range of neurons (all tx-rx pairs are connected)
 - `add_bias(neurons)`: creates and connects one bias neuron (constant signal 1.0) per neuron in the given range
 - `train(samples, rule)`: trains the network on the provided data using the given `LearningRule`
 - `infer(data)`: performs inference on new inputs
 
-During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with learned weights, elapsed time, and total epochs.
+Internally, `NNet` compiles the connection list into receiver partitions in topological order. Compatible contiguous partitions are grouped into dense blocks, so their forward pass uses sequential weight and signal buffers. Signals are stored separately from neuron metadata in a flat buffer; neurons retain their type, activation function, and latest weighted sum.
+
+During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with elapsed time and total epochs.
 
 ## TODO
 
 The main planned improvements are:
 
-- give the learning rules persistent state across epochs (momentum, adaptive learning rate)
-- reduce the implicit dependency on propagation order
+- add mini-batch training and gradient accumulation
+- add adaptive optimizers such as Adam or RMSProp
 - add a layer/model abstraction and configurable training parameters
 
 See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.
