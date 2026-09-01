@@ -235,7 +235,9 @@ namespace hNNet {
                     return outputs;
                 }
             private:
-                // Disjoint-set forest with path compression and union by rank
+                /////////////////////
+                // UnionFind class //
+                /////////////////////
                 class UnionFind {
                     public:
                         explicit UnionFind(const size_t count) : _roots(count), _ranks(count, 0) {
