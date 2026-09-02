@@ -12,10 +12,12 @@ int main() {
     auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
     auto hidden_layer = gate.new_neurons(4, NeuronType::hidden, Builtin::SigmoidActivation{});
     auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::SigmoidActivation{});
+    auto hidden_bias  = gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
+    auto output_bias  = gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
     gate.connect(input_layer, hidden_layer);
     gate.connect(hidden_layer, output_layer);
-    gate.add_bias(hidden_layer);
-    gate.add_bias(output_layer);
+    gate.connect(hidden_bias, hidden_layer);
+    gate.connect(output_bias, output_layer);
     // train net
     std::vector<Gate::TrainingSample> samples = {
         // binary

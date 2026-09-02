@@ -1,9 +1,6 @@
 #pragma once
-#include <limits>
-#include <unordered_map>
 #include "hnnet/neuron.h"
 #include "hnnet/learning-rule.h"
-#include "hnnet/builtin/activations.h"
 
 namespace hNNet {
     ////////////////
@@ -136,14 +133,6 @@ namespace hNNet {
                             connect(tx, rx);
                         }
                     }
-                // Add bias to neurons
-                template <NeuronView View>
-                    void add_bias(View neurons) {
-                        auto bias = new_neurons(1, NeuronType::bias, Builtin::IdentityActivation{});
-                        connect(bias, neurons);
-                        auto &bias_neuron = bias.front();
-                        _signals[index_of(bias_neuron)] = bias_neuron.activate(1.0);
-                    }
                 // Set weights to random values in the range [min, max]
                 void randomize_weights(const real_t min, const real_t max) {
                     std::uniform_real_distribution<real_t> dist(min, max);
@@ -186,7 +175,7 @@ namespace hNNet {
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
                             for (const auto &sample : samples) {
                                 reset();
-                                inject(sample.inputs, in_neurons);
+                                inject(sample.inputs);
                                 broadcast();
                                 mean_squared_error += learn(sample.targets, rule);
                             }
@@ -226,7 +215,7 @@ namespace hNNet {
                         throw std::invalid_argument("NNet::infer: size error!");
                     }
                     reset();
-                    inject(data, in_neurons);
+                    inject(data);
                     broadcast();
                     OutputData outputs;
                     for (const auto &[iout, out_neuron] : out_neurons | std::views::enumerate) {
@@ -274,15 +263,20 @@ namespace hNNet {
                     }
                 };
                 // Inject input data into neurons
-                template <NeuronView View>
-                    void inject(const InputData &inputs, View neurons) {
-                        if (std::ranges::distance(neurons) != std::ranges::distance(inputs)) {
-                            throw std::invalid_argument("NNet::inject: size error!");
-                        }
-                        for (const auto &[neuron, input] : std::views::zip(neurons, inputs)) {
-                            _signals[index_of(neuron)] = neuron.activate(input);
+                void inject(const InputData &inputs) {
+                    for (const auto &[inr, neuron] : _neurons | std::views::enumerate) {
+                        switch (neuron.type()) {
+                            case NeuronType::input:
+                                _signals[inr] = neuron.activate(inputs[inr]);
+                                break;
+                            case NeuronType::bias:
+                                _signals[inr] = neuron.activate(1.0);
+                                break;
+                            default:
+                                break;
                         }
                     }
+                }
                 // Compute the flat index of a neuron in _neurons
                 index_t index_of(const Neuron &neuron) const {
                     const auto index = static_cast<index_t>(&neuron - _neurons.data());
@@ -483,10 +477,8 @@ namespace hNNet {
                 // Reset all neurons in the net
                 void reset() {
                     for (index_t inr{0}; inr < _neurons.size(); ++inr) {
-                        if (_neurons[inr].type() != NeuronType::bias) {
-                            _neurons[inr].reset();
-                            _signals[inr] = 0.0;
-                        }
+                        _neurons[inr].reset();
+                        _signals[inr] = 0.0;
                     }
                 }
                 // Get neurons of given type

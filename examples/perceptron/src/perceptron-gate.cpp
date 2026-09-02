@@ -11,8 +11,9 @@ int main() {
     Gate gate;
     auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
     auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::PerceptronActivation{});
+    auto bias =         gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
     gate.connect(input_layer, output_layer);
-    gate.add_bias(output_layer);
+    gate.connect(bias, output_layer);
     // train net
     std::vector<Gate::TrainingSample> samples = {
         {{1, 1},  {1}},

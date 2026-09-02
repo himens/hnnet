@@ -13,6 +13,8 @@
 #include <cmath>
 #include <random>
 #include <memory>
+#include <limits>
+#include <unordered_map>
 #include <omp.h>
 #include "timer.h"
 
