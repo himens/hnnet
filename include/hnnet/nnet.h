@@ -115,10 +115,11 @@ namespace hNNet {
                         _trained = false;
                         auto itxs = to_index(std::forward<TxType>(tx_neurons));
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
+                        std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            const auto found = std::ranges::any_of(std::views::iota(0ul, _irxs.size()), [&] (const auto &icon) {
-                                                                   return (_itxs[icon] == itx) and (_irxs[icon] == irx); });
-                            if (found) {
+                            const auto icon = _itxs.size();
+                            const auto [it, inserted] = hash_map.try_emplace(std::pair{irx, itx}, icon);
+                            if (not inserted) {
                                 throw std::invalid_argument("NNet::connect: duplicate connection!");
                             }
                             _itxs.push_back(itx);
@@ -256,10 +257,11 @@ namespace hNNet {
                         std::vector<index_t> _roots;
                         std::vector<size_t> _ranks;
                 };
-                // Hash for the (tx_begin, tx_count) signature used to group partitions into dense blocks
-                struct SignatureHash {
-                    size_t operator()(const std::pair<index_t, size_t> &signature) const {
-                        return std::hash<index_t>{}(signature.first) ^ (std::hash<size_t>{}(signature.second) << 1);
+                // Index pair hash
+                using IndexPair = std::pair<index_t, index_t>;
+                struct IndexPairHash {
+                    size_t operator()(const IndexPair &pair) const {
+                        return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                     }
                 };
                 // Inject input data into neurons
@@ -333,7 +335,7 @@ namespace hNNet {
                         _signals[block.rx_begin + irow] = _neurons[block.rx_begin + irow].activate(weighted_sum);
                     }
                 }
-                // Prepare net (build partitions, order them topologically, ...)
+                // Prepare net (build and order partitions, find dense blocks ...)
                 void prepare() {
                     Timer timer;
                     std::println("NNet::prepare: preparing net...");
@@ -411,7 +413,7 @@ namespace hNNet {
                     _dense_blocks.clear();
                     _block_ids.assign(_partitions.size(), no_block);
                     UnionFind union_find(_partitions.size());
-                    std::unordered_map<std::pair<index_t, size_t>, index_t, SignatureHash> signature_owner;
+                    std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                     for (index_t ipart{0}; ipart < _partitions.size(); ++ipart) {
                         const auto &partition = _partitions[ipart];
                         const auto count = partition.end - partition.begin;
@@ -419,7 +421,7 @@ namespace hNNet {
                         if ((_itxs[partition.end - 1] - tx_begin) != (count - 1)) {
                             continue;  // itx range has gaps (e.g. a bias mixed in): not a pure dense candidate
                         }
-                        const auto [it, inserted] = signature_owner.try_emplace(std::pair{tx_begin, count}, ipart);
+                        const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, ipart);
                         if (not inserted) {
                             union_find.unite(it->second, ipart);
                         }
