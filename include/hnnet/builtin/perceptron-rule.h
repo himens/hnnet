@@ -20,7 +20,7 @@ namespace hNNet::Builtin {
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
                         }
-                        // Find the partition corresponding to this output neuron (irx == inr)
+                        // Find the partition corresponding to this output neuron (irx == iout)
                         for (const auto &partition : view.partitions()) {
                             if (partition.irx != iout) {
                                 continue;

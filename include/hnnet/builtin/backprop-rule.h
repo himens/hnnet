@@ -29,7 +29,7 @@ namespace hNNet::Builtin {
                         const auto &partition = reversed_partitions[ipart];
                         const auto block_id = view.block_id(reversed_partitions.size() - ipart - 1);
                         if (block_id != Net::no_block) {
-                            const auto &block = view.dense_blocks()[block_id];
+                            const auto &block = view.dense_block(block_id);
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {
                                 const auto irx = block.rx_begin + irow;
                                 const auto &rx = view.neuron(irx);
@@ -61,7 +61,7 @@ namespace hNNet::Builtin {
                         const auto &partition = partitions[ipart];
                         const auto block_id = view.block_id(ipart);
                         if (block_id != Net::no_block) {
-                            const auto &block = view.dense_blocks()[block_id];
+                            const auto &block = view.dense_block(block_id);
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {
                                 const auto scaled_delta = _learning_rate * _deltas[block.rx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;

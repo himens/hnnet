@@ -25,7 +25,6 @@ namespace hNNet {
                     size_t begin;
                     size_t end;
                 };
-                // A set of receivers sharing the exact same (contiguous) source range: a pure matrix-vector product
                 struct DenseBlock {
                     index_t tx_begin;
                     index_t tx_count;
@@ -59,17 +58,17 @@ namespace hNNet {
                         const std::vector<Partition>& partitions() const {
                             return _net._partitions;
                         }
-                        const std::vector<index_t>& iout_neurons() const {
-                            return _net._iout_neurons;
-                        }
-                        const std::vector<typename NNet::DenseBlock>& dense_blocks() const {
-                            return _net._dense_blocks;
+                        const NNet::DenseBlock& dense_block(const index_t index) const {
+                            return _net._dense_blocks[index];
                         }
                         index_t block_id(const size_t ipart) const {
                             return _net._block_ids[ipart];
                         }
                         real_t signal(const index_t index) const {
                             return _net._signals[index];
+                        }
+                        const std::vector<index_t>& iout_neurons() const {
+                            return _net._iout_neurons;
                         }
                     private:
                         friend class NNet;
@@ -149,11 +148,6 @@ namespace hNNet {
                         constexpr size_t max_epochs{1'000'000};
                         size_t epoch{0};
                         bool converged{false};
-                        auto in_neurons = neurons(NeuronType::input);
-                        auto out_neurons = neurons(NeuronType::output);
-                        if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
-                            throw std::invalid_argument("NNet::train: size error!");
-                        }
                         Timer timer{};
                         std::println("NNet::train: ==================================");
                         std::println("NNet::train: Training net with {} samples...   ", samples.size());
@@ -161,8 +155,6 @@ namespace hNNet {
                         timer.start();
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
-                            Timer epoch_timer{};
-                            epoch_timer.start();
                             epoch++;
                             if ((epoch < 10        and epoch % 1 == 0)      or
                                 (epoch < 100       and epoch % 10 == 0)     or
@@ -170,9 +162,11 @@ namespace hNNet {
                                 (epoch < 10'000    and epoch % 1000 == 0)   or
                                 (epoch < 100'000   and epoch % 10'000 == 0) or
                                 (epoch < 1'000'000 and epoch % 100'000 == 0)) {
-                                std::println("NNet::train: Epoch: {}", epoch);
+                                std::println("NNet::train: epoch: {}", epoch);
                             }
                             real_t mean_squared_error{0.0};
+                            Timer timer{};
+                            timer.start();
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
                             for (const auto &sample : samples) {
                                 reset();
@@ -180,22 +174,14 @@ namespace hNNet {
                                 broadcast();
                                 mean_squared_error += learn(sample.targets, rule);
                             }
-                            epoch_timer.stop();
+                            timer.stop();
                             mean_squared_error /= samples.size();
                             converged = (mean_squared_error < error_threshold);
-                            std::println("NNet::train: epoch: {}, elapsed time: {}s, mean squared error: {:.6f}",
-                                         epoch, epoch_timer.get_elapsed_time_s(), mean_squared_error);
+                            std::println("NNet::train: elapsed time: {}s, mean squared error: {:.6f}", timer.get_elapsed_time_s(), mean_squared_error);
                         }
-                        timer.stop();
                         if (converged) {
                             _trained = true;
                             std::println("NNet::train: Training summary:");
-                            //for (const auto &[i, weight] : _weights | std::views::enumerate) {
-                            //    std::println("NNet::train: weight[{}]: {}", i, weight);
-                            //}
-                            //auto targets = samples | std::views::transform([&] (const auto &sample) { return sample.targets; });
-                            //auto outputs = samples | std::views::transform([&] (const auto &sample) { return infer(sample.inputs); });
-                            //std::println("NNet::train: targets: {}, outputs: {}", targets, outputs);
                             std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                             std::println("NNet::train: epochs: {}", epoch);
                         }
@@ -210,17 +196,12 @@ namespace hNNet {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    auto in_neurons = neurons(NeuronType::input);
-                    auto out_neurons = neurons(NeuronType::output);
-                    if (std::ranges::distance(in_neurons) != input_size or std::ranges::distance(out_neurons) != output_size) {
-                        throw std::invalid_argument("NNet::infer: size error!");
-                    }
                     reset();
                     inject(data);
                     broadcast();
                     OutputData outputs;
-                    for (const auto &[iout, out_neuron] : out_neurons | std::views::enumerate) {
-                        outputs[iout] = _signals[index_of(out_neuron)];
+                    for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
+                        outputs[i] = _signals[iout];
                     }
                     return outputs;
                 }
@@ -266,27 +247,13 @@ namespace hNNet {
                 };
                 // Inject input data into neurons
                 void inject(const InputData &inputs) {
-                    for (const auto &[inr, neuron] : _neurons | std::views::enumerate) {
-                        switch (neuron.type()) {
-                            case NeuronType::input:
-                                _signals[inr] = neuron.activate(inputs[inr]);
-                                break;
-                            case NeuronType::bias:
-                                _signals[inr] = neuron.activate(1.0);
-                                break;
-                            default:
-                                break;
-                        }
+                    for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
+                        _signals[iin] = _neurons[iin].activate(input);
                     }
-                }
-                // Compute the flat index of a neuron in _neurons
-                index_t index_of(const Neuron &neuron) const {
-                    const auto index = static_cast<index_t>(&neuron - _neurons.data());
-                    if (index >= _neurons.size()) {
-                        throw std::invalid_argument("NNet::index_of: invalid index!");
+                    for (const auto &ibias : _ibias_neurons) {
+                        _signals[ibias] = _neurons[ibias].activate(1.0);
                     }
-                    return index;
-                }
+                } 
                 // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
                     for (index_t ipart{0}; ipart < _partitions.size(); ipart++) {
@@ -337,6 +304,27 @@ namespace hNNet {
                 }
                 // Prepare net (build and order partitions, find dense blocks ...)
                 void prepare() {
+                    // sanity check 
+                    const auto neuron_count = _neurons.size();
+                    _iout_neurons.clear();
+                    _iin_neurons.clear();
+                    _ibias_neurons.clear();
+                    for (index_t inr{0}; inr < neuron_count; ++inr) {
+                        switch(_neurons[inr].type()) {
+                            case NeuronType::input:
+                                _iin_neurons.push_back(inr);
+                                break;
+                            case NeuronType::output:
+                                _iout_neurons.push_back(inr);
+                                break;
+                            case NeuronType::bias:
+                                _ibias_neurons.push_back(inr);
+                                break;
+                        }
+                    }
+                    if ((_iin_neurons.size() != input_size) or (_iout_neurons.size() != output_size)) {
+                        throw std::invalid_argument("NNet::prepare: size error!");
+                    }
                     Timer timer;
                     std::println("NNet::prepare: preparing net...");
                     timer.start();
@@ -369,14 +357,6 @@ namespace hNNet {
                         }
                         _partitions.push_back({.irx = irx, .begin = begin, .end = end});
                         begin = end;
-                    }
-                    // save indices of output neurons
-                    const auto neuron_count = _neurons.size();
-                    _iout_neurons.clear();
-                    for (index_t inr{0}; inr < neuron_count; ++inr) {
-                        if (_neurons[inr].type() == NeuronType::output) {
-                            _iout_neurons.push_back(inr);
-                        }
                     }
                     // topologically order partitions (Kahn's algorithm)
                     std::vector<std::vector<index_t>> irxs(neuron_count);
@@ -438,7 +418,7 @@ namespace hNNet {
                         if ((max_ipart - min_ipart + 1) != members.size()) {
                             continue; // must be contiguous partitions (in topo order)
                         }
-                        // sort members per increasing irx and check rx indices and tx indices are contiguous
+                        // sort members per increasing irx and check their irxs and itxs are contiguous
                         std::ranges::sort(members, [&] (const auto &lhs, const auto &rhs) { return _partitions[lhs].irx < _partitions[rhs].irx; });
                         auto contiguous = true;
                         for (size_t i{1}; i < members.size(); ++i) {
@@ -467,6 +447,7 @@ namespace hNNet {
                         }
                     }
                     timer.stop();
+                    std::println("NNet::prepare: neuron(s): {}, connection(s): {}", neuron_count, connection_count);
                     std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
                     std::println("NNet::prepare: net prepared in {}s", timer.get_elapsed_time_s());
                 }
@@ -483,9 +464,13 @@ namespace hNNet {
                         _signals[inr] = 0.0;
                     }
                 }
-                // Get neurons of given type
-                auto neurons(const NeuronType type) {
-                    return _neurons | std::views::filter([type] (const auto &neuron) { return neuron.type() == type; });
+                // Compute the flat index of a neuron in _neurons
+                index_t index_of(const Neuron &neuron) const {
+                    const auto index = static_cast<index_t>(&neuron - _neurons.data());
+                    if (index >= _neurons.size()) {
+                        throw std::invalid_argument("NNet::index_of: invalid index!");
+                    }
+                    return index;
                 }
                 // Get random generator
                 std::mt19937& random_generator() {
@@ -499,8 +484,10 @@ namespace hNNet {
                 std::vector<real_t> _signals{};
                 std::vector<index_t> _itxs{};
                 std::vector<index_t> _irxs{};
-                std::vector<index_t> _iout_neurons{};
                 std::vector<real_t> _weights{};
+                std::vector<index_t> _iin_neurons{};
+                std::vector<index_t> _iout_neurons{};
+                std::vector<index_t> _ibias_neurons{};
                 std::vector<Partition> _partitions{};
                 std::vector<DenseBlock> _dense_blocks{};
                 std::vector<index_t> _block_ids{};
