@@ -52,7 +52,7 @@ namespace hNNet::Builtin {
                             delta_rx *= rx.activation()->derivative(rx.weighted_sum());
                         }
                         for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
-                            const auto itx = view.itx(icon);
+                            const auto itx = view.connection(icon).itx;
                             _deltas[itx] += delta_rx * view.weight(icon);
                         }
                     }
@@ -76,8 +76,8 @@ namespace hNNet::Builtin {
                             continue;
                         }
                         for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
-                            const auto irx = view.irx(icon); // indirection
-                            const auto itx = view.itx(icon); // indirection
+                            const auto irx = view.connection(icon).irx; // indirection
+                            const auto itx = view.connection(icon).itx; // indirection
                             const auto dweight = (_learning_rate * _deltas[irx] * view.signal(itx)) + (_momentum * _dweights[icon]);
                             view.weight(icon) += dweight;
                             _dweights[icon] = dweight;

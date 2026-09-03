@@ -20,6 +20,10 @@ namespace hNNet {
                     InputData inputs;
                     OutputData targets;
                 };
+                struct SynapticConn {
+                    index_t itx;
+                    index_t irx;
+                };
                 struct Partition {
                     index_t irx;
                     size_t begin;
@@ -41,16 +45,13 @@ namespace hNNet {
                             return _net._neurons.size();
                         }
                         size_t connection_count() const {
-                            return _net._itxs.size();
+                            return _net._connections.size();
                         }
                         const Neuron& neuron(const index_t index) const {
                             return _net._neurons[index];
                         }
-                        index_t itx(const index_t icon) const {
-                            return _net._itxs[icon];
-                        }
-                        index_t irx(const index_t icon) const {
-                            return _net._irxs[icon];
+                        const SynapticConn& connection(const index_t icon) const {
+                            return _net._connections[icon];
                         }
                         real_t& weight(const index_t icon) {
                             return _net._weights[icon];
@@ -80,8 +81,7 @@ namespace hNNet {
                 NNet() {
                     _neurons.reserve(1000);
                     _signals.reserve(_neurons.capacity());
-                    _itxs.reserve(_neurons.capacity() * 10);
-                    _irxs.reserve(_neurons.capacity() * 10);
+                    _connections.reserve(_neurons.capacity() * 10);
                     _weights.reserve(_neurons.capacity() * 10);
                 }
                 // Create a view of the net
@@ -116,13 +116,12 @@ namespace hNNet {
                         auto irxs = to_index(std::forward<RxType>(rx_neurons));
                         std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                         for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            const auto icon = _itxs.size();
+                            const auto icon = _connections.size();
                             const auto [it, inserted] = hash_map.try_emplace(std::pair{irx, itx}, icon);
                             if (not inserted) {
                                 throw std::invalid_argument("NNet::connect: duplicate connection!");
                             }
-                            _itxs.push_back(itx);
-                            _irxs.push_back(irx);
+                            _connections.push_back({.itx = itx, .irx = irx});
                             _weights.push_back(0.0);
                         }
                     }
@@ -155,29 +154,18 @@ namespace hNNet {
                         timer.start();
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
-                            epoch++;
-                            if ((epoch < 10        and epoch % 1 == 0)      or
-                                (epoch < 100       and epoch % 10 == 0)     or
-                                (epoch < 1000      and epoch % 100 == 0)    or 
-                                (epoch < 10'000    and epoch % 1000 == 0)   or
-                                (epoch < 100'000   and epoch % 10'000 == 0) or
-                                (epoch < 1'000'000 and epoch % 100'000 == 0)) {
-                                std::println("NNet::train: epoch: {}", epoch);
-                            }
-                            real_t mean_squared_error{0.0};
-                            Timer timer{};
-                            timer.start();
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
+                            real_t mean_squared_error{0.0};
                             for (const auto &sample : samples) {
                                 reset();
                                 inject(sample.inputs);
                                 broadcast();
                                 mean_squared_error += learn(sample.targets, rule);
                             }
-                            timer.stop();
                             mean_squared_error /= samples.size();
                             converged = (mean_squared_error < error_threshold);
-                            std::println("NNet::train: elapsed time: {}s, mean squared error: {:.6f}", timer.get_elapsed_time_s(), mean_squared_error);
+                            epoch++;
+                            std::println("NNet::train: epoch: {}, elapsed time: {}s, error: {:.6f}", epoch, timer.get_elapsed_time_s(), mean_squared_error);
                         }
                         if (converged) {
                             _trained = true;
@@ -272,14 +260,14 @@ namespace hNNet {
                     real_t weighted_sum{0.0};
                     size_t icon{partition.begin};
                     for (; (icon + register_size) <= partition.end; icon += register_size) {
-                        weighted_sum +=  _weights[icon]     * _signals[_itxs[icon]]
-                                       + _weights[icon + 1] * _signals[_itxs[icon + 1]]
-                                       + _weights[icon + 2] * _signals[_itxs[icon + 2]]
-                                       + _weights[icon + 3] * _signals[_itxs[icon + 3]];
+                        weighted_sum +=  _weights[icon]     * _signals[_connections[icon].itx]
+                                       + _weights[icon + 1] * _signals[_connections[icon + 1].itx]
+                                       + _weights[icon + 2] * _signals[_connections[icon + 2].itx]
+                                       + _weights[icon + 3] * _signals[_connections[icon + 3].itx];
                     }
                     //#pragma omp simd reduction(+:weighted_sum)
                     for (; icon < partition.end; icon++) {
-                        weighted_sum += _weights[icon] * _signals[_itxs[icon]];
+                        weighted_sum += _weights[icon] * _signals[_connections[icon].itx];
                     }
                     _signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
                 }
@@ -325,34 +313,29 @@ namespace hNNet {
                     if ((_iin_neurons.size() != input_size) or (_iout_neurons.size() != output_size)) {
                         throw std::invalid_argument("NNet::prepare: size error!");
                     }
-                    Timer timer;
-                    std::println("NNet::prepare: preparing net...");
-                    timer.start();
                     // sort connections per irx and itx
-                    const auto connection_count = _itxs.size();
+                    const auto connection_count = _connections.size();
+                    std::vector<SynapticConn> sorted_connections(connection_count);
+                    std::vector<real_t> sorted_weights(connection_count);
                     std::vector<index_t> sorted_icons(connection_count);
                     std::ranges::iota(sorted_icons, 0);
                     std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs) {
-                                      return std::tie(_irxs[lhs], _itxs[lhs]) < std::tie(_irxs[rhs], _itxs[rhs]); });
-                    std::vector<index_t> sorted_itxs(connection_count);
-                    std::vector<index_t> sorted_irxs(connection_count);
-                    std::vector<real_t> sorted_weights(connection_count);
+                                      return std::tie(_connections[lhs].irx, _connections[lhs].itx) <
+                                             std::tie(_connections[rhs].irx, _connections[rhs].itx); });
                     for (size_t icon{0}; icon < connection_count; ++icon) {
                         const auto &old_icon = sorted_icons[icon];
-                        sorted_itxs[icon] = _itxs[old_icon];
-                        sorted_irxs[icon] = _irxs[old_icon];
+                        sorted_connections[icon] = _connections[old_icon];
                         sorted_weights[icon] = _weights[old_icon];
                     }
-                    _itxs = std::move(sorted_itxs);
-                    _irxs = std::move(sorted_irxs);
+                    _connections = std::move(sorted_connections);
                     _weights = std::move(sorted_weights);
                     // each contiguous block sharing the same irx becomes a partition
                     _partitions.clear();
                     size_t begin{0};
-                    while (begin < _irxs.size()) {
-                        const auto &irx = _irxs[begin];
+                    while (begin < _connections.size()) {
+                        const auto &irx = _connections[begin].irx;
                         size_t end{begin + 1};
-                        while (end < _irxs.size() and _irxs[end] == irx) {
+                        while (end < _connections.size() and _connections[end].irx == irx) {
                             ++end;
                         }
                         _partitions.push_back({.irx = irx, .begin = begin, .end = end});
@@ -360,8 +343,8 @@ namespace hNNet {
                     }
                     // topologically order partitions (Kahn's algorithm)
                     std::vector<std::vector<index_t>> irxs(neuron_count);
-                    for (index_t icon{0}; icon < _itxs.size(); ++icon) {
-                        irxs[_itxs[icon]].push_back(_irxs[icon]);
+                    for (const auto &conn : _connections) {
+                        irxs[conn.itx].push_back(conn.irx);
                     }
                     std::vector<size_t> visits_left(neuron_count, 0);
                     for (const auto &partition : _partitions) {
@@ -389,16 +372,15 @@ namespace hNNet {
                         throw std::runtime_error("NNet::prepare: net contains a cycle, topological order does not exist!");
                     }
                     std::ranges::sort(_partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.irx] < topo_ranks[rhs.irx]; });
-                    // group partitions sharing the exact same (contiguous) source range into dense blocks
+                    // group partitions sharing the exact same (contiguous) tx range
                     _dense_blocks.clear();
                     _block_ids.assign(_partitions.size(), no_block);
                     UnionFind union_find(_partitions.size());
                     std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
-                    for (index_t ipart{0}; ipart < _partitions.size(); ++ipart) {
-                        const auto &partition = _partitions[ipart];
+                    for (const auto &[ipart, partition] : _partitions | std::views::enumerate) {
                         const auto count = partition.end - partition.begin;
-                        const auto tx_begin = _itxs[partition.begin];
-                        if ((_itxs[partition.end - 1] - tx_begin) != (count - 1)) {
+                        const auto tx_begin = _connections[partition.begin].itx;
+                        if ((_connections[partition.end - 1].itx - tx_begin) != (count - 1)) {
                             continue;  // itx range has gaps (e.g. a bias mixed in): not a pure dense candidate
                         }
                         const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, ipart);
@@ -410,6 +392,7 @@ namespace hNNet {
                     for (index_t ipart{0}; ipart < _partitions.size(); ++ipart) {
                         groups[union_find.find(ipart)].push_back(ipart);
                     }
+                    // find dense blocks
                     for (auto &[root, members] : groups) {
                         if (members.size() < 2) {
                             continue;  // no gain grouping a single receiver
@@ -436,7 +419,7 @@ namespace hNNet {
                         const auto &first = _partitions[members.front()];
                         const auto block_id = static_cast<index_t>(_dense_blocks.size());
                         _dense_blocks.push_back({
-                            .tx_begin = _itxs[first.begin],
+                            .tx_begin = _connections[first.begin].itx,
                             .tx_count = static_cast<index_t>(first.end - first.begin),
                             .rx_begin = first.irx,
                             .rx_count = static_cast<index_t>(members.size()),
@@ -446,10 +429,8 @@ namespace hNNet {
                             _block_ids[imember] = block_id;
                         }
                     }
-                    timer.stop();
                     std::println("NNet::prepare: neuron(s): {}, connection(s): {}", neuron_count, connection_count);
                     std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
-                    std::println("NNet::prepare: net prepared in {}s", timer.get_elapsed_time_s());
                 }
                 // Learn from targets using the selected learning rule
                 template <typename LearningRule>
@@ -482,8 +463,7 @@ namespace hNNet {
                 bool _trained{false};
                 std::vector<Neuron> _neurons{};
                 std::vector<real_t> _signals{};
-                std::vector<index_t> _itxs{};
-                std::vector<index_t> _irxs{};
+                std::vector<SynapticConn> _connections{};
                 std::vector<real_t> _weights{};
                 std::vector<index_t> _iin_neurons{};
                 std::vector<index_t> _iout_neurons{};
