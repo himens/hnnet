@@ -48,9 +48,10 @@ class Timer {
 			return get_elapsed_time_s() * 1e3; 
 		}
     	double get_elapsed_time_s() const { 
-        	const std::chrono::duration<double> elapsed_s{_end - _start};
+            const auto end = _running ? std::chrono::system_clock::now() : _end;
+            const std::chrono::duration<double> elapsed_s{end - _start};
       		return elapsed_s.count();
-    	} 
+    	}
   	private:  
 	    // Data members
 		bool _running{false};
