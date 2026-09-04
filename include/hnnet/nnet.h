@@ -101,6 +101,14 @@ namespace hNNet {
                     requires (NeuronView<std::remove_cvref_t<TxType>> or std::same_as<std::remove_cvref_t<TxType>, Neuron>) and
                              (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
                     void connect(TxType &&tx_neurons, RxType &&rx_neurons) {
+                        // Compute the flat index of neurons
+                        auto index_of = [&] (const Neuron &neuron) {
+                            const auto index = static_cast<index_t>(&neuron - _neurons.data());
+                            if (index >= _neurons.size()) {
+                                throw std::invalid_argument("NNet::connect::index_of: invalid index!");
+                            }
+                            return index;
+                        };
                         auto to_index = [&] (auto &&arg) {
                             if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
                                 return std::views::single(index_of(arg));
@@ -426,14 +434,6 @@ namespace hNNet {
                         _neurons[inr].reset();
                         _signals[inr] = 0.0;
                     }
-                }
-                // Compute the flat index of a neuron in _neurons
-                index_t index_of(const Neuron &neuron) const {
-                    const auto index = static_cast<index_t>(&neuron - _neurons.data());
-                    if (index >= _neurons.size()) {
-                        throw std::invalid_argument("NNet::index_of: invalid index!");
-                    }
-                    return index;
                 }
                 // Get random generator
                 std::mt19937& random_generator() {
