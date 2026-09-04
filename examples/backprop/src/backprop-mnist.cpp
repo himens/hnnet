@@ -76,11 +76,15 @@ int main() {
     using Classifier = NNet<InputData, OutputData>;
     // create net
     Classifier classifier;
-    auto input_layer  = classifier.new_neurons(nb_pixels, NeuronType::input, Builtin::IdentityActivation{});
-    auto hidden_layer = classifier.new_neurons(nb_hidden, NeuronType::hidden, Builtin::SigmoidActivation{});
-    auto output_layer = classifier.new_neurons(nb_classes, NeuronType::output, Builtin::SigmoidActivation{});
-    classifier.connect(input_layer, hidden_layer);
-    classifier.connect(hidden_layer, output_layer);
+    auto input_layer  =  classifier.new_neurons(nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{});
+    auto hidden_layer1 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
+    //auto hidden_layer2 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
+    //auto hidden_layer3 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
+    auto output_layer =  classifier.new_neurons(nb_classes, NeuronType::output, Builtin::SigmoidActivation{});
+    classifier.connect(input_layer, hidden_layer1);
+    //classifier.connect(hidden_layer1, hidden_layer2);
+    //classifier.connect(hidden_layer2, hidden_layer3);
+    classifier.connect(hidden_layer1, output_layer);
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
@@ -90,7 +94,6 @@ int main() {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
     }
     // train net
-    classifier.randomize_weights(-0.1, 0.1);
     classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {

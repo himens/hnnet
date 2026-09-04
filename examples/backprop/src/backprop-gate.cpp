@@ -31,7 +31,6 @@ int main() {
         //{{-1, +1}, {+1}},
         //{{-1, -1}, {-1}}
     };
-    gate.randomize_weights(-0.5, +0.5);
     gate.train(samples, Builtin::BackpropRule{0.2});
 
     return 0;

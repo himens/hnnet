@@ -27,7 +27,7 @@ namespace hNNet::Builtin {
                     auto reversed_partitions = partitions | std::views::reverse;
                     for (index_t ipart{0}; ipart < reversed_partitions.size(); ipart++) {
                         const auto &partition = reversed_partitions[ipart];
-                        const auto block_id = view.block_id(reversed_partitions.size() - ipart - 1);
+                        const auto block_id = partition.block_id;
                         if (block_id != Net::no_block) {
                             const auto &block = view.dense_block(block_id);
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {
@@ -59,7 +59,7 @@ namespace hNNet::Builtin {
                     // update weights
                     for (index_t ipart{0}; ipart < partitions.size(); ipart++) {
                         const auto &partition = partitions[ipart];
-                        const auto block_id = view.block_id(ipart);
+                        const auto block_id = partition.block_id;
                         if (block_id != Net::no_block) {
                             const auto &block = view.dense_block(block_id);
                             for (index_t irow{0}; irow < block.rx_count; ++irow) {

@@ -28,6 +28,7 @@ namespace hNNet {
                     index_t irx;
                     size_t begin;
                     size_t end;
+                    index_t block_id;
                 };
                 struct DenseBlock {
                     index_t tx_begin;
@@ -61,9 +62,6 @@ namespace hNNet {
                         }
                         const NNet::DenseBlock& dense_block(const index_t index) const {
                             return _net._dense_blocks[index];
-                        }
-                        index_t block_id(const size_t ipart) const {
-                            return _net._block_ids[ipart];
                         }
                         real_t signal(const index_t index) const {
                             return _net._signals[index];
@@ -132,13 +130,6 @@ namespace hNNet {
                             connect(tx, rx);
                         }
                     }
-                // Set weights to random values in the range [min, max]
-                void randomize_weights(const real_t min, const real_t max) {
-                    std::uniform_real_distribution<real_t> dist(min, max);
-                    for (auto &weight : _weights) {
-                        weight = dist(random_generator());
-                    }
-                }
                 // Train net using a set of training samples
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
@@ -245,14 +236,15 @@ namespace hNNet {
                 // Broadcast signals through the net using the partitions, already in topological order
                 void broadcast() {
                     for (index_t ipart{0}; ipart < _partitions.size(); ipart++) {
-                        const auto block_id = _block_ids[ipart];
+                        const auto &partition = _partitions[ipart];
+                        const auto block_id = partition.block_id;;
                         if (block_id != no_block) {
                             const auto &block = _dense_blocks[block_id];
                             broadcast(block);
                             ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                             continue;
                         }
-                        broadcast(_partitions[ipart]);
+                        broadcast(partition);
                     }
                 }
                 // Process a single partition
@@ -293,11 +285,10 @@ namespace hNNet {
                 // Prepare net (build and order partitions, find dense blocks ...)
                 void prepare() {
                     // sanity check 
-                    const auto neuron_count = _neurons.size();
                     _iout_neurons.clear();
                     _iin_neurons.clear();
                     _ibias_neurons.clear();
-                    for (index_t inr{0}; inr < neuron_count; ++inr) {
+                    for (index_t inr{0}; inr < _neurons.size(); ++inr) {
                         switch(_neurons[inr].type()) {
                             case NeuronType::input:
                                 _iin_neurons.push_back(inr);
@@ -313,51 +304,42 @@ namespace hNNet {
                     if ((_iin_neurons.size() != input_size) or (_iout_neurons.size() != output_size)) {
                         throw std::invalid_argument("NNet::prepare: size error!");
                     }
-                    // sort connections per irx and itx
-                    const auto connection_count = _connections.size();
-                    std::vector<SynapticConn> sorted_connections(connection_count);
-                    std::vector<real_t> sorted_weights(connection_count);
-                    std::vector<index_t> sorted_icons(connection_count);
-                    std::ranges::iota(sorted_icons, 0);
-                    std::ranges::sort(sorted_icons, [&] (const auto &lhs, const auto &rhs) {
-                                      return std::tie(_connections[lhs].irx, _connections[lhs].itx) <
-                                             std::tie(_connections[rhs].irx, _connections[rhs].itx); });
-                    for (size_t icon{0}; icon < connection_count; ++icon) {
-                        const auto &old_icon = sorted_icons[icon];
-                        sorted_connections[icon] = _connections[old_icon];
-                        sorted_weights[icon] = _weights[old_icon];
+                    // randomize weights
+                    std::uniform_real_distribution<real_t> dist(-0.1, +0.1);
+                    for (auto &weight : _weights) {
+                        weight = dist(random_generator());
                     }
-                    _connections = std::move(sorted_connections);
-                    _weights = std::move(sorted_weights);
+                    // sort connections per irx and itx
+                    std::ranges::sort(_connections, [&] (const auto &lhs, const auto &rhs) { return std::tie(lhs.irx, lhs.itx) < std::tie(rhs.irx, rhs.itx); });
                     // each contiguous block sharing the same irx becomes a partition
                     _partitions.clear();
                     size_t begin{0};
                     while (begin < _connections.size()) {
                         const auto &irx = _connections[begin].irx;
                         size_t end{begin + 1};
-                        while (end < _connections.size() and _connections[end].irx == irx) {
+                        while ((end < _connections.size()) and (_connections[end].irx == irx)) {
                             ++end;
                         }
-                        _partitions.push_back({.irx = irx, .begin = begin, .end = end});
+                        _partitions.push_back({.irx = irx, .begin = begin, .end = end, .block_id = no_block});
                         begin = end;
                     }
                     // topologically order partitions (Kahn's algorithm)
-                    std::vector<std::vector<index_t>> irxs(neuron_count);
+                    std::vector<std::vector<index_t>> irxs(_neurons.size());
                     for (const auto &conn : _connections) {
                         irxs[conn.itx].push_back(conn.irx);
                     }
-                    std::vector<size_t> visits_left(neuron_count, 0);
+                    std::vector<size_t> visits_left(_neurons.size(), 0);
                     for (const auto &partition : _partitions) {
                         visits_left[partition.irx] = partition.end - partition.begin;
                     }
                     std::vector<index_t> visited_queue;
-                    for (index_t inr{0}; inr < neuron_count; ++inr) {
+                    for (index_t inr{0}; inr < _neurons.size(); ++inr) {
                         if (visits_left[inr] == 0) {
                             visited_queue.push_back(inr);
                         }
                     }
                     size_t visited_count{0};
-                    std::vector<size_t> topo_ranks(neuron_count, 0);
+                    std::vector<size_t> topo_ranks(_neurons.size(), 0);
                     while (not visited_queue.empty()) {
                         const auto &inr = visited_queue.back();
                         visited_queue.pop_back();
@@ -368,13 +350,13 @@ namespace hNNet {
                             }
                         }
                     }
-                    if (visited_count != neuron_count) {
+                    if (visited_count != _neurons.size()) {
                         throw std::runtime_error("NNet::prepare: net contains a cycle, topological order does not exist!");
                     }
+                    // sort partitions per topological rank
                     std::ranges::sort(_partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.irx] < topo_ranks[rhs.irx]; });
                     // group partitions sharing the exact same (contiguous) tx range
                     _dense_blocks.clear();
-                    _block_ids.assign(_partitions.size(), no_block);
                     UnionFind union_find(_partitions.size());
                     std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                     for (const auto &[ipart, partition] : _partitions | std::views::enumerate) {
@@ -417,7 +399,6 @@ namespace hNNet {
                         }
                         // add dense block
                         const auto &first = _partitions[members.front()];
-                        const auto block_id = static_cast<index_t>(_dense_blocks.size());
                         _dense_blocks.push_back({
                             .tx_begin = _connections[first.begin].itx,
                             .tx_count = static_cast<index_t>(first.end - first.begin),
@@ -425,11 +406,12 @@ namespace hNNet {
                             .rx_count = static_cast<index_t>(members.size()),
                             .weight_offset = first.begin,
                         });
-                        for (const auto &imember : members) {
-                            _block_ids[imember] = block_id;
+                        for (auto &ipart : members) {
+                            _partitions[ipart].block_id = static_cast<index_t>(_dense_blocks.size()) - 1;
                         }
                     }
-                    std::println("NNet::prepare: neuron(s): {}, connection(s): {}", neuron_count, connection_count);
+                    std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
+                    std::println("NNet::prepare: found {} partitions(s)", _partitions.size());
                     std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
                 }
                 // Learn from targets using the selected learning rule
@@ -470,7 +452,6 @@ namespace hNNet {
                 std::vector<index_t> _ibias_neurons{};
                 std::vector<Partition> _partitions{};
                 std::vector<DenseBlock> _dense_blocks{};
-                std::vector<index_t> _block_ids{};
         };
     template <typename T>
         using input_t = T::input_type;
