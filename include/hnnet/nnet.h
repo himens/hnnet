@@ -202,6 +202,9 @@ namespace hNNet {
                 class UnionFind {
                     public:
                         explicit UnionFind(const int_t count) : _roots(count), _ranks(count, 0) {
+                            if (count < 0) {
+                                throw std::invalid_argument("UnionFind: invalid count!");
+                            }
                             std::iota(std::begin(_roots), std::end(_roots), 0);
                         }
                         index_t find(const index_t x) {
