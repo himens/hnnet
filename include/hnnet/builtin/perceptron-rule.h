@@ -25,7 +25,7 @@ namespace hNNet::Builtin {
                             if (partition.irx != iout) {
                                 continue;
                             }
-                            for (const auto &icon : std::views::iota(partition.begin, partition.end)) {
+                            for (const auto &icon : std::views::iota(partition.icon_begin, partition.icon_end)) {
                                 const auto itx = view.connection(icon).itx;
                                 view.weight(icon) += _learning_rate * target * view.signal(itx);
                             }

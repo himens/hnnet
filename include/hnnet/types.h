@@ -19,21 +19,18 @@
 #include "timer.h"
 
 namespace hNNet {
-    constexpr size_t register_size{4};
-
     using real_t   = std::float64_t;
     using int_t    = std::int64_t;
     using real32_t = std::float32_t;
-    using int32_t  = std::int32_t;
-    using size_t   = std::size_t;
-    using index_t  = std::uint32_t;
+    using index_t  = std::int64_t;
 
+    constexpr int_t register_size{4};
     template <typename T>
         concept ValueType = std::same_as<T, real_t>   or 
                             std::same_as<T, int_t>    or 
                             std::same_as<T, real32_t> or 
                             std::same_as<T, int32_t>;
-    template <ValueType Type, size_t Size>
+    template <ValueType Type, int_t Size>
         requires (Size > 0)
         using Data = std::array<Type, Size>;
     template <typename T>

@@ -20,7 +20,7 @@ add_subdirectory(examples/perceptron)
 add_subdirectory(examples/backprop)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(hnnet_lib INTERFACE -Wfatal-errors)
+    target_compile_options(hnnet_lib INTERFACE -Wfatal-errors -Wall -Wextra -Wpedantic)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
         target_compile_options(hnnet_lib INTERFACE -mcpu=native)
     else()
