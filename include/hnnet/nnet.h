@@ -75,20 +75,13 @@ namespace hNNet {
                         NNet& _net;
                 };
             public:
-                // Constructor
-                NNet() {
-                    _neurons.reserve(1000);
-                    _signals.reserve(_neurons.capacity());
-                    _connections.reserve(_neurons.capacity() * 10);
-                    _weights.reserve(_neurons.capacity() * 10);
-                }
                 // Create a view of the net
                 View view() {
                     return View(*this);
                 }
                 // Create new neurons
                 template <ActivationType Activation>
-                    auto new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
+                    std::vector<index_t> new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
                         if (number < 0) {
                             throw std::invalid_argument("NNet::new_neurons: invalid number!");
                         }
@@ -97,50 +90,36 @@ namespace hNNet {
                             _neurons.push_back({type, std::make_unique<Activation>(activation)});
                             _signals.push_back(0.0);
                         }
-                        return _neurons | std::views::drop(_neurons.size() - number) | std::views::take(number);
+                        return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<std::vector<index_t>>();
                 }
                 // Connect neurons (cartesian product)
-                template <typename TxType, typename RxType>
-                    requires (NeuronView<std::remove_cvref_t<TxType>> or std::same_as<std::remove_cvref_t<TxType>, Neuron>) and
-                             (NeuronView<std::remove_cvref_t<RxType>> or std::same_as<std::remove_cvref_t<RxType>, Neuron>)
-                    void connect(TxType &&tx_neurons, RxType &&rx_neurons) {
-                        // Compute the flat index of neurons
-                        auto index_of = [&] (const Neuron &neuron) {
-                            const index_t index = &neuron - _neurons.data();
-                            if (index < 0 or index >= std::ssize(_neurons)) {
-                                throw std::invalid_argument("NNet::connect::index_of: invalid index!");
-                            }
-                            return index;
-                        };
-                        auto to_index = [&] (auto &&arg) {
-                            if constexpr (std::same_as<std::remove_cvref_t<decltype(arg)>, Neuron>) {
-                                return std::views::single(index_of(arg));
-                            }
-                            else {
-                                return std::forward<decltype(arg)>(arg) | std::views::transform([&] (const auto &neuron) { return index_of(neuron); });
-                            }
-                        };
-                        _trained = false;
-                        auto itxs = to_index(std::forward<TxType>(tx_neurons));
-                        auto irxs = to_index(std::forward<RxType>(rx_neurons));
-                        std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
-                        for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                            const index_t icon = std::ssize(_connections);
-                            const auto [it, inserted] = hash_map.try_emplace(std::pair{irx, itx}, icon);
-                            if (not inserted) {
-                                throw std::invalid_argument("NNet::connect: duplicate connection!");
-                            }
-                            _connections.push_back({.itx = itx, .irx = irx});
-                            _weights.push_back(0.0);
-                        }
+                void connect(std::span<const index_t> itxs, std::span<const index_t> irxs) {
+                    _trained = false;
+                    const auto [min_itx, max_itx] = std::ranges::minmax(itxs);
+                    const auto [min_irx, max_irx] = std::ranges::minmax(irxs);
+                    if ((min_itx < 0 or max_itx >= std::ssize(_neurons)) or (min_irx < 0 or max_irx >= std::ssize(_neurons))) {
+                        throw std::out_of_range("NNet::connect: out-of-range index!");
                     }
+                    std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
+                    for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
+                        const index_t icon = std::ssize(_connections);
+                        const auto [it, inserted] = hash_map.try_emplace(std::pair{irx, itx}, icon);
+                        if (not inserted) {
+                            throw std::invalid_argument("NNet::connect: duplicate connection!");
+                        }
+                        _connections.push_back({.itx = itx, .irx = irx});
+                        _weights.push_back(0.0);
+                    }
+                }
                 // Connect neurons (zip)
-                template <NeuronView TxView, NeuronView RxView>
-                    void zip_connect(TxView itxs, RxView irxs) {
-                        for (const auto &[tx, rx] : std::views::zip(itxs, irxs)) {
-                            connect(tx, rx);
-                        }
+                void zip_connect(std::span<const index_t> itxs, std::span<const index_t> irxs) {
+                    if (itxs.size() != irxs.size()) {
+                        throw std::invalid_argument("NNet::zip_connect: size error!");
                     }
+                    for (const auto &[itx, irx] : std::views::zip(itxs, irxs)) {
+                        connect(itx, irx);
+                    }
+                }
                 // Train net using a set of training samples
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
@@ -341,8 +320,8 @@ namespace hNNet {
                     }
                     // topologically order partitions (Kahn's algorithm)
                     std::vector<std::vector<index_t>> irxs(_neurons.size());
-                    for (const auto &conn : _connections) {
-                        irxs[conn.itx].push_back(conn.irx);
+                    for (const auto &con : _connections) {
+                        irxs[con.itx].push_back(con.irx);
                     }
                     std::vector<int_t> visits_left(_neurons.size(), 0);
                     for (const auto &partition : _partitions) {

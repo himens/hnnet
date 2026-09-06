@@ -41,8 +41,4 @@ namespace hNNet {
             real_t _weighted_sum{0.0};
             std::unique_ptr<Activation> _activation{nullptr};
     };
-    template <typename T>
-        concept NeuronRange = std::ranges::range<T> and std::same_as<std::ranges::range_value_t<T>, Neuron>;
-    template <typename T>
-        concept NeuronView = std::ranges::view<T> and NeuronRange<T>;
 }
