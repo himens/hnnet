@@ -1,35 +1,23 @@
 #pragma once
-#include <utility>
 #include "hnnet/nnet.h"
 #include "hnnet/builtin/activations.h"
 
 namespace hNNet::Builtin {
-    /////////////////
-    // LayerType   //
-    /////////////////
-    // A layer exposes size (int_t), type (NeuronType) and a valid activation object.
     template <typename T>
-        concept LayerType = requires(const T &layer) {
-            requires std::same_as<std::remove_cvref_t<decltype(layer.size)>, int_t>;
-            requires std::same_as<std::remove_cvref_t<decltype(layer.type)>, NeuronType>;
-            requires ActivationType<std::remove_cvref_t<decltype(layer.activation)>>;
+        concept LayerType = requires(T layer) {
+            { auto(layer.size) } -> std::same_as<int_t>;
+            { auto(layer.type) } -> std::same_as<NeuronType>;
+            { auto(layer.activation) } -> ActivationType;
         };
-    /////////////////
-    // Layer struct //
-    /////////////////
-    // Ready-to-use layer descriptor (aggregate, supports CTAD)
     template <ActivationType Activation>
         struct Layer {
             int_t size;
             NeuronType type;
             Activation activation;
         };
-    //////////////////////////////
-    // DenseForwardNet class    //
-    //////////////////////////////
-    // Fully-connected feed-forward net: layer[i] is fully connected to layer[i + 1], in order.
-    // If the first layer is not of input type, an implicit input layer (size = InputData) is created.
-    // The last layer must be of output type.
+    ///////////////////////////
+    // DenseForwardNet class //
+    ///////////////////////////
     template <DataType InputData, DataType OutputData>
         class DenseForwardNet : public NNet<InputData, OutputData> {
             public:
@@ -48,7 +36,7 @@ namespace hNNet::Builtin {
                         auto connect_layer = [&] (const auto &layer) {
                             auto rx_neurons = this->new_neurons(layer.size, layer.type, layer.activation);
                             this->connect(tx_neurons, rx_neurons);
-                            tx_neurons = rx_neurons; // rx diventa il tx della prossima connessione
+                            tx_neurons = rx_neurons;
                         };
                         if (has_input_layer) {
                             [&]<size_t... I>(std::index_sequence<I...>) {

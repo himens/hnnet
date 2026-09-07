@@ -77,14 +77,14 @@ int main() {
     using Classifier = Builtin::DenseForwardNet<InputData, OutputData>;
     // create net
     Classifier classifier{
-        Builtin::Layer{static_cast<int_t>(nb_pixels),  NeuronType::input,  Builtin::IdentityActivation{}},
-        Builtin::Layer{static_cast<int_t>(nb_hidden),  NeuronType::hidden, Builtin::SigmoidActivation{}},
-        Builtin::Layer{static_cast<int_t>(nb_classes), NeuronType::output, Builtin::SigmoidActivation{}}
+        Builtin::Layer{nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{}},
+        Builtin::Layer{nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{}},
+        Builtin::Layer{nb_classes, NeuronType::output, Builtin::SigmoidActivation{}}
     };
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
-    std::vector<Classifier::TrainingSample> samples;
+    std::vector<TrainingSample<InputData, OutputData>> samples;
     samples.reserve(nb_training_samples);
     for (const auto &[label, pixels] : train_digits) {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
