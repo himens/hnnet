@@ -2,6 +2,7 @@
 #include <sstream>
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/backprop-rule.h"
+#include "hnnet/builtin/dense-forward-net.h"
 #include "hnnet/nnet.h"
 
 constexpr size_t nb_pixels{784};
@@ -73,18 +74,13 @@ std::vector<DigitData> read_digits(const std::string &filename, const size_t max
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
 int main() {
     // define net type
-    using Classifier = NNet<InputData, OutputData>;
+    using Classifier = Builtin::DenseForwardNet<InputData, OutputData>;
     // create net
-    Classifier classifier;
-    auto input_layer  =  classifier.new_neurons(nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{});
-    auto hidden_layer1 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
-    //auto hidden_layer2 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
-    //auto hidden_layer3 = classifier.new_neurons(nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{});
-    auto output_layer =  classifier.new_neurons(nb_classes, NeuronType::output, Builtin::SigmoidActivation{});
-    classifier.connect(input_layer, hidden_layer1);
-    //classifier.connect(hidden_layer1, hidden_layer2);
-    //classifier.connect(hidden_layer2, hidden_layer3);
-    classifier.connect(hidden_layer1, output_layer);
+    Classifier classifier{
+        Builtin::Layer{static_cast<int_t>(nb_pixels),  NeuronType::input,  Builtin::IdentityActivation{}},
+        Builtin::Layer{static_cast<int_t>(nb_hidden),  NeuronType::hidden, Builtin::SigmoidActivation{}},
+        Builtin::Layer{static_cast<int_t>(nb_classes), NeuronType::output, Builtin::SigmoidActivation{}}
+    };
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
