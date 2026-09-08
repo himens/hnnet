@@ -51,9 +51,9 @@ namespace hNNet::Builtin {
                         if (rx.type() != NeuronType::output) {
                             delta_rx *= rx.activation()->derivative(rx.weighted_sum());
                         }
-                        for (const auto &icon : std::views::iota(partition.icon_begin, partition.icon_end)) {
-                            const auto itx = view.connection(icon).itx;
-                            _deltas[itx] += delta_rx * view.weight(icon);
+                        for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            const auto itx = view.connection(iconn).itx;
+                            _deltas[itx] += delta_rx * view.weight(iconn);
                         }
                     }
                     // update weights
@@ -75,12 +75,12 @@ namespace hNNet::Builtin {
                             ipart += block.rx_count - 1;
                             continue;
                         }
-                        for (const auto &icon : std::views::iota(partition.icon_begin, partition.icon_end)) {
-                            const auto irx = view.connection(icon).irx; // indirection
-                            const auto itx = view.connection(icon).itx; // indirection
-                            const auto dweight = (_learning_rate * _deltas[irx] * view.signal(itx)) + (_momentum * _dweights[icon]);
-                            view.weight(icon) += dweight;
-                            _dweights[icon] = dweight;
+                        for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            const auto irx = view.connection(iconn).irx; // indirection
+                            const auto itx = view.connection(iconn).itx; // indirection
+                            const auto dweight = (_learning_rate * _deltas[irx] * view.signal(itx)) + (_momentum * _dweights[iconn]);
+                            view.weight(iconn) += dweight;
+                            _dweights[iconn] = dweight;
                         }
                     }
                     return squared_error;
