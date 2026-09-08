@@ -9,7 +9,7 @@ namespace hNNet {
     class Neuron {
         public:
             // Constructor
-            Neuron(const NeuronType type, std::unique_ptr<Activation> activation) : _type(type), _activation(std::move(activation)) {
+            explicit Neuron(const NeuronType type, std::unique_ptr<Activation> activation) : _type(type), _activation(std::move(activation)) {
                 if (_activation == nullptr) {
                     throw std::invalid_argument("Neuron::Neuron: invalid activation!");
                 }

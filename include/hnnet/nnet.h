@@ -85,7 +85,7 @@ namespace hNNet {
                         }
                         _trained = false;
                         for (auto i{0}; i < number; ++i) {
-                            _neurons.push_back({type, std::make_unique<Activation>(activation)});
+                            _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
                             _signals.push_back(0.0);
                         }
                         return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<std::vector<index_t>>();
