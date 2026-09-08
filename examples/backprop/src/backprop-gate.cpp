@@ -19,7 +19,7 @@ int main() {
     gate.connect(hidden_bias, hidden_layer);
     gate.connect(output_bias, output_layer);
     // train net
-    std::vector<Gate::TrainingSample> samples = {
+    std::vector<Gate::TrainingData> samples = {
         // binary
         {{1, 1}, {0}},
         {{1, 0}, {1}},

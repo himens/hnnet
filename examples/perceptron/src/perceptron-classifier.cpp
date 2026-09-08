@@ -3,21 +3,20 @@
 #include "hnnet/builtin/perceptron-rule.h"
 #include "hnnet/nnet.h"
 
+// Constants
 constexpr size_t nb_rows{9};
 constexpr size_t nb_columns{7};
 constexpr size_t nb_pixels{nb_rows * nb_columns};
 constexpr size_t nb_letters{26};
-
+// Aliases and data types
 using namespace hNNet;
 using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
 using InputData  = Data<int_t, nb_pixels>;
 using OutputData = Data<int_t, nb_letters>;
-
 struct LetterData {
     char character{'\0'};
     Pixels pixels{};
 };
-
 // Encode pixel grid
 InputData encode(const Pixels &pixels) {
     InputData data{};
@@ -89,7 +88,6 @@ std::vector<LetterData> read_letters(const std::string &filename) {
     }
     return letters;
 }
-
 // Classify letters using the trained perceptron neural network
 int main() {
     // define net type
@@ -104,7 +102,7 @@ int main() {
     letters.append_range(read_letters("data/letters/train_1.txt"));
     letters.append_range(read_letters("data/letters/train_2.txt"));
     letters.append_range(read_letters("data/letters/train_3.txt"));
-    std::vector<Classifier::TrainingSample> samples;
+    std::vector<Classifier::TrainingData> samples;
     for (const auto &[ch, pixels] : letters) {
         samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
     }

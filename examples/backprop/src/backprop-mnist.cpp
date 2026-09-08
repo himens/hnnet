@@ -5,22 +5,21 @@
 #include "hnnet/builtin/dense-forward-net.h"
 #include "hnnet/nnet.h"
 
+// Constants
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_classes{10};
 constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60'000};
 constexpr size_t nb_test_samples{10'000};
 constexpr size_t batch_size{nb_training_samples};
-
+// Aliases and data types
 using namespace hNNet;
 using InputData  = Data<real_t, nb_pixels>;
 using OutputData = Data<real_t, nb_classes>;
-
 struct DigitData {
     int_t label{0};
     std::array<int_t, nb_pixels> pixels{};
 };
-
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
 InputData encode(const std::array<int_t, nb_pixels> &pixels) {
     InputData data{};
@@ -84,7 +83,7 @@ int main() {
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
-    std::vector<TrainingSample<InputData, OutputData>> samples;
+    std::vector<Classifier::TrainingData> samples;
     samples.reserve(nb_training_samples);
     for (const auto &[label, pixels] : train_digits) {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});

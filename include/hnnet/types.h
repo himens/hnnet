@@ -14,6 +14,7 @@
 #include <random>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <omp.h>
 #include "timer.h"
 
@@ -26,7 +27,7 @@ namespace hNNet {
     using index_t  = int_t; // indices are just a semantic alias for int_t
     // Constants
     constexpr int_t register_size{4}; // SIMD register size
-    // Data type for fixed-size arrays
+    // Data type and concepts for fixed-size arrays
     template <typename T>
         concept ValueType = std::same_as<T, real_t>   or 
                             std::same_as<T, int_t>    or 
@@ -39,5 +40,5 @@ namespace hNNet {
     template <typename T>
         concept DataType = requires{ {std::tuple_size_v<T>}; } and std::same_as<T, Data<std::ranges::range_value_t<T>, std::tuple_size_v<T>>>;
     template <typename T>
-        concept IndexRange = std::ranges::range<T> and std::integral<std::ranges::range_value_t<T>>;
+        concept IndexRange = std::ranges::input_range<T> and std::same_as<std::ranges::range_value_t<T>, index_t>;
 }
