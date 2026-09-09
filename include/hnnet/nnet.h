@@ -8,10 +8,6 @@ namespace hNNet {
         std::vector<real_t> weighted_sums{};
         NNetState() = default;
         explicit NNetState(const int_t neuron_count) : signals(neuron_count, 0.0), weighted_sums(neuron_count, 0.0) {}
-        void reset() {
-            std::ranges::fill(signals, 0.0);
-            std::ranges::fill(weighted_sums, 0.0);
-        }
     };
     ////////////////
     // NNet class //

@@ -79,7 +79,6 @@ namespace hNNet::Builtin {
                             for (auto isample = batch_begin; isample < batch_end; ++isample) {
                                 const auto tid = omp_get_thread_num();
                                 auto &state = _states[tid];
-                                state.reset();
                                 net.inject(state, samples[isample].inputs);
                                 net.broadcast(state);
                                 total_error += backward(net, state, samples[isample].targets, _deltas[tid], _thread_dweights[tid]);
