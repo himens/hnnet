@@ -24,19 +24,19 @@ namespace hNNet::Builtin {
             explicit SGDMomentum(const real_t learning_rate = 0.0, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {}
             template <typename View>
                 void apply(View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
-                    if (_prev_update.empty()) {
-                        _prev_update.assign(batch_deltas.size(), 0.0);
+                    if (_prev_dweights.empty()) {
+                        _prev_dweights.assign(batch_deltas.size(), 0.0);
                     }
                     for (auto iconn{0}; iconn < std::ssize(batch_deltas); ++iconn) {
-                        const auto dweight = (_learning_rate * batch_deltas[iconn] / batch_size) + (_momentum * _prev_update[iconn]);
+                        const auto dweight = (_learning_rate * batch_deltas[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
                         view.weight(iconn) += dweight;
-                        _prev_update[iconn] = dweight;
+                        _prev_dweights[iconn] = dweight;
                     }
                 }
         private:
             real_t _learning_rate;
             real_t _momentum;
-            std::vector<real_t> _prev_update{};
+            std::vector<real_t> _prev_dweights{};
     };
     ////////////////////////
     // BackpropRule class //
