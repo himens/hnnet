@@ -2,6 +2,9 @@
 #include "hnnet/nnet.h"
 
 namespace hNNet::Builtin {
+    //////////////////////////
+    // PerceptronRule class //
+    //////////////////////////
     class PerceptronRule {
         public:
             // Constructor
@@ -9,7 +12,7 @@ namespace hNNet::Builtin {
             // Learn from a whole epoch of training samples (online: one immediate update per sample)
             template <NNetType Net>
                 real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
-                    NNetState state(net.view().neuron_count());   // single instance: PerceptronRule stays online, no mini-batch/parallel
+                    NNetState state(net.view().neuron_count());
                     real_t mean_squared_error{0.0};
                     for (const auto &sample : samples) {
                         state.reset();

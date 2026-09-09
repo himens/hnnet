@@ -3,11 +3,6 @@
 #include "hnnet/learning-rule.h"
 
 namespace hNNet {
-    ///////////////////
-    // NNetState type //
-    ///////////////////
-    // Transient per-sample state (signals, weighted sums), decoupled from NNet so that
-    // multiple independent instances can exist (e.g. one per thread for parallel mini-batches).
     struct NNetState {
         std::vector<real_t> signals{};
         std::vector<real_t> weighted_sums{};
@@ -144,7 +139,7 @@ namespace hNNet {
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
-                            const real_t mean_squared_error = rule.learn(*this, samples);  // the rule owns the whole epoch (online, mini-batch, parallel, ...)
+                            const real_t mean_squared_error = rule.learn(*this, samples);
                             converged = (mean_squared_error < error_threshold);
                             epoch++;
                             std::println("NNet::train: epoch: {}, elapsed time: {}s, error: {:.6f}", epoch, timer.get_elapsed_time_s(), mean_squared_error);
