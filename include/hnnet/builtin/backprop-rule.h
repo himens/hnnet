@@ -53,46 +53,54 @@ namespace hNNet::Builtin {
                     real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
-                        const auto num_threads = omp_get_max_threads();
+                        const auto max_threads = omp_get_max_threads();
                         if (_states.empty()) {  // lazy init: allocate once, reuse across every epoch
-                            _states.reserve(num_threads);
-                            for (auto t{0}; t < num_threads; ++t) {
+                            _states.reserve(max_threads);
+                            for (auto tid{0}; tid < max_threads; ++tid) {
                                 _states.emplace_back(neuron_count);
                             }
-                            _backward_deltas.assign(num_threads, std::vector<real_t>(neuron_count, 0.0));
-                            _thread_deltas.assign(num_threads, std::vector<real_t>(connection_count, 0.0));
-                            _batch_deltas.assign(connection_count, 0.0);
+                            _deltas.assign(max_threads, std::vector<real_t>(neuron_count, 0.0));
+                            _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
+                            _batch_dweights.assign(connection_count, 0.0);
                         }
                         real_t total_error{0.0};
-                        for (auto ibatch{0}; ibatch < std::ssize(samples); ibatch += _batch_size) {
-                            const auto batch_end = std::min<index_t>(samples.size(), ibatch + _batch_size);
-                            const auto batch_count = batch_end - ibatch;
+                        const auto batch_count = (std::ssize(samples) + _batch_size - 1) / _batch_size;  // ceiling division
+                        for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
+                            const auto batch_begin = ibatch * _batch_size;
+                            const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
+                            const auto batch_size = batch_end - batch_begin;
                             // below this size, opening a parallel region isn't worth its fork/join overhead: the if() clause runs the loop sequentially instead
-                            const auto parallel = batch_count >= num_threads;
-                            const auto active_threads = parallel ? num_threads : index_t{1};
-                            for (auto t{0}; t < active_threads; ++t) {
-                                std::ranges::fill(_thread_deltas[t], 0.0);
+                            const auto parallel = batch_size >= max_threads;
+                            const auto thread_count = parallel ? max_threads : index_t{1};
+                            for (auto tid{0}; tid < thread_count; ++tid) {
+                                std::ranges::fill(_thread_dweights[tid], 0.0);
                             }
                             #pragma omp parallel for if(parallel) reduction(+:total_error)
-                            for (auto i = ibatch; i < batch_end; ++i) {
+                            for (auto isample = batch_begin; isample < batch_end; ++isample) {
                                 const auto tid = omp_get_thread_num();
                                 auto &state = _states[tid];
                                 state.reset();
-                                net.inject(state, samples[i].inputs);
+                                net.inject(state, samples[isample].inputs);
                                 net.broadcast(state);
-                                total_error += backward(net, state, samples[i].targets, _backward_deltas[tid], _thread_deltas[tid]);
-                            }
-                            // sequential reduction: sum every actually-used thread's contribution into a single per-connection buffer
-                            std::ranges::fill(_batch_deltas, 0.0);
-                            for (auto t{0}; t < active_threads; ++t) {
-                                const auto &deltas = _thread_deltas[t];
-                                for (auto iconn{0}; iconn < connection_count; ++iconn) {
-                                    _batch_deltas[iconn] += deltas[iconn];
-                                }
+                                total_error += backward(net, state, samples[isample].targets, _deltas[tid], _thread_dweights[tid]);
                             }
                             // single, sequential weight update
                             auto view = net.view();
-                            _optimizer.apply(view, _batch_deltas, static_cast<real_t>(batch_count));
+                            if (thread_count == 1) {
+                                // only one contributor: skip the copy into _batch_dweights, apply its buffer directly
+                                _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size));
+                            }
+                            else {
+                                // sequential reduction: sum every actually-used thread's contribution into a single per-connection buffer
+                                std::ranges::fill(_batch_dweights, 0.0);
+                                for (auto tid{0}; tid < thread_count; ++tid) {
+                                    const auto &dweights = _thread_dweights[tid];
+                                    for (auto iconn{0}; iconn < connection_count; ++iconn) {
+                                        _batch_dweights[iconn] += dweights[iconn];
+                                    }
+                                }
+                                _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size));
+                            }
                         }
                         return total_error / samples.size();
                     }
@@ -171,9 +179,9 @@ namespace hNNet::Builtin {
                 Loss _loss;
                 Optimizer _optimizer;
                 std::vector<NNetState> _states{};
-                std::vector<std::vector<real_t>> _backward_deltas{};
-                std::vector<std::vector<real_t>> _thread_deltas{};
-                std::vector<real_t> _batch_deltas{};
+                std::vector<std::vector<real_t>> _deltas{};
+                std::vector<std::vector<real_t>> _thread_dweights{};
+                std::vector<real_t> _batch_dweights{};
         };
 }
 
