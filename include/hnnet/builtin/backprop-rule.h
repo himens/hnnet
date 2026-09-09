@@ -149,7 +149,7 @@ namespace hNNet::Builtin {
                                 deltas[itx] += delta_rx * view.weight(iconn);
                             }
                         }
-                        // per-connection delta_weight (pure, no learning rate/momentum): each connection written exactly once
+                        // per-connection delta_weight (pure, no learning rate/momentum)
                         for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
                             const auto &partition = partitions[ipart];
                             const auto iblock = partition.iblock;
@@ -159,7 +159,7 @@ namespace hNNet::Builtin {
                                     const auto delta_rx = deltas[block.irx_begin + irow];
                                     const auto row_offset = block.weight_offset + irow * block.tx_count;
                                     for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                        dweights[row_offset + icol] = delta_rx * state.signals[block.itx_begin + icol];
+                                        dweights[row_offset + icol] += delta_rx * state.signals[block.itx_begin + icol];
                                     }
                                 }
                                 ipart += block.rx_count - 1;
@@ -168,7 +168,7 @@ namespace hNNet::Builtin {
                             for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
                                 const auto irx = view.connection(iconn).irx;
                                 const auto itx = view.connection(iconn).itx;
-                                dweights[iconn] = deltas[irx] * state.signals[itx];
+                                dweights[iconn] += deltas[irx] * state.signals[itx];
                             }
                         }
                         return total_error;
