@@ -166,7 +166,7 @@ namespace hNNet {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    NNetState state(neurons.size());
+                    NNetState state(_neurons.size());
                     inject(state, data);
                     broadcast(state);
                     OutputData outputs;
