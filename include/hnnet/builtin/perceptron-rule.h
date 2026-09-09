@@ -15,7 +15,6 @@ namespace hNNet::Builtin {
                     NNetState state(net.view().neuron_count());
                     real_t mean_squared_error{0.0};
                     for (const auto &sample : samples) {
-                        state.reset();
                         net.inject(state, sample.inputs);
                         net.broadcast(state);
                         mean_squared_error += learn(net, state, sample.targets);
