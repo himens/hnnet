@@ -6,16 +6,30 @@ namespace hNNet::Builtin {
         public:
             // Constructor
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
-            // Learn from targets using the perceptron learning rule
+            // Learn from a whole epoch of training samples (online: one immediate update per sample)
             template <NNetType Net>
-                real_t learn(Net &net, const output_t<Net> &targets) {
+                real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
+                    NNetState state(net.view().neuron_count());   // single instance: PerceptronRule stays online, no mini-batch/parallel
+                    real_t mean_squared_error{0.0};
+                    for (const auto &sample : samples) {
+                        state.reset();
+                        net.inject(state, sample.inputs);
+                        net.broadcast(state);
+                        mean_squared_error += learn(net, state, sample.targets);
+                    }
+                    return mean_squared_error / samples.size();
+                }
+        private:
+            // Learn from targets using the perceptron learning rule (single sample, immediate weight update)
+            template <NNetType Net>
+                real_t learn(Net &net, NNetState &state, const output_t<Net> &targets) {
                     auto view = net.view();
                     if (view.partitions().size() != output_size_v<Net>) {
                         throw std::runtime_error("PerceptronRule::learn: invalid net!");
                     }
                     real_t squared_error{0};
                     for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
-                        const auto error = (target - view.signal(iout));
+                        const auto error = (target - state.signals[iout]);
                         squared_error += error * error;
                         if (std::abs(error) < 1e-6) {
                             continue;  // No update needed if the error is negligible
@@ -27,7 +41,7 @@ namespace hNNet::Builtin {
                             }
                             for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
                                 const auto itx = view.connection(iconn).itx;
-                                view.weight(iconn) += _learning_rate * target * view.signal(itx);
+                                view.weight(iconn) += _learning_rate * target * state.signals[itx];
                             }
                         }
                     }

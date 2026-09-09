@@ -3,6 +3,21 @@
 #include "hnnet/learning-rule.h"
 
 namespace hNNet {
+    ///////////////////
+    // NNetState type //
+    ///////////////////
+    // Transient per-sample state (signals, weighted sums), decoupled from NNet so that
+    // multiple independent instances can exist (e.g. one per thread for parallel mini-batches).
+    struct NNetState {
+        std::vector<real_t> signals{};
+        std::vector<real_t> weighted_sums{};
+        NNetState() = default;
+        explicit NNetState(const int_t neuron_count) : signals(neuron_count, 0.0), weighted_sums(neuron_count, 0.0) {}
+        void reset() {
+            std::ranges::fill(signals, 0.0);
+            std::ranges::fill(weighted_sums, 0.0);
+        }
+    };
     ////////////////
     // NNet class //
     ////////////////
@@ -60,9 +75,6 @@ namespace hNNet {
                         const NNet::DenseBlock& dense_block(const index_t index) const {
                             return _net._dense_blocks[index];
                         }
-                        real_t signal(const index_t index) const {
-                            return _net._signals[index];
-                        }
                         const std::vector<index_t>& iout_neurons() const {
                             return _net._iout_neurons;
                         }
@@ -74,8 +86,7 @@ namespace hNNet {
             public:
                 // Create a view of the net
                 View view() {
-                    static thread_local View view{*this};
-                    return view;
+                    return View(*this);
                 }
                 // Create new neurons
                 template <ActivationType Activation>
@@ -86,7 +97,6 @@ namespace hNNet {
                         _trained = false;
                         for (auto i{0}; i < number; ++i) {
                             _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
-                            _signals.push_back(0.0);
                         }
                         return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<std::vector<index_t>>();
                 }
@@ -134,14 +144,7 @@ namespace hNNet {
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
-                            real_t mean_squared_error{0.0};
-                            for (const auto &sample : samples) {
-                                reset();
-                                inject(sample.inputs);
-                                broadcast();
-                                mean_squared_error += learn(sample.targets, rule);
-                            }
-                            mean_squared_error /= samples.size();
+                            const real_t mean_squared_error = rule.learn(*this, samples);  // the rule owns the whole epoch (online, mini-batch, parallel, ...)
                             converged = (mean_squared_error < error_threshold);
                             epoch++;
                             std::println("NNet::train: epoch: {}, elapsed time: {}s, error: {:.6f}", epoch, timer.get_elapsed_time_s(), mean_squared_error);
@@ -163,14 +166,39 @@ namespace hNNet {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    reset();
-                    inject(data);
-                    broadcast();
+                    NNetState state(neurons.size());
+                    inject(state, data);
+                    broadcast(state);
                     OutputData outputs;
                     for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
-                        outputs[i] = _signals[iout];
+                        outputs[i] = state.signals[iout];
                     }
                     return outputs;
+                }
+                // Inject input data into a net state
+                void inject(NNetState &state, const InputData &inputs) const {
+                    for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
+                        state.weighted_sums[iin] = input;
+                        state.signals[iin] = _neurons[iin].activate(input);
+                    }
+                    for (const auto &ibias : _ibias_neurons) {
+                        state.weighted_sums[ibias] = 1.0;
+                        state.signals[ibias] = _neurons[ibias].activate(1.0);
+                    }
+                }
+                // Broadcast signals through the net using the partitions, already in topological order
+                void broadcast(NNetState &state) const {
+                    for (auto ipart{0}; ipart < std::ssize(_partitions); ipart++) {
+                        const auto &partition = _partitions[ipart];
+                        const auto iblock = partition.iblock;;
+                        if (iblock != no_block) {
+                            const auto &block = _dense_blocks[iblock];
+                            broadcast(block, state);
+                            ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
+                            continue;
+                        }
+                        broadcast(partition, state);
+                    }
                 }
             private:
                 // Data types
@@ -212,6 +240,43 @@ namespace hNNet {
                         std::vector<index_t> _roots;
                         std::vector<int_t> _ranks;
                 };
+                // Process a single partition
+                void broadcast(const Partition &partition, NNetState &state) const {
+                    real_t weighted_sum{0.0};
+                    auto iconn = partition.iconn_begin;
+                    for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
+                        weighted_sum +=  _weights[iconn]     * state.signals[_connections[iconn].itx]
+                                       + _weights[iconn + 1] * state.signals[_connections[iconn + 1].itx]
+                                       + _weights[iconn + 2] * state.signals[_connections[iconn + 2].itx]
+                                       + _weights[iconn + 3] * state.signals[_connections[iconn + 3].itx];
+                    }
+                    //#pragma omp simd reduction(+:weighted_sum)
+                    for (; iconn < partition.iconn_end; iconn++) {
+                        weighted_sum += _weights[iconn] * state.signals[_connections[iconn].itx];
+                    }
+                    state.weighted_sums[partition.irx] = weighted_sum;
+                    state.signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
+                }
+                // Process a dense block: all its receivers share the exact same source range, hence a pure matrix-vector product
+                void broadcast(const DenseBlock &block, NNetState &state) const {
+                    for (auto irow{0}; irow < block.rx_count; ++irow) {
+                        real_t weighted_sum{0.0};
+                        const auto row_offset = block.weight_offset + irow * block.tx_count;
+                        index_t icol{0};
+                        for (; icol <= (block.tx_count - register_size); icol += register_size) {
+                            weighted_sum +=  _weights[row_offset + icol]     * state.signals[block.itx_begin + icol]
+                                           + _weights[row_offset + icol + 1] * state.signals[block.itx_begin + icol + 1]
+                                           + _weights[row_offset + icol + 2] * state.signals[block.itx_begin + icol + 2]
+                                           + _weights[row_offset + icol + 3] * state.signals[block.itx_begin + icol + 3];
+                        }
+                        //#pragma omp simd reduction(+:weighted_sum)
+                        for (; icol < block.tx_count; ++icol) {
+                            weighted_sum +=  _weights[row_offset + icol] * state.signals[block.itx_begin + icol];
+                        }
+                        state.weighted_sums[block.irx_begin + irow] = weighted_sum;
+                        state.signals[block.irx_begin + irow] = _neurons[block.irx_begin + irow].activate(weighted_sum);
+                    }
+                }
                 // Prepare net (build and order partitions, find dense blocks ...)
                 void prepare() {
                     // sanity check 
@@ -346,77 +411,6 @@ namespace hNNet {
                     std::println("NNet::prepare: found {} partitions(s)", _partitions.size());
                     std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
                 }
-                // Inject input data into neurons
-                void inject(const InputData &inputs) {
-                    for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
-                        _signals[iin] = _neurons[iin].activate(input);
-                    }
-                    for (const auto &ibias : _ibias_neurons) {
-                        _signals[ibias] = _neurons[ibias].activate(1.0);
-                    }
-                }
-                // Broadcast signals through the net using the partitions, already in topological order
-                void broadcast() {
-                    for (auto ipart{0}; ipart < std::ssize(_partitions); ipart++) {
-                        const auto &partition = _partitions[ipart];
-                        const auto iblock = partition.iblock;;
-                        if (iblock != no_block) {
-                            const auto &block = _dense_blocks[iblock];
-                            broadcast(block);
-                            ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
-                            continue;
-                        }
-                        broadcast(partition);
-                    }
-                }
-                // Process a single partition
-                void broadcast(const Partition &partition) {
-                    real_t weighted_sum{0.0};
-                    auto iconn = partition.iconn_begin;
-                    for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
-                        weighted_sum +=  _weights[iconn]     * _signals[_connections[iconn].itx]
-                                       + _weights[iconn + 1] * _signals[_connections[iconn + 1].itx]
-                                       + _weights[iconn + 2] * _signals[_connections[iconn + 2].itx]
-                                       + _weights[iconn + 3] * _signals[_connections[iconn + 3].itx];
-                    }
-                    //#pragma omp simd reduction(+:weighted_sum)
-                    for (; iconn < partition.iconn_end; iconn++) {
-                        weighted_sum += _weights[iconn] * _signals[_connections[iconn].itx];
-                    }
-                    _signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
-                }
-                // Process a dense block: all its receivers share the exact same source range, hence a pure matrix-vector product
-                void broadcast(const DenseBlock &block) {
-                    for (auto irow{0}; irow < block.rx_count; ++irow) {
-                        real_t weighted_sum{0.0};
-                        const auto row_offset = block.weight_offset + irow * block.tx_count;
-                        index_t icol{0};
-                        for (; icol <= (block.tx_count - register_size); icol += register_size) {
-                            weighted_sum +=  _weights[row_offset + icol]     * _signals[block.itx_begin + icol]
-                                           + _weights[row_offset + icol + 1] * _signals[block.itx_begin + icol + 1]
-                                           + _weights[row_offset + icol + 2] * _signals[block.itx_begin + icol + 2]
-                                           + _weights[row_offset + icol + 3] * _signals[block.itx_begin + icol + 3];
-                        }
-                        //#pragma omp simd reduction(+:weighted_sum)
-                        for (; icol < block.tx_count; ++icol) {
-                            weighted_sum +=  _weights[row_offset + icol] * _signals[block.itx_begin + icol];
-                        }
-                        _signals[block.irx_begin + irow] = _neurons[block.irx_begin + irow].activate(weighted_sum);
-                    }
-                }
-                // Reset net state
-                void reset() {
-                    for (const auto &[inr, neuron] : _neurons | std::views::enumerate) {
-                        neuron.reset();
-                        _signals[inr] = 0.0;
-                    }
-                }
-                // Learn from targets using the selected learning rule
-                template <typename LearningRule>
-                    requires LearningRuleType<LearningRule, NNet>
-                    [[nodiscard]] real_t learn(const OutputData &targets, LearningRule &rule) {
-                        return rule.learn(*this, targets);
-                    }
                 // Get random generator
                 std::mt19937& random_generator() {
                     static std::random_device rd;
@@ -426,7 +420,6 @@ namespace hNNet {
                 // Data members
                 bool _trained{false};
                 std::vector<Neuron> _neurons{};
-                std::vector<real_t> _signals{};
                 std::vector<SynapticConn> _connections{};
                 std::vector<real_t> _weights{};
                 std::vector<index_t> _iin_neurons{};

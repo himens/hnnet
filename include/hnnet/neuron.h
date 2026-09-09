@@ -18,27 +18,17 @@ namespace hNNet {
             NeuronType type() const {
                 return _type;
             }
-            // Get weighted sum
-            real_t weighted_sum() const {
-                return _weighted_sum;
-            }
             // Get the activation function
             const Activation*  activation() const {
                 return _activation.get();
             }
             // Activate neuron (calculate activation value), returns the computed signal
-            real_t activate(const real_t weighted_sum) {
-                _weighted_sum = weighted_sum;
-                return (*_activation)(_weighted_sum);
-            }
-            // Reset state before processing a new sample
-            void reset() {
-                _weighted_sum = 0.0;
+            real_t activate(const real_t weighted_sum) const {
+                return (*_activation)(weighted_sum);
             }
         private:
             // Data members
             NeuronType _type;
-            real_t _weighted_sum{0.0};
             std::unique_ptr<Activation> _activation{nullptr};
     };
 }
