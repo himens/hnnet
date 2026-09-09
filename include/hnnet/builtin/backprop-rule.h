@@ -54,38 +54,45 @@ namespace hNNet::Builtin {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
                         const auto num_threads = omp_get_max_threads();
-                        std::vector<NNetState> states;
-                        states.reserve(num_threads);
-                        for (auto t{0}; t < num_threads; ++t) {
-                            states.emplace_back(neuron_count);
+                        if (_states.empty()) {  // lazy init: allocate once, reuse across every epoch
+                            _states.reserve(num_threads);
+                            for (auto t{0}; t < num_threads; ++t) {
+                                _states.emplace_back(neuron_count);
+                            }
+                            _backward_deltas.assign(num_threads, std::vector<real_t>(neuron_count, 0.0));
+                            _thread_deltas.assign(num_threads, std::vector<real_t>(connection_count, 0.0));
+                            _batch_deltas.assign(connection_count, 0.0);
                         }
-                        std::vector<std::vector<real_t>> backward_deltas(num_threads, std::vector<real_t>(neuron_count, 0.0));
-                        std::vector<std::vector<real_t>> thread_deltas(num_threads, std::vector<real_t>(connection_count, 0.0));
                         real_t total_error{0.0};
                         for (auto ibatch{0}; ibatch < std::ssize(samples); ibatch += _batch_size) {
                             const auto batch_end = std::min<index_t>(samples.size(), ibatch + _batch_size);
-                            for (auto &deltas : thread_deltas) {
-                                std::ranges::fill(deltas, 0.0);
+                            const auto batch_count = batch_end - ibatch;
+                            // below this size, opening a parallel region isn't worth its fork/join overhead: the if() clause runs the loop sequentially instead
+                            const auto parallel = batch_count >= num_threads;
+                            const auto active_threads = parallel ? num_threads : index_t{1};
+                            for (auto t{0}; t < active_threads; ++t) {
+                                std::ranges::fill(_thread_deltas[t], 0.0);
                             }
-                            #pragma omp parallel for reduction(+:total_error)
+                            #pragma omp parallel for if(parallel) reduction(+:total_error)
                             for (auto i = ibatch; i < batch_end; ++i) {
                                 const auto tid = omp_get_thread_num();
-                                auto &state = states[tid];
+                                auto &state = _states[tid];
                                 state.reset();
                                 net.inject(state, samples[i].inputs);
                                 net.broadcast(state);
-                                total_error += backward(net, state, samples[i].targets, backward_deltas[tid], thread_deltas[tid]);
+                                total_error += backward(net, state, samples[i].targets, _backward_deltas[tid], _thread_deltas[tid]);
                             }
-                            // sequential reduction: sum every thread's contribution into a single per-connection buffer
-                            std::vector<real_t> batch_deltas(connection_count, 0.0);
-                            for (const auto &deltas : thread_deltas) {
+                            // sequential reduction: sum every actually-used thread's contribution into a single per-connection buffer
+                            std::ranges::fill(_batch_deltas, 0.0);
+                            for (auto t{0}; t < active_threads; ++t) {
+                                const auto &deltas = _thread_deltas[t];
                                 for (auto iconn{0}; iconn < connection_count; ++iconn) {
-                                    batch_deltas[iconn] += deltas[iconn];
+                                    _batch_deltas[iconn] += deltas[iconn];
                                 }
                             }
                             // single, sequential weight update
                             auto view = net.view();
-                            _optimizer.apply(view, batch_deltas, static_cast<real_t>(batch_end - ibatch));
+                            _optimizer.apply(view, _batch_deltas, static_cast<real_t>(batch_count));
                         }
                         return total_error / samples.size();
                     }
@@ -163,6 +170,10 @@ namespace hNNet::Builtin {
                 int_t _batch_size{1};
                 Loss _loss;
                 Optimizer _optimizer;
+                std::vector<NNetState> _states{};
+                std::vector<std::vector<real_t>> _backward_deltas{};
+                std::vector<std::vector<real_t>> _thread_deltas{};
+                std::vector<real_t> _batch_deltas{};
         };
 }
 
