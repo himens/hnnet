@@ -4,10 +4,9 @@
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
-    // define net type
     using namespace hNNet;
-    using Gate = Builtin::DenseForwardNet<Data<real_t, 2>, Data<real_t, 1>>;
     // create net
+    using Gate = Builtin::DenseForwardNet<Data<real_t, 2>, Data<real_t, 1>>;
     Gate gate{
         Builtin::Layer{2, NeuronType::input,  Builtin::IdentityActivation{}},
         Builtin::Layer{4, NeuronType::hidden, Builtin::SigmoidActivation{}, true},

@@ -134,7 +134,7 @@ namespace hNNet {
                         timer.start();
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
-                            //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
+                            //std::ranges::shuffle(samples, random_generator()); -- samples must be not const!
                             const auto loss = rule.learn(*this, samples);
                             converged = (loss < loss_threshold);
                             epoch++;
