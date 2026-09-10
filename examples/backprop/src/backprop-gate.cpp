@@ -1,25 +1,20 @@
 #include "hnnet/builtin/activations.h"
+#include "hnnet/builtin/dense-forward-net.h"
 #include "hnnet/builtin/backprop-rule.h"
-#include "hnnet/nnet.h"
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
     // define net type
     using namespace hNNet;
-    using Gate = NNet<Data<real_t, 2>, Data<real_t, 1>>;
+    using Gate = Builtin::DenseForwardNet<Data<real_t, 2>, Data<real_t, 1>>;
     // create net
-    Gate gate;
-    auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
-    auto hidden_layer = gate.new_neurons(4, NeuronType::hidden, Builtin::SigmoidActivation{});
-    auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::SigmoidActivation{});
-    auto hidden_bias  = gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
-    auto output_bias  = gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
-    gate.connect(input_layer, hidden_layer);
-    gate.connect(hidden_layer, output_layer);
-    gate.connect(hidden_bias, hidden_layer);
-    gate.connect(output_bias, output_layer);
+    Gate gate{
+        Builtin::Layer{2, NeuronType::input,  Builtin::IdentityActivation{}},
+        Builtin::Layer{4, NeuronType::hidden, Builtin::SigmoidActivation{}, true},
+        Builtin::Layer{1, NeuronType::output, Builtin::SigmoidActivation{}, true}
+    };
     // train net
-    std::vector<Gate::TrainingData> samples = {
+    std::vector<Gate::TrainingData> samples{
         // binary
         {{1, 1}, {0}},
         {{1, 0}, {1}},

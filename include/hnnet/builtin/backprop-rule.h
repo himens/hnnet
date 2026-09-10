@@ -69,7 +69,6 @@ namespace hNNet::Builtin {
                             const auto batch_begin = ibatch * _batch_size;
                             const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
                             const auto batch_size = batch_end - batch_begin;
-                            // below this size, opening a parallel region isn't worth its fork/join overhead: the if() clause runs the loop sequentially instead
                             const auto parallel = batch_size >= max_threads;
                             const auto thread_count = parallel ? max_threads : index_t{1};
                             for (auto tid{0}; tid < thread_count; ++tid) {
@@ -86,11 +85,10 @@ namespace hNNet::Builtin {
                             // single, sequential weight update
                             auto view = net.view();
                             if (thread_count == 1) {
-                                // only one contributor: skip the copy into _batch_dweights, apply its buffer directly
                                 _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size));
                             }
                             else {
-                                // sequential reduction: sum every actually-used thread's contribution into a single per-connection buffer
+                                // sequential reduction: sum contribution of each thread
                                 std::ranges::fill(_batch_dweights, 0.0);
                                 for (auto tid{0}; tid < thread_count; ++tid) {
                                     const auto &dweights = _thread_dweights[tid];
