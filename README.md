@@ -68,7 +68,7 @@ Classifier data representation details:
     - `hnnet/types.h`: base types such as `Data`
     - `hnnet/activation.h`: `Activation` strategies (identity, step, sigmoid, ...)
     - `hnnet/neuron.h`: definition of the `Neuron` class
-    - `hnnet/learning-rule.h`: `LearningRuleType` concept used by `NNet::train(...)`
+    - `hnnet/learning_rule.h`: `LearningRuleType` concept used by `NNet::train(...)`
     - `hnnet/nnet.h`: implementation of the generic `NNet` network
     - `hnnet/builtin/`: built-in learning rules (`PerceptronRule`, `BackpropRule`)
 - `examples/`: example implementations built on top of the generic framework
@@ -100,7 +100,7 @@ Here is a minimal example of how to create and train a network (AND gate with a 
 
 ```cpp
 #include "hnnet/nnet.h"
-#include "hnnet/builtin/perceptron-rule.h"
+#include "hnnet/builtin/perceptron_rule.h"
 
 using namespace hNNet;
 using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;

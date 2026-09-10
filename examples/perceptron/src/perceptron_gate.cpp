@@ -1,5 +1,5 @@
 #include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/perceptron-rule.h"
+#include "hnnet/builtin/perceptron_rule.h"
 #include "hnnet/nnet.h"
 
 // Simple AND gate implementation using a perceptron neural network

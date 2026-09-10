@@ -1,6 +1,6 @@
 #include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/dense-forward-net.h"
-#include "hnnet/builtin/backprop-rule.h"
+#include "hnnet/builtin/dense_forward_net.h"
+#include "hnnet/builtin/backprop_rule.h"
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {

@@ -5,11 +5,11 @@ project(hnnet-backprop LANGUAGES CXX)
 # Lo standard C++26 e il compilatore sono ereditati dal CMakeLists.txt radice.
 
 add_executable(hnnet-backprop-gate
-    src/backprop-gate.cpp
+    src/backprop_gate.cpp
 )
 
 add_executable(hnnet-backprop-mnist
-    src/backprop-mnist.cpp
+    src/backprop_mnist.cpp
 )
 
 target_link_libraries(hnnet-backprop-gate PRIVATE hnnet::hnnet)

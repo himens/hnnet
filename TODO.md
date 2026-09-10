@@ -70,17 +70,18 @@
 ## Stress test / Benchmark
 
 - [x] **Aggiungere un esempio MNIST con una rete più grande**
-  - `examples/backprop/src/backprop-mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
+  - `examples/backprop/src/backprop_mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
+  - `examples/backprop/src/backprop_mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
 
 - [ ] **Rendere riproducibili i benchmark di performance**
   - Registrare configurazione CPU, compilatore, flag Release e seed del generatore casuale.
   - Misurare più epoch e riportare mediana o media, separando setup della topologia, forward, delta e weight update.
 
-## Report di profiling storico (backprop-mnist, 2026-08-24)
+## Report di profiling storico (backprop_mnist, 2026-08-24)
 
 Questo report descrive l'implementazione precedente, basata su adjacency list e propagazione ricorsiva. I risultati non sono direttamente confrontabili con la versione corrente a partition/dense block; resta come traccia della procedura Callgrind.
 
-Contesto: si sospettava che `BackpropRule::learn()` (in `backprop-rule.h`) fosse il collo di
+Contesto: si sospettava che `BackpropRule::learn()` (in `backprop_rule.h`) fosse il collo di
 bottiglia del training MNIST (~6 minuti per l'intero dataset, 60k campioni, rete 784→100→10).
 Prima ipotesi testata: la ricorsione in `learn()`/`broadcast()` come causa di overhead — **non
 confermata**: convertire `backprop_error` da ricorsivo a iterativo (worklist esplicito) non ha
@@ -103,7 +104,7 @@ Passi seguiti:
    di `connect()` resta comunque presente, solo più piccolo).
 2. Aggiunto `#include <valgrind/callgrind.h>` e circondata la chiamata a `classifier.train(...)`
    con `CALLGRIND_START_INSTRUMENTATION;` / `CALLGRIND_STOP_INSTRUMENTATION;` in
-   `backprop-mnist.cpp` (modifica temporanea, poi rimossa).
+  `backprop_mnist.cpp` (modifica temporanea, poi rimossa).
 3. Eseguito con `valgrind --tool=callgrind --instr-atstart=no ...`: la raccolta dati resta
    disattivata (quindi quasi a costo zero) durante lettura CSV e `connect()`, e si attiva solo
    dentro `train()`.

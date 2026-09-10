@@ -1,6 +1,6 @@
 #include <fstream>
 #include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/perceptron-rule.h"
+#include "hnnet/builtin/perceptron_rule.h"
 #include "hnnet/nnet.h"
 
 // Constants

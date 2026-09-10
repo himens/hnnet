@@ -1,6 +1,6 @@
 #pragma once
 #include "hnnet/neuron.h"
-#include "hnnet/learning-rule.h"
+#include "hnnet/learning_rule.h"
 
 namespace hNNet {
     struct NNetState {

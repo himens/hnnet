@@ -5,11 +5,11 @@ project(hnnet-perceptron LANGUAGES CXX)
 # Lo standard C++26 e il compilatore sono ereditati dal CMakeLists.txt radice.
 
 add_executable(hnnet-perceptron-gate
-    src/perceptron-gate.cpp
+    src/perceptron_gate.cpp
 )
 
 add_executable(hnnet-perceptron-classifier
-    src/perceptron-classifier.cpp
+    src/perceptron_classifier.cpp
 )
 
 target_link_libraries(hnnet-perceptron-gate PRIVATE hnnet::hnnet)
