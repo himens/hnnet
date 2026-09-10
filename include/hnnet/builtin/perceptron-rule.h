@@ -1,56 +1,57 @@
 #pragma once
 #include "hnnet/nnet.h"
+#include "hnnet/builtin/losses.h"
 
 namespace hNNet::Builtin {
     //////////////////////////
     // PerceptronRule class //
     //////////////////////////
     class PerceptronRule {
-        public:
-            // Constructor
+            public:
+                // Constructor
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
-            // Learn from a whole epoch of training samples (online: one immediate update per sample)
-            template <NNetType Net>
-                real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
-                    NNetState state(net.view().neuron_count());
-                    real_t mean_squared_error{0.0};
-                    for (const auto &sample : samples) {
-                        net.inject(state, sample.inputs);
-                        net.broadcast(state);
-                        mean_squared_error += learn(net, state, sample.targets);
-                    }
-                    return mean_squared_error / samples.size();
-                }
-        private:
-            // Learn from targets using the perceptron learning rule (single sample, immediate weight update)
-            template <NNetType Net>
-                real_t learn(Net &net, NNetState &state, const output_t<Net> &targets) {
-                    auto view = net.view();
-                    if (view.partitions().size() != output_size_v<Net>) {
-                        throw std::runtime_error("PerceptronRule::learn: invalid net!");
-                    }
-                    real_t squared_error{0};
-                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
-                        const auto error = (target - state.signals[iout]);
-                        squared_error += error * error;
-                        if (std::abs(error) < 1e-6) {
-                            continue;  // No update needed if the error is negligible
+                // Learn from a whole epoch of training samples (online: one immediate update per sample)
+                template <NNetType Net>
+                    real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
+                        NNetState state(net.view().neuron_count());
+                        real_t mean_squared_error{0.0};
+                        for (const auto &sample : samples) {
+                            net.inject(state, sample.inputs);
+                            net.broadcast(state);
+                            mean_squared_error += learn(net, state, sample.targets);
                         }
-                        // Find the partition corresponding to this output neuron (irx == iout)
-                        for (const auto &partition : view.partitions()) {
-                            if (partition.irx != iout) {
-                                continue;
+                        return mean_squared_error / samples.size();
+                    }
+            private:
+                // Learn from targets using the perceptron learning rule (single sample, immediate weight update)
+                template <NNetType Net>
+                    real_t learn(Net &net, NNetState &state, const output_t<Net> &targets) {
+                        auto view = net.view();
+                        if (view.partitions().size() != output_size_v<Net>) {
+                            throw std::runtime_error("PerceptronRule::learn: invalid net!");
+                        }
+                        real_t squared_error{0};
+                        for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
+                            const auto signal = state.signals[iout];
+                            squared_error += _mean_squared_err.value(target, signal);
+                            if (std::abs(target - signal) < 1e-6) {
+                                continue;  // No update needed if the error is negligible
                             }
-                            for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
-                                const auto itx = view.connection(iconn).itx;
-                                view.weight(iconn) += _learning_rate * target * state.signals[itx];
+                            // Find the partition corresponding to this output neuron (irx == iout)
+                            for (const auto &partition : view.partitions()) {
+                                if (partition.irx != iout) {
+                                    continue;
+                                }
+                                for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                                    const auto itx = view.connection(iconn).itx;
+                                    view.weight(iconn) += _learning_rate * target * state.signals[itx];
+                                }
                             }
                         }
+                        return squared_error;
                     }
-                    return squared_error;
-                }
-        private:
-            // Data members
-            real_t _learning_rate;
-    };
+                // Data members
+                real_t _learning_rate;
+                MSELoss _mean_squared_err;
+        };
 }

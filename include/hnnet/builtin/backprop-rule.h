@@ -1,21 +1,12 @@
 #pragma once
 #include "hnnet/nnet.h"
+#include "hnnet/builtin/losses.h"
 
 namespace hNNet::Builtin {
-    ///////////////////
-    // MSELoss class //
-    ///////////////////
-    class MSELoss {
-        public:
-            real_t value(const real_t target, const real_t signal) const {
-                const auto error = target - signal;
-                return error * error;
-            }
-            // Seed value fed to the output neuron's activation derivative (matches the classic error term).
-            real_t derivative(const real_t target, const real_t signal) const {
-                return target - signal;
-            }
-    };
+    template <typename T, typename View>
+        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
+            optimizer.apply(view, batch_deltas, batch_size);
+        };
     ///////////////////////
     // SGDMomentum class //
     ///////////////////////
@@ -42,7 +33,7 @@ namespace hNNet::Builtin {
     // BackpropRule class //
     ////////////////////////
     // Back-propagation learning rule: split samples into mini-batches and process batch samples in parallel
-    template <typename Loss = MSELoss, typename Optimizer = SGDMomentum>
+    template <LossType Loss = MSELoss, typename Optimizer = SGDMomentum>
         class BackpropRule {
             public:
                 // Constructor
@@ -50,6 +41,7 @@ namespace hNNet::Builtin {
                     : _batch_size(batch_size), _loss(std::move(loss)), _optimizer(learning_rate, momentum) {}
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
+                    requires OptimizerType<Optimizer, typename Net::View>
                     real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
@@ -63,7 +55,7 @@ namespace hNNet::Builtin {
                             _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
                             _batch_dweights.assign(connection_count, 0.0);
                         }
-                        real_t total_error{0.0};
+                        real_t loss{0.0};
                         const auto batch_count = (std::ssize(samples) + _batch_size - 1) / _batch_size;  // ceiling division
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;
@@ -74,13 +66,13 @@ namespace hNNet::Builtin {
                             for (auto tid{0}; tid < thread_count; ++tid) {
                                 std::ranges::fill(_thread_dweights[tid], 0.0);
                             }
-                            #pragma omp parallel for if(parallel) reduction(+:total_error)
+                            #pragma omp parallel for if(parallel) reduction(+:loss)
                             for (auto isample = batch_begin; isample < batch_end; ++isample) {
                                 const auto tid = omp_get_thread_num();
                                 auto &state = _states[tid];
                                 net.inject(state, samples[isample].inputs);
                                 net.broadcast(state);
-                                total_error += backward(net, state, samples[isample].targets, _deltas[tid], _thread_dweights[tid]);
+                                loss += backward(net, state, samples[isample].targets, _deltas[tid], _thread_dweights[tid]);
                             }
                             // single, sequential weight update
                             auto view = net.view();
@@ -99,7 +91,7 @@ namespace hNNet::Builtin {
                                 _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size));
                             }
                         }
-                        return total_error / samples.size();
+                        return loss / samples.size();
                     }
             private:
                 // Compute the error and delta weights contribution of a single sample
@@ -108,10 +100,10 @@ namespace hNNet::Builtin {
                         auto view = net.view();
                         std::ranges::fill(deltas, 0.0);
                         // seed output deltas using the loss
-                        real_t total_error{0.0};
+                        real_t loss{0.0};
                         for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                             const auto signal = state.signals[iout];
-                            total_error += _loss.value(target, signal);
+                            loss += _loss.value(target, signal);
                             deltas[iout] = _loss.derivative(target, signal) * view.neuron(iout).activation()->derivative(state.weighted_sums[iout]);
                         }
                         // partitions are already in topological order: walk them backwards
@@ -169,7 +161,7 @@ namespace hNNet::Builtin {
                                 dweights[iconn] += deltas[irx] * state.signals[itx];
                             }
                         }
-                        return total_error;
+                        return loss;
                     }
                 // Data members
                 int_t _batch_size{1};

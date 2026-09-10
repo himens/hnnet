@@ -123,7 +123,7 @@ namespace hNNet {
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
                     void train(const std::vector<TrainingData> &samples, LearningRule rule) {
-                        constexpr real_t error_threshold{1e-2};
+                        constexpr real_t loss_threshold{1e-2};
                         constexpr int_t max_epochs{1'000'000};
                         int_t epoch{0};
                         bool converged{false};
@@ -135,10 +135,10 @@ namespace hNNet {
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
                             //std::ranges::shunion_findfle(samples, random_generator()); -- samples must be not const!
-                            const auto mean_squared_error = rule.learn(*this, samples);
-                            converged = (mean_squared_error < error_threshold);
+                            const auto loss = rule.learn(*this, samples);
+                            converged = (loss < loss_threshold);
                             epoch++;
-                            std::println("NNet::train: epoch: {}, elapsed time: {}s, error: {:.6f}", epoch, timer.get_elapsed_time_s(), mean_squared_error);
+                            std::println("NNet::train: epoch: {}, elapsed time: {}s, loss: {:.6f}", epoch, timer.get_elapsed_time_s(), loss);
                         }
                         if (converged) {
                             _trained = true;
