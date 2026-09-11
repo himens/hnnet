@@ -20,6 +20,7 @@ namespace hNNet::Builtin {
                     if (_momentum < 0.0) {
                         throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
                     }
+                    std::println("SGDMomentum::SGDMomentum: learning rate: {}, momentum: {}", _learning_rate, _momentum);
                 }
             template <typename View>
                 void apply(View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
@@ -40,7 +41,7 @@ namespace hNNet::Builtin {
     ////////////////////////
     // BackpropRule class //
     ////////////////////////
-    // Back-propagation learning rule: split samples into mini-batches and process batch samples in parallel
+    // Back-propagation learning rule: split samples into mini-batches, each processed sequentially by one thread
     template <LossType Loss = MSELoss, typename Optimizer = SGDMomentum>
         class BackpropRule {
             public:
@@ -50,8 +51,10 @@ namespace hNNet::Builtin {
                         if (batch_size <= 0) {
                             throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
                         }
+                        std::println("BackpropRule:BackpropRule: batch size: {}", _batch_size);
                     }
-                // Learn from a whole epoch of training samples
+                // Learn from a whole epoch of training samples: one thread processes one whole mini-batch,
+                // weights stay fixed for the whole epoch and are updated once, at the end
                 template <NNetType Net>
                     requires OptimizerType<Optimizer, typename Net::View>
                     real_t learn(Net &net, const std::span<typename Net::TrainingData> samples) {
@@ -68,44 +71,34 @@ namespace hNNet::Builtin {
                             _batch_dweights.assign(connection_count, 0.0);
                         }
                         //std::ranges::shuffle(samples, random_generator());
+                        for (auto &dweights : _thread_dweights) {
+                            std::ranges::fill(dweights, 0.0);
+                        }
                         real_t loss{0.0};
-                        std::println("BackpropRule:learn: batch size: {}", _batch_size);
                         const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
-                        for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
+                        #pragma omp parallel for reduction(+:loss)
+                        for (auto ibatch = 0; ibatch < batch_count; ++ibatch) {
+                            const auto tid = omp_get_thread_num();
+                            auto &state = _states[tid];
+                            auto &dweights = _thread_dweights[tid];
                             const auto batch_begin = ibatch * _batch_size;
                             const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
-                            const auto batch_size = batch_end - batch_begin;
-                            const auto parallel = batch_size >= max_threads;
-                            const auto thread_count = parallel ? max_threads : index_t{1};
-                            for (auto tid{0}; tid < thread_count; ++tid) {
-                                std::ranges::fill(_thread_dweights[tid], 0.0);
-                            }
-                            #pragma omp parallel for if(parallel) reduction(+:loss)
                             for (auto isample = batch_begin; isample < batch_end; ++isample) {
-                                const auto tid = omp_get_thread_num();
-                                auto &state = _states[tid];
                                 const auto &sample = samples[isample];
                                 net.inject(state, sample.inputs);
                                 net.broadcast(state);
-                                loss += backward(net, state, sample.targets, _deltas[tid], _thread_dweights[tid]);
-                            }
-                            // single, sequential weight update
-                            auto view = net.view();
-                            if (thread_count == 1) {
-                                _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size));
-                            }
-                            else {
-                                // sequential reduction: sum contribution of each thread
-                                std::ranges::fill(_batch_dweights, 0.0);
-                                for (auto tid{0}; tid < thread_count; ++tid) {
-                                    const auto &dweights = _thread_dweights[tid];
-                                    for (auto iconn{0}; iconn < connection_count; ++iconn) {
-                                        _batch_dweights[iconn] += dweights[iconn];
-                                    }
-                                }
-                                _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size));
+                                loss += backward(net, state, sample.targets, _deltas[tid], dweights);
                             }
                         }
+                        // single, sequential weight update at the end of the epoch
+                        std::ranges::fill(_batch_dweights, 0.0);
+                        for (const auto &dweights : _thread_dweights) {
+                            for (auto iconn{0}; iconn < connection_count; ++iconn) {
+                                _batch_dweights[iconn] += dweights[iconn];
+                            }
+                        }
+                        auto view = net.view();
+                        _optimizer.appy(view, _batch_dweights, static_cast<real_t>(samples.size()));
                         return loss / samples.size();
                     }
             private:
