@@ -9,7 +9,11 @@ namespace hNNet::Builtin {
     class PerceptronRule {
             public:
                 // Constructor
-            explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
+            explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {
+                    if (_learning_rate < 0.0) {
+                        throw std::invalid_argument("PerceptronRule::PerceptronRule: learning_rate must be >= 0");
+                    }
+                }
                 // Learn from a whole epoch of training samples (online: one immediate update per sample)
                 template <NNetType Net>
                     real_t learn(Net &net, const std::span<const typename Net::TrainingData> samples) {

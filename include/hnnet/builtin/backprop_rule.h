@@ -12,7 +12,15 @@ namespace hNNet::Builtin {
     ///////////////////////
     class SGDMomentum {
         public:
-            explicit SGDMomentum(const real_t learning_rate = 0.0, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {}
+            explicit SGDMomentum(const real_t learning_rate = 0.0, const real_t momentum = 0.0)
+                : _learning_rate(learning_rate), _momentum(momentum) {
+                    if (_learning_rate < 0.0) {
+                        throw std::invalid_argument("SGDMomentum::SGDMomentum: learning_rate must be >= 0");
+                    }
+                    if (_momentum < 0.0) {
+                        throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
+                    }
+                }
             template <typename View>
                 void apply(View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
                     if (_prev_dweights.empty()) {
@@ -38,7 +46,11 @@ namespace hNNet::Builtin {
             public:
                 // Constructor
                 explicit BackpropRule(const real_t learning_rate, const real_t momentum = 0.0, const int_t batch_size = 1, Loss loss = {})
-                    : _batch_size(batch_size), _loss(std::move(loss)), _optimizer(learning_rate, momentum) {}
+                    : _batch_size(batch_size), _loss(std::move(loss)), _optimizer(learning_rate, momentum) {
+                        if (batch_size <= 0) {
+                            throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
+                        }
+                    }
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
                     requires OptimizerType<Optimizer, typename Net::View>
@@ -56,7 +68,7 @@ namespace hNNet::Builtin {
                             _batch_dweights.assign(connection_count, 0.0);
                         }
                         real_t loss{0.0};
-                        const auto batch_count = (std::ssize(samples) + _batch_size - 1) / _batch_size;  // ceiling division
+                        const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;
                             const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
