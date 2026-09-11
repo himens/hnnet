@@ -3,7 +3,6 @@
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/backprop_rule.h"
 #include "hnnet/builtin/dense_forward_net.h"
-#include "hnnet/nnet.h"
 
 // Constants
 constexpr size_t nb_pixels{784};
@@ -72,9 +71,8 @@ std::vector<DigitData> read_digits(const std::string &filename, const size_t max
 }
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
 int main() {
-    // define net type
-    using Classifier = Builtin::DenseForwardNet<InputData, OutputData>;
     // create net
+    using Classifier = Builtin::DenseForwardNet<InputData, OutputData>;
     Classifier classifier{
         Builtin::Layer{nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{}},
         Builtin::Layer{nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{}},
@@ -89,7 +87,7 @@ int main() {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
     }
     // train net
-    classifier.train(samples, Builtin::BackpropRule{0.05, 0.9});
+    classifier.train(samples, Builtin::BackpropRule{0.25, 0.9, 64});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
