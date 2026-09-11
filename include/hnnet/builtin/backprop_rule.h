@@ -98,7 +98,7 @@ namespace hNNet::Builtin {
                             }
                         }
                         auto view = net.view();
-                        _optimizer.appy(view, _batch_dweights, static_cast<real_t>(samples.size()));
+                        _optimizer.apply(view, _batch_dweights, static_cast<real_t>(samples.size()));
                         return loss / samples.size();
                     }
             private:
