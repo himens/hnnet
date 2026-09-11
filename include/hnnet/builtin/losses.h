@@ -7,7 +7,7 @@ namespace hNNet::Builtin {
     ///////////////////
     class MSELoss {
         public:
-            real_t value(const real_t target, const real_t signal) const {
+            real_t operator()(const real_t target, const real_t signal) const {
                 const auto error = target - signal;
                 return error * error;
             }

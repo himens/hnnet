@@ -118,7 +118,7 @@ namespace hNNet::Builtin {
                         real_t loss{0.0};
                         for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                             const auto signal = state.signals[iout];
-                            loss += _loss.value(target, signal);
+                            loss += _loss(target, signal);
                             deltas[iout] = _loss.derivative(target, signal) * view.neuron(iout).activation()->derivative(state.weighted_sums[iout]);
                         }
                         // partitions are already in topological order: walk them backwards

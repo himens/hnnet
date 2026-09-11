@@ -38,7 +38,7 @@ namespace hNNet::Builtin {
                         real_t squared_error{0};
                         for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                             const auto signal = state.signals[iout];
-                            squared_error += _mean_squared_err.value(target, signal);
+                            squared_error += _mean_squared_error(target, signal);
                             if (std::abs(target - signal) < 1e-6) {
                                 continue;  // No update needed if the error is negligible
                             }
@@ -57,6 +57,6 @@ namespace hNNet::Builtin {
                     }
                 // Data members
                 real_t _learning_rate;
-                MSELoss _mean_squared_err;
+                MSELoss _mean_squared_error;
         };
 }
