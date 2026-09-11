@@ -20,6 +20,7 @@ namespace hNNet::Builtin {
                     if (_momentum < 0.0) {
                         throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
                     }
+                    std::println("SGDMomentum::SGDMomentum: learning rate: {}, momentum: {}", _learning_rate, _momentum);
                 }
             template <typename View>
                 void apply(View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
@@ -50,6 +51,7 @@ namespace hNNet::Builtin {
                         if (batch_size <= 0) {
                             throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
                         }
+                        std::println("BackpropRule:learn: batch size: {}", _batch_size);
                     }
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
@@ -69,7 +71,6 @@ namespace hNNet::Builtin {
                         }
                         //std::ranges::shuffle(samples, random_generator());
                         real_t loss{0.0};
-                        std::println("BackpropRule:learn: batch size: {}", _batch_size);
                         const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;
