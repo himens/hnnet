@@ -42,7 +42,7 @@ namespace hNNet::Builtin {
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
                     requires OptimizerType<Optimizer, typename Net::View>
-                    real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
+                    real_t learn(Net &net, const std::span<const typename Net::TrainingData> samples) {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
                         const auto max_threads = omp_get_max_threads();
@@ -70,9 +70,10 @@ namespace hNNet::Builtin {
                             for (auto isample = batch_begin; isample < batch_end; ++isample) {
                                 const auto tid = omp_get_thread_num();
                                 auto &state = _states[tid];
-                                net.inject(state, samples[isample].inputs);
+                                const auto &sample = samples[isample];
+                                net.inject(state, sample.inputs);
                                 net.broadcast(state);
-                                loss += backward(net, state, samples[isample].targets, _deltas[tid], _thread_dweights[tid]);
+                                loss += backward(net, state, sample.targets, _deltas[tid], _thread_dweights[tid]);
                             }
                             // single, sequential weight update
                             auto view = net.view();

@@ -122,7 +122,7 @@ namespace hNNet {
                 // Train net using a set of training samples
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
-                    void train(const std::vector<TrainingData> &samples, LearningRule rule) {
+                    void train(const std::span<const TrainingData> samples, LearningRule rule) {
                         constexpr real_t loss_threshold{1e-2};
                         constexpr int_t max_epochs{1'000'000};
                         int_t epoch{0};

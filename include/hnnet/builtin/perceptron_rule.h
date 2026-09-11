@@ -12,7 +12,7 @@ namespace hNNet::Builtin {
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {}
                 // Learn from a whole epoch of training samples (online: one immediate update per sample)
                 template <NNetType Net>
-                    real_t learn(Net &net, const std::vector<typename Net::TrainingData> &samples) {
+                    real_t learn(Net &net, const std::span<const typename Net::TrainingData> samples) {
                         NNetState state(net.view().neuron_count());
                         real_t mean_squared_error{0.0};
                         for (const auto &sample : samples) {
