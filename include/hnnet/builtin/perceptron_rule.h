@@ -13,10 +13,11 @@ namespace hNNet::Builtin {
                     if (_learning_rate < 0.0) {
                         throw std::invalid_argument("PerceptronRule::PerceptronRule: learning_rate must be >= 0");
                     }
+                    std::println("PerceptronRule::PerceptronRule: learning rate: {}", learning_rate);
                 }
                 // Learn from a whole epoch of training samples (online: one immediate update per sample)
                 template <NNetType Net>
-                    real_t learn(Net &net, const std::span<const typename Net::TrainingData> samples) {
+                    real_t learn(Net &net, const std::span<typename Net::TrainingData> samples) {
                         NNetState state(net.view().neuron_count());
                         real_t mean_squared_error{0.0};
                         for (const auto &sample : samples) {

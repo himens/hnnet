@@ -122,7 +122,7 @@ namespace hNNet {
                 // Train net using a set of training samples
                 template <typename LearningRule>
                     requires LearningRuleType<LearningRule, NNet>
-                    void train(const std::span<const TrainingData> samples, LearningRule rule) {
+                    void train(const std::span<TrainingData> samples, LearningRule rule) {
                         constexpr real_t loss_threshold{1e-2};
                         constexpr int_t max_epochs{1'000'000};
                         int_t epoch{0};
@@ -134,7 +134,6 @@ namespace hNNet {
                         timer.start();
                         prepare();
                         while (not converged and (epoch <= max_epochs)) {
-                            //std::ranges::shuffle(samples, random_generator()); -- samples must be not const!
                             const auto loss = rule.learn(*this, samples);
                             converged = (loss < loss_threshold);
                             epoch++;
@@ -401,12 +400,6 @@ namespace hNNet {
                     std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
                     std::println("NNet::prepare: found {} partitions(s)", _partitions.size());
                     std::println("NNet::prepare: found {} dense block(s)", _dense_blocks.size());
-                }
-                // Get random generator
-                std::mt19937& random_generator() {
-                    static std::random_device rd;
-                    static thread_local std::mt19937 gen(rd());
-                    return gen;
                 }
                 // Data members
                 bool _trained{false};

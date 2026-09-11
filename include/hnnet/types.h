@@ -4,15 +4,17 @@
 #include <ranges>
 #include <concepts>
 #include <stdfloat>
+#include <cmath>
+#include <numeric>
 #include <array>
 #include <vector>
 #include <algorithm>
 #include <string>
-#include <random>
 #include <memory>
 #include <unordered_map>
 #include <omp.h>
 #include "timer.h"
+#include "random.h"
 
 namespace hNNet {
     // Aliases for commonly used types

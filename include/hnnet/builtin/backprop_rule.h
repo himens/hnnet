@@ -54,7 +54,7 @@ namespace hNNet::Builtin {
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
                     requires OptimizerType<Optimizer, typename Net::View>
-                    real_t learn(Net &net, const std::span<const typename Net::TrainingData> samples) {
+                    real_t learn(Net &net, const std::span<typename Net::TrainingData> samples) {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
                         const auto max_threads = omp_get_max_threads();
@@ -67,7 +67,9 @@ namespace hNNet::Builtin {
                             _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
                             _batch_dweights.assign(connection_count, 0.0);
                         }
+                        //std::ranges::shuffle(samples, random_generator());
                         real_t loss{0.0};
+                        std::println("BackpropRule:learn: batch size: {}", _batch_size);
                         const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;

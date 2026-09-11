@@ -7,7 +7,7 @@ namespace hNNet {
     template <typename Rule, typename Net>
         concept LearningRuleType = 
             requires { typename Net::output_type; typename Net::TrainingData; } and 
-            requires (Rule& rule, Net& net, std::span<const typename Net::TrainingData> samples) {
+            requires (Rule& rule, Net& net, const std::span<typename Net::TrainingData> samples) {
                 { rule.learn(net, samples) } -> std::same_as<real_t>;
             };
 }
