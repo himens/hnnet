@@ -21,7 +21,6 @@ namespace hNNet {
     using real_t  = std::float64_t;
     using int_t   = std::int64_t;
     using index_t = int_t; // indices are just a semantic alias for int_t
-    using Dataset = std::vector<std::vector<real_t>>;
     // Constants
     constexpr int_t register_size{4}; // SIMD register size
     // Concepts

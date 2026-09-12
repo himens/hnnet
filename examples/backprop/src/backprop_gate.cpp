@@ -1,4 +1,3 @@
-#include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/dense_forward_net.h"
 #include "hnnet/builtin/backprop_rule.h"
 
@@ -12,7 +11,7 @@ int main() {
         Builtin::Layer{1, NeuronType::output, Builtin::SigmoidActivation{}, true}
     };
     // train net
-    Dataset inputs{
+    const std::array<input_vector_t, 4> inputs{{
         // binary
         {1, 1},
         {1, 0},
@@ -23,12 +22,13 @@ int main() {
         //{+1, -1},
         //{-1, +1},
         //{-1, -1}
-    };
-    Dataset targets{
+    }};
+    const std::array<output_vector_t, 4> targets{{
         {0}, 
         {1}, 
         {1}, 
-        {0}};
+        {0}
+    }};
     gate.train(inputs, targets, Builtin::BackpropRule{0.2});
 
     return 0;

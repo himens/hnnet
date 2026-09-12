@@ -3,6 +3,8 @@
 #include "hnnet/learning_rule.h"
 
 namespace hNNet {
+    using input_vector_t  = std::vector<real_t>;
+    using output_vector_t = std::vector<real_t>;
     struct NNetState {
         std::vector<real_t> signals{};
         std::vector<real_t> weighted_sums{};

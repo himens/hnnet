@@ -3,8 +3,10 @@
 #include "hnnet/builtin/losses.h"
 
 namespace hNNet::Builtin {
+    using delta_vector_t = std::vector<real_t>;
+    using grad_vector_t = std::vector<real_t>;
     template <typename T>
-        concept OptimizerType = requires (T &optimizer, NNet::View &view, const std::vector<real_t> &batch_dweights, const int_t batch_size, const real_t learning_rate) {
+        concept OptimizerType = requires (T &optimizer, NNet::View &view, const grad_vector_t &batch_dweights, const int_t batch_size, const real_t learning_rate) {
             optimizer.update(view, batch_dweights, batch_size, learning_rate);
         };
     ///////////////////////
@@ -18,7 +20,7 @@ namespace hNNet::Builtin {
                 }
                 std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
             }
-            void update(NNet::View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
+            void update(NNet::View &view, const grad_vector_t &batch_dweights, const real_t batch_size, const real_t learning_rate) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(batch_dweights.size(), 0.0);
                 }
@@ -30,7 +32,7 @@ namespace hNNet::Builtin {
             }
         private:
             real_t _momentum;
-            std::vector<real_t> _prev_dweights{};
+            grad_vector_t _prev_dweights{};
     };
     ////////////////////////
     // BackpropRule class //
@@ -64,8 +66,8 @@ namespace hNNet::Builtin {
                         for (auto tid{0}; tid < max_threads; ++tid) {
                             _states.emplace_back(neuron_count);
                         }
-                        _deltas.assign(max_threads, std::vector<real_t>(neuron_count, 0.0));
-                        _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
+                        _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
+                        _thread_dweights.assign(max_threads, grad_vector_t(connection_count, 0.0));
                         _batch_dweights.assign(connection_count, 0.0);
                     }
                     auto view = net.view();
@@ -103,7 +105,7 @@ namespace hNNet::Builtin {
                 }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                real_t backward(NNet::View &view, NNetState &state, std::vector<real_t> &deltas, std::vector<real_t> &dweights, const DataType auto &targets) const {
+                real_t backward(NNet::View &view, NNetState &state, delta_vector_t &deltas, grad_vector_t &dweights, const DataType auto &targets) const {
                     std::ranges::fill(deltas, 0.0);
                     // seed output deltas using the loss
                     real_t loss{0.0};
@@ -175,9 +177,9 @@ namespace hNNet::Builtin {
                 int_t _batch_size{1};
                 Loss _loss;
                 std::vector<NNetState> _states{};
-                std::vector<std::vector<real_t>> _deltas{};
-                std::vector<std::vector<real_t>> _thread_dweights{};
-                std::vector<real_t> _batch_dweights{};
+                std::vector<delta_vector_t> _deltas{};
+                std::vector<grad_vector_t> _thread_dweights{};
+                grad_vector_t _batch_dweights{};
         };
 }
 

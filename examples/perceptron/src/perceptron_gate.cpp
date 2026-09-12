@@ -13,17 +13,18 @@ int main() {
     gate.connect(input_layer, output_layer);
     gate.connect(bias, output_layer);
     // train net
-    Dataset inputs{
+    const std::array<input_vector_t, 4> inputs{{
         {1, 1},
         {1, 0},
         {0, 1},
         {0, 0}
-    };
-    Dataset targets{
+    }};
+    const std::array<output_vector_t, 4> targets{{
         {+1}, 
         {-1}, 
         {-1}, 
-        {-1}};
+        {-1}
+    }};
     gate.train(inputs, targets, Builtin::PerceptronRule{1.0});
 
     return 0;

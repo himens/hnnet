@@ -6,32 +6,29 @@
 
 // Constants
 constexpr size_t nb_pixels{784};
-constexpr size_t nb_classes{10};
+constexpr size_t nb_digits{10};
 constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60'000};
 constexpr size_t nb_test_samples{10'000};
-constexpr size_t batch_size{nb_training_samples};
 // Aliases and data types
 using namespace hNNet;
-using InputData  = std::array<real_t, nb_pixels>;
-using OutputData = std::array<real_t, nb_classes>;
+using Pixels = std::array<int_t, nb_pixels>;
 struct DigitData {
     int_t label{0};
-    std::array<int_t, nb_pixels> pixels{};
+    Pixels pixels{};
 };
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
-InputData encode(const std::array<int_t, nb_pixels> &pixels) {
-    InputData data{};
+input_vector_t encode(const Pixels &pixels) {
+    input_vector_t data(nb_pixels, 0.0);
     for (const auto &[ipx, pixel] : pixels | std::views::enumerate) {
         data[ipx] = static_cast<real_t>(pixel) / 255.0;
     }
     return data;
 }
 // Encode digit label (one-hot)
-OutputData encode(const int_t label) {
-    OutputData data{};
-    std::ranges::fill(data, 0.0);
-    if (label < 0 or label >= static_cast<int_t>(nb_classes)) {
+output_vector_t encode(const int_t label) {
+    output_vector_t data(nb_digits, 0.0);
+    if (label < 0 or label >= static_cast<int_t>(nb_digits)) {
         throw std::invalid_argument("encode: invalid label: " + std::to_string(label));
     }
     data[label] = 1.0;
@@ -75,13 +72,13 @@ int main() {
      Builtin::DenseForwardNet classifier{
         Builtin::Layer{nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{}},
         Builtin::Layer{nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{}},
-        Builtin::Layer{nb_classes, NeuronType::output, Builtin::SigmoidActivation{}}
+        Builtin::Layer{nb_digits, NeuronType::output, Builtin::SigmoidActivation{}}
     };
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
-    std::vector<InputData> inputs(nb_training_samples);
-    std::vector<OutputData> targets(nb_training_samples);
+    std::vector<input_vector_t> inputs(nb_training_samples);
+    std::vector<output_vector_t> targets(nb_training_samples);
     for (const auto &[i, digit] : train_digits | std::views::enumerate) {
         inputs[i] = encode(digit.pixels);
         targets[i] = encode(digit.label);

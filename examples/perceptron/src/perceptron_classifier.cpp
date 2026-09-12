@@ -11,16 +11,13 @@ constexpr size_t nb_letters{26};
 // Aliases and data types
 using namespace hNNet;
 using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
-using InputData  = std::array<real_t, nb_pixels>;
-using OutputData = std::array<real_t, nb_letters>;
 struct LetterData {
     char character{'\0'};
     Pixels pixels{};
 };
 // Encode pixel grid
-InputData encode(const Pixels &pixels) {
-    InputData data{};
-    std::ranges::fill(data, -1);
+input_vector_t encode(const Pixels &pixels) {
+    input_vector_t data(nb_pixels, -1);
     for (const auto &[row, row_pixels] : pixels | std::views::enumerate) {
         for (const auto &[col, pixel] : row_pixels | std::views::enumerate) {
             const auto idx = row * nb_columns + col;
@@ -30,9 +27,8 @@ InputData encode(const Pixels &pixels) {
     return data;
 }
 // Encode letters
-OutputData encode(const std::initializer_list<char> &letters) {
-    OutputData data;
-    std::ranges::fill(data, -1);
+output_vector_t encode(const std::initializer_list<char> &letters) {
+    output_vector_t data(nb_letters, -1);
     for (const auto &letter : letters) {
         if (letter < 'A' or letter > 'Z') {
             throw std::invalid_argument("encode: invalid letter: " + std::string{letter});
@@ -100,8 +96,8 @@ int main() {
     letters.append_range(read_letters("data/letters/train_1.txt"));
     letters.append_range(read_letters("data/letters/train_2.txt"));
     letters.append_range(read_letters("data/letters/train_3.txt"));
-    std::vector<InputData> inputs;
-    std::vector<OutputData> targets;
+    std::vector<input_vector_t> inputs;
+    std::vector<output_vector_t> targets;
     for (const auto &[ch, pixels] : letters) {
         inputs.push_back(encode(pixels));
         targets.push_back(encode({ch}));
