@@ -5,6 +5,7 @@
 namespace hNNet {
     using input_vector_t  = std::vector<real_t>;
     using output_vector_t = std::vector<real_t>;
+    using index_vector_t  = std::vector<index_t>;
     struct NNetState {
         std::vector<real_t> signals{};
         std::vector<real_t> weighted_sums{};
@@ -61,7 +62,7 @@ namespace hNNet {
                     const NNet::DenseBlock& dense_block(const index_t index) const {
                         return _net._dense_blocks[index];
                     }
-                    const std::vector<index_t>& iout_neurons() const {
+                    const index_vector_t& iout_neurons() const {
                         return _net._iout_neurons;
                     }
                 private:
@@ -76,7 +77,7 @@ namespace hNNet {
             }
             // Create new neurons
             template <ActivationType Activation>
-                std::vector<index_t> new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
+                index_vector_t new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
                     if (number < 0) {
                         throw std::invalid_argument("NNet::new_neurons: invalid number!");
                     }
@@ -84,7 +85,7 @@ namespace hNNet {
                     for (auto i{0}; i < number; ++i) {
                         _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
                     }
-                    return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<std::vector<index_t>>();
+                    return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
             }
             // Connect neurons (cartesian product)
             void connect(const IndexRange auto &itxs, const IndexRange auto &irxs) {
@@ -151,7 +152,7 @@ namespace hNNet {
                     }
                 }
             // Infer from data
-            std::vector<real_t> infer(const DataType auto &inputs) {
+            output_vector_t infer(const DataType auto &inputs) {
                 if (not _trained) {
                     std::println("NNet::infer: try to infer from an untrained net!");
                     return {};
@@ -161,7 +162,7 @@ namespace hNNet {
                 }
                 static thread_local NNetState state(_neurons.size());
                 update(state, inputs);
-                std::vector<real_t> outputs(_iout_neurons.size());
+                output_vector_t outputs(_iout_neurons.size());
                 for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
                     outputs[i] = state.signals[iout];
                 }
@@ -212,7 +213,7 @@ namespace hNNet {
                         }
                     }
                 private:
-                    std::vector<index_t> _roots;
+                    index_vector_t _roots;
                     std::vector<int_t> _ranks;
             };
             // Inject input data into a net state
@@ -245,7 +246,7 @@ namespace hNNet {
                 real_t weighted_sum{0.0};
                 auto iconn = partition.iconn_begin;
                 for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
-                    weighted_sum +=  _weights[iconn]     * state.signals[_connections[iconn].itx]
+                    weighted_sum +=  _weights[iconn]      * state.signals[_connections[iconn].itx]
                                     + _weights[iconn + 1] * state.signals[_connections[iconn + 1].itx]
                                     + _weights[iconn + 2] * state.signals[_connections[iconn + 2].itx]
                                     + _weights[iconn + 3] * state.signals[_connections[iconn + 3].itx];
@@ -264,7 +265,7 @@ namespace hNNet {
                     const auto row_offset = block.weight_offset + irow * block.tx_count;
                     index_t icol{0};
                     for (; icol <= (block.tx_count - register_size); icol += register_size) {
-                        weighted_sum +=  _weights[row_offset + icol]     * state.signals[block.itx_begin + icol]
+                        weighted_sum +=  _weights[row_offset + icol]      * state.signals[block.itx_begin + icol]
                                         + _weights[row_offset + icol + 1] * state.signals[block.itx_begin + icol + 1]
                                         + _weights[row_offset + icol + 2] * state.signals[block.itx_begin + icol + 2]
                                         + _weights[row_offset + icol + 3] * state.signals[block.itx_begin + icol + 3];
@@ -318,7 +319,7 @@ namespace hNNet {
                     iconn_begin = iconn_end;
                 }
                 // topologically order partitions (Kahn's algorithm)
-                std::vector<std::vector<index_t>> irxs(_neurons.size());
+                std::vector<index_vector_t> irxs(_neurons.size());
                 for (const auto &conn : _connections) {
                     irxs[conn.itx].push_back(conn.irx);
                 }
@@ -326,7 +327,7 @@ namespace hNNet {
                 for (const auto &partition : _partitions) {
                     visits_left[partition.irx] = partition.iconn_end - partition.iconn_begin;
                 }
-                std::vector<index_t> visited_queue;
+                index_vector_t visited_queue;
                 for (auto inr{0}; inr < std::ssize(_neurons); ++inr) {
                     if (visits_left[inr] == 0) {
                         visited_queue.push_back(inr);
@@ -364,7 +365,7 @@ namespace hNNet {
                         union_find.unite(it->second, ipart);
                     }
                 }
-                std::unordered_map<index_t, std::vector<index_t>> groups;
+                std::unordered_map<index_t, index_vector_t> groups;
                 for (auto ipart{0}; ipart < std::ssize(_partitions); ++ipart) {
                     groups[union_find.find(ipart)].push_back(ipart);
                 }
@@ -413,10 +414,10 @@ namespace hNNet {
             std::vector<Neuron> _neurons{};
             std::vector<SynapticConn> _connections{};
             std::vector<real_t> _weights{};
-            std::vector<index_t> _iin_neurons{};
-            std::vector<index_t> _iout_neurons{};
-            std::vector<index_t> _ibias_neurons{};
             std::vector<Partition> _partitions{};
             std::vector<DenseBlock> _dense_blocks{};
+            index_vector_t _iin_neurons{};
+            index_vector_t _iout_neurons{};
+            index_vector_t _ibias_neurons{};
     };
 }
