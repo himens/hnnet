@@ -42,8 +42,8 @@ namespace hNNet::Builtin {
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(const real_t learning_rate, const Optimizer optimizer = {}, const int_t batch_size = 1, Loss loss = {})
-                    : _learning_rate(learning_rate), _optimizer(std::move(optimizer)), _batch_size(batch_size), _loss(std::move(loss)) {
+                explicit BackpropRule(const real_t learning_rate, Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {})
+                    : _learning_rate(learning_rate),_optimizer(std::move(optimizer)), _batch_size(batch_size), _loss(std::move(loss)) {
                         if (_learning_rate < 0.0) {
                             throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
                         }
@@ -180,9 +180,9 @@ namespace hNNet::Builtin {
                     }
                 // Data members
                 real_t _learning_rate;
+                Optimizer _optimizer;
                 int_t _batch_size{1};
                 Loss _loss;
-                Optimizer _optimizer;
                 std::vector<NNetState> _states{};
                 std::vector<std::vector<real_t>> _deltas{};
                 std::vector<std::vector<real_t>> _thread_dweights{};
