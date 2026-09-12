@@ -32,11 +32,12 @@
 - [x] **Separare i segnali dalla struttura del neurone**
   - I segnali vivono in `NNet::_signals`, un `std::vector<real_t>` allineato agli indici dei neuroni; `Neuron` conserva soltanto metadati, attivazione e weighted sum.
 
-## Priorita alta
+- [x] **Introdurre mini-batch e gradient accumulation**
+  - `BackpropRule` divide i sample in mini-batch; ciascun mini-batch viene elaborato sequenzialmente da un thread (più mini-batch in parallelo su thread diversi), accumulando i delta-weight in un buffer per-thread.
+  - I pesi vengono aggiornati una sola volta per epoca dalla somma dei gradienti di tutti i thread; lo stato per-sample (`NNetState`: segnali e weighted sum) è separato dalla topologia e duplicato per thread.
+  - `learning_rate` è un parametro di `BackpropRule`, non dell'optimizer, per restare generico rispetto a `Optimizer`.
 
-- [ ] **Introdurre mini-batch e gradient accumulation**
-  - Accumulare gradienti per un batch di sample e aggiornare i pesi una volta per batch.
-  - Separare completamente lo stato per-sample (segnali, weighted sum e delta) dalla topologia, in modo da poter rappresentare buffer `batch × neuroni` e sfruttare kernel densi.
+## Priorita alta
 
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam come primo optimizer adattivo; valutare RMSProp e RPROP in seguito.
@@ -47,6 +48,10 @@
 - [ ] **Introdurre un'astrazione per layer o modelli di rete**
   - Oggi l'utente deve creare e collegare manualmente ogni gruppo di neuroni.
   - Aggiungere helper per costruire layer densi e collegamenti tra layer ridurrebbe il codice ripetitivo senza nascondere il grafo quando serve controllo fine.
+
+- [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
+  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
+  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
 
 - [ ] **Migliorare la configurazione dell'addestramento**
   - Rendere configurabili soglia di errore, numero massimo di epoche, learning rate e strategia di aggiornamento.

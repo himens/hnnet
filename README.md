@@ -66,11 +66,12 @@ Classifier data representation details:
 
 - `include/`: library headers
     - `hnnet/types.h`: base types such as `Data`
-    - `hnnet/activation.h`: `Activation` strategies (identity, step, sigmoid, ...)
+    - `hnnet/activation.h`: `ActivationType` concept
     - `hnnet/neuron.h`: definition of the `Neuron` class
+    - `hnnet/loss.h`: `LossType` concept used by learning rules
     - `hnnet/learning_rule.h`: `LearningRuleType` concept used by `NNet::train(...)`
-    - `hnnet/nnet.h`: implementation of the generic `NNet` network
-    - `hnnet/builtin/`: built-in learning rules (`PerceptronRule`, `BackpropRule`)
+    - `hnnet/nnet.h`: implementation of the generic `NNet` network and `NNetState`
+    - `hnnet/builtin/`: built-in activations (`activations.h`), losses (`losses.h`), learning rules (`perceptron_rule.h`, `backprop_rule.h`) and the `DenseForwardNet` helper (`dense_forward_net.h`)
 - `examples/`: example implementations built on top of the generic framework
 - `data/`: datasets used by the examples
 - `scripts/`: helper scripts for generating or processing data
@@ -96,40 +97,41 @@ The library is designed around three main pieces:
 
 ## Basic usage example
 
-Here is a minimal example of how to create and train a network (AND gate with a perceptron rule):
+Here is a minimal example of how to create and train a network (XOR gate with a backprop rule and a hidden layer):
 
 ```cpp
-#include "hnnet/nnet.h"
-#include "hnnet/builtin/perceptron_rule.h"
+#include "hnnet/builtin/activations.h"
+#include "hnnet/builtin/dense_forward_net.h"
+#include "hnnet/builtin/backprop_rule.h"
 
 using namespace hNNet;
-using Gate = NNet<Data<int_t, 2>, Data<int_t, 1>>;
-Gate gate;
-
-auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
-auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::PerceptronActivation{});
-gate.connect(input_layer, output_layer);
-gate.add_bias(output_layer);
-
-std::vector<Gate::TrainingSample> samples = {
-    {{1, 1},  {1}},
-    {{1, 0}, {-1}},
-    {{0, 1}, {-1}},
-    {{0, 0}, {-1}}
+using Gate = Builtin::DenseForwardNet<Data<real_t, 2>, Data<real_t, 1>>;
+Gate gate{
+    Builtin::Layer{2, NeuronType::input,  Builtin::IdentityActivation{}},
+    Builtin::Layer{4, NeuronType::hidden, Builtin::SigmoidActivation{}, true},
+    Builtin::Layer{1, NeuronType::output, Builtin::SigmoidActivation{}, true}
 };
 
-gate.train(samples, Builtin::PerceptronRule{1.0});
+std::vector<Gate::TrainingData> samples{
+    {{1, 1}, {0}},
+    {{1, 0}, {1}},
+    {{0, 1}, {1}},
+    {{0, 0}, {0}}
+};
+
+gate.train(samples, Builtin::BackpropRule{0.2});
 ```
 
 The main operations are:
 
-- `new_neurons(n, type, activation)`: creates `n` neurons of the given `NeuronType` and activation function
-- `connect(tx, rx)`: connects neurons to each other; each side can be a single `Neuron` or a range of neurons (all tx-rx pairs are connected)
-- `add_bias(neurons)`: creates and connects one bias neuron (constant signal 1.0) per neuron in the given range
-- `train(samples, rule)`: trains the network on the provided data using the given `LearningRule`
+- `DenseForwardNet<InputData, OutputData>{Layer{...}, ...}`: builds a fully-connected feed-forward network from a runtime list of `Layer` descriptions (size, `NeuronType`, activation, optional bias)
+- `new_neurons(n, type, activation)` / `connect(tx, rx)`: lower-level primitives used internally by `DenseForwardNet` if you need to build a custom topology by hand
+- `train(samples, rule)`: trains the network on the provided data using the given `LearningRule` for a whole epoch at a time
 - `infer(data)`: performs inference on new inputs
 
-Internally, `NNet` compiles the connection list into receiver partitions in topological order. Compatible contiguous partitions are grouped into dense blocks, so their forward pass uses sequential weight and signal buffers. Signals are stored separately from neuron metadata in a flat buffer; neurons retain their type, activation function, and latest weighted sum.
+`Builtin::BackpropRule<Loss, Optimizer>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`: samples are split into mini-batches, each mini-batch is processed sequentially by one thread (multiple mini-batches run in parallel across threads), and weights are updated once per epoch from the accumulated gradient. `Builtin::SGDMomentum` is the built-in optimizer, holding only the momentum-specific state (the learning rate lives on `BackpropRule`, not on the optimizer, so it stays generic across optimizers).
+
+Internally, `NNet` compiles the connection list into receiver partitions in topological order. Compatible contiguous partitions are grouped into dense blocks, so their forward pass uses sequential weight and signal buffers. Per-sample transient state (signals and weighted sums) lives in `NNetState`, separate from the network topology, so it can be duplicated per thread for parallel training.
 
 During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with elapsed time and total epochs.
 
@@ -137,9 +139,9 @@ During `train(...)`, the current implementation prints epoch progress and, when 
 
 The main planned improvements are:
 
-- add mini-batch training and gradient accumulation
 - add adaptive optimizers such as Adam or RMSProp
-- add a layer/model abstraction and configurable training parameters
+- add a layer/model abstraction beyond `DenseForwardNet` and configurable training parameters
+- evaluate a GPU backend (e.g. Metal) in addition to the current OpenMP-based CPU parallelism
 
 See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.
 
