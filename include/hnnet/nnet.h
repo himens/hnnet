@@ -20,7 +20,6 @@ namespace hNNet {
                 using output_type = OutputData;
                 static constexpr size_t input_size{std::tuple_size_v<InputData>};
                 static constexpr size_t output_size{std::tuple_size_v<OutputData>};
-                static constexpr index_t no_block{-1};
                 // Data types
                 struct TrainingData {
                     InputData  inputs;
@@ -31,10 +30,14 @@ namespace hNNet {
                     index_t irx;
                 };
                 struct Partition {
+                    static constexpr index_t no_block{-1};
                     index_t irx;
                     index_t iconn_begin;
                     index_t iconn_end;
-                    index_t iblock;
+                    index_t iblock{no_block};
+                    bool is_dense() const {
+                        return iblock != no_block;
+                    }
                 };
                 struct DenseBlock {
                     index_t itx_begin;
@@ -45,6 +48,8 @@ namespace hNNet {
                 };
                 class View {
                     public:
+                        using input_type = InputData;
+                        using output_type = OutputData;
                         int_t neuron_count() const {
                             return _net._neurons.size();
                         }
@@ -157,38 +162,17 @@ namespace hNNet {
                         return {};
                     }
                     NNetState state(_neurons.size());
-                    inject(state, data);
-                    broadcast(state);
+                    update(state, data);
                     OutputData outputs;
                     for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
                         outputs[i] = state.signals[iout];
                     }
                     return outputs;
                 }
-                // Inject input data into a net state
-                void inject(NNetState &state, const InputData &inputs) const {
-                    for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
-                        state.weighted_sums[iin] = input;
-                        state.signals[iin] = _neurons[iin].activate(input);
-                    }
-                    for (const auto &ibias : _ibias_neurons) {
-                        state.weighted_sums[ibias] = 1.0;
-                        state.signals[ibias] = _neurons[ibias].activate(1.0);
-                    }
-                }
-                // Broadcast signals through the net using the partitions, already in topological order
-                void broadcast(NNetState &state) const {
-                    for (auto ipart{0}; ipart < std::ssize(_partitions); ipart++) {
-                        const auto &partition = _partitions[ipart];
-                        const auto iblock = partition.iblock;;
-                        if (iblock != no_block) {
-                            const auto &block = _dense_blocks[iblock];
-                            broadcast(block, state);
-                            ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
-                            continue;
-                        }
-                        broadcast(partition, state);
-                    }
+                // Update a net state from input data
+                void update(NNetState &state, const InputData &inputs) const {
+                    inject(state, inputs);
+                    broadcast(state);
                 }
             private:
                 // Data types
@@ -230,6 +214,31 @@ namespace hNNet {
                         std::vector<index_t> _roots;
                         std::vector<int_t> _ranks;
                 };
+                // Inject input data into a net state
+                void inject(NNetState &state, const InputData &inputs) const {
+                    for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
+                        state.weighted_sums[iin] = input;
+                        state.signals[iin] = _neurons[iin].activate(input);
+                    }
+                    for (const auto &ibias : _ibias_neurons) {
+                        state.weighted_sums[ibias] = 1.0;
+                        state.signals[ibias] = _neurons[ibias].activate(1.0);
+                    }
+                }
+                // Broadcast signals through the net using the partitions, already in topological order
+                void broadcast(NNetState &state) const {
+                    for (auto ipart{0}; ipart < std::ssize(_partitions); ipart++) {
+                        const auto &partition = _partitions[ipart];
+                        if (partition.is_dense()) {
+                            const auto iblock = partition.iblock;
+                            const auto &block = _dense_blocks[iblock];
+                            broadcast(block, state);
+                            ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
+                            continue;
+                        }
+                        broadcast(partition, state);
+                    }
+                }
                 // Process a single partition
                 void broadcast(const Partition &partition, NNetState &state) const {
                     real_t weighted_sum{0.0};
@@ -307,7 +316,7 @@ namespace hNNet {
                         while ((iconn_end < std::ssize(_connections)) and (_connections[iconn_end].irx == irx)) {
                             ++iconn_end;
                         }
-                        _partitions.push_back({.irx = irx, .iconn_begin = iconn_begin, .iconn_end = iconn_end, .iblock = no_block});
+                        _partitions.push_back({.irx = irx, .iconn_begin = iconn_begin, .iconn_end = iconn_end});
                         iconn_begin = iconn_end;
                     }
                     // topologically order partitions (Kahn's algorithm)

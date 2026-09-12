@@ -4,8 +4,8 @@
 
 namespace hNNet::Builtin {
     template <typename T, typename View>
-        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
-            optimizer.apply(view, batch_dweights, batch_size, learning_rate);
+        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_dweights, const int_t batch_size, const real_t learning_rate) {
+            optimizer.update(view, batch_dweights, batch_size, learning_rate);
         };
     ///////////////////////
     // SGDMomentum class //
@@ -20,7 +20,7 @@ namespace hNNet::Builtin {
                     std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
                 }
             template <typename View>
-                void apply(View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
+                void update(View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
                     if (_prev_dweights.empty()) {
                         _prev_dweights.assign(batch_dweights.size(), 0.0);
                     }
@@ -69,14 +69,14 @@ namespace hNNet::Builtin {
                             _batch_dweights.assign(connection_count, 0.0);
                         }
                         //std::ranges::shuffle(samples, random_generator());
-                        real_t loss{0.0};
                         const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
+                        const auto parallel = batch_count != std::ssize(samples);
+                        const auto thread_count = parallel ? max_threads : index_t{1};
+                        real_t loss{0.0};
+                        auto view = net.view();
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;
                             const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
-                            const auto batch_size = batch_end - batch_begin;
-                            const auto parallel = batch_size >= max_threads;
-                            const auto thread_count = parallel ? max_threads : index_t{1};
                             for (auto tid{0}; tid < thread_count; ++tid) {
                                 std::ranges::fill(_thread_dweights[tid], 0.0);
                             }
@@ -85,14 +85,12 @@ namespace hNNet::Builtin {
                                 const auto tid = omp_get_thread_num();
                                 auto &state = _states[tid];
                                 const auto &sample = samples[isample];
-                                net.inject(state, sample.inputs);
-                                net.broadcast(state);
-                                loss += backward(net, state, sample.targets, _deltas[tid], _thread_dweights[tid]);
+                                net.update(state, sample.inputs);
+                                loss += backward(view, state, _deltas[tid], _thread_dweights[tid], sample.targets);
                             }
                             // single, sequential weight update
-                            auto view = net.view();
                             if (thread_count == 1) {
-                                _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size), _learning_rate);
+                                _optimizer.update(view, _thread_dweights[0], _batch_size, _learning_rate);
                             }
                             else {
                                 // sequential reduction: sum contribution of each thread
@@ -103,16 +101,15 @@ namespace hNNet::Builtin {
                                         _batch_dweights[iconn] += dweights[iconn];
                                     }
                                 }
-                                _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size), _learning_rate);
+                                _optimizer.update(view, _batch_dweights, _batch_size, _learning_rate);
                             }
                         }
                         return loss / samples.size();
                     }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                template <NNetType Net>
-                    real_t backward(Net &net, NNetState &state, const output_t<Net> &targets, std::vector<real_t> &deltas, std::vector<real_t> &dweights) const {
-                        auto view = net.view();
+                template <typename View>
+                    real_t backward(View &view, NNetState &state, std::vector<real_t> &deltas, std::vector<real_t> &dweights, const output_t<View> &targets) const {
                         std::ranges::fill(deltas, 0.0);
                         // seed output deltas using the loss
                         real_t loss{0.0};
@@ -126,8 +123,8 @@ namespace hNNet::Builtin {
                         auto reversed_partitions = partitions | std::views::reverse;
                         for (auto ipart{0}; ipart < std::ssize(reversed_partitions); ipart++) {
                             const auto &partition = reversed_partitions[ipart];
-                            const auto iblock = partition.iblock;
-                            if (iblock != Net::no_block) {
+                            if (partition.is_dense()) {
+                                const auto iblock = partition.iblock;
                                 const auto &block = view.dense_block(iblock);
                                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                                     const auto irx = block.irx_begin + irow;
@@ -157,8 +154,8 @@ namespace hNNet::Builtin {
                         // per-connection delta_weight (pure, no learning rate/momentum)
                         for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
                             const auto &partition = partitions[ipart];
-                            const auto iblock = partition.iblock;
-                            if (iblock != Net::no_block) {
+                            if (partition.is_dense()) {
+                                const auto iblock = partition.iblock;
                                 const auto &block = view.dense_block(iblock);
                                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                                     const auto delta_rx = deltas[block.irx_begin + irow];

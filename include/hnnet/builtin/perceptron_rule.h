@@ -8,7 +8,7 @@ namespace hNNet::Builtin {
     //////////////////////////
     class PerceptronRule {
             public:
-                // Constructor
+            // Constructor
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {
                     if (_learning_rate < 0.0) {
                         throw std::invalid_argument("PerceptronRule::PerceptronRule: learning_rate must be >= 0");
@@ -21,16 +21,15 @@ namespace hNNet::Builtin {
                         NNetState state(net.view().neuron_count());
                         real_t mean_squared_error{0.0};
                         for (const auto &sample : samples) {
-                            net.inject(state, sample.inputs);
-                            net.broadcast(state);
-                            mean_squared_error += learn(net, state, sample.targets);
+                            net.update(state, sample.inputs);
+                            mean_squared_error += update_weights(net, state, sample.targets);
                         }
                         return mean_squared_error / samples.size();
                     }
             private:
-                // Learn from targets using the perceptron learning rule (single sample, immediate weight update)
+                // Update weights from targets using the perceptron learning rule
                 template <NNetType Net>
-                    real_t learn(Net &net, NNetState &state, const output_t<Net> &targets) {
+                    real_t update_weights(Net &net, NNetState &state, const output_t<Net> &targets) {
                         auto view = net.view();
                         if (view.partitions().size() != output_size_v<Net>) {
                             throw std::runtime_error("PerceptronRule::learn: invalid net!");
