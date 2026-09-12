@@ -50,7 +50,7 @@ namespace hNNet::Builtin {
                         if (batch_size <= 0) {
                             throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
                         }
-                        std::println("BackpropRule:learn: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
+                        std::println("BackpropRule:BackpropRule: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
                     }
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
@@ -59,7 +59,11 @@ namespace hNNet::Builtin {
                         const auto neuron_count = net.view().neuron_count();
                         const auto connection_count = net.view().connection_count();
                         const auto max_threads = omp_get_max_threads();
-                        if (_states.empty()) {  // lazy init: allocate once, reuse across every epoch
+                        const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
+                        const auto parallel = batch_count != std::ssize(samples);
+                        const auto thread_count = parallel ? max_threads : index_t{1};
+                        //std::ranges::shuffle(samples, random_generator());
+                        if (_states.empty()) {
                             _states.reserve(max_threads);
                             for (auto tid{0}; tid < max_threads; ++tid) {
                                 _states.emplace_back(neuron_count);
@@ -68,12 +72,8 @@ namespace hNNet::Builtin {
                             _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
                             _batch_dweights.assign(connection_count, 0.0);
                         }
-                        //std::ranges::shuffle(samples, random_generator());
-                        const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
-                        const auto parallel = batch_count != std::ssize(samples);
-                        const auto thread_count = parallel ? max_threads : index_t{1};
-                        real_t loss{0.0};
                         auto view = net.view();
+                        real_t loss{0.0};
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * _batch_size;
                             const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
