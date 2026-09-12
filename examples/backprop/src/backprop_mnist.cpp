@@ -69,9 +69,9 @@ std::vector<DigitData> read_digits(const std::string &filename, const size_t max
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
 int main() {
     // create net
-     Builtin::DenseForwardNet classifier{
-        Builtin::Layer{nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{}},
-        Builtin::Layer{nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{}},
+    Builtin::DenseForwardNet classifier{
+        Builtin::Layer{nb_pixels, NeuronType::input,  Builtin::IdentityActivation{}},
+        Builtin::Layer{nb_hidden, NeuronType::hidden, Builtin::SigmoidActivation{}},
         Builtin::Layer{nb_digits, NeuronType::output, Builtin::SigmoidActivation{}}
     };
     // read train and test samples

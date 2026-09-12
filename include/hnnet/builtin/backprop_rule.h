@@ -37,7 +37,6 @@ namespace hNNet::Builtin {
     ////////////////////////
     // BackpropRule class //
     ////////////////////////
-    // Back-propagation learning rule: split samples into mini-batches and process batch samples in parallel
     template <OptimizerType Optimizer = SGDMomentum, LossType Loss = MSELoss>
         class BackpropRule {
             public:

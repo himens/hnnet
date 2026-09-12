@@ -96,11 +96,11 @@ int main() {
     letters.append_range(read_letters("data/letters/train_1.txt"));
     letters.append_range(read_letters("data/letters/train_2.txt"));
     letters.append_range(read_letters("data/letters/train_3.txt"));
-    std::vector<input_vector_t> inputs;
-    std::vector<output_vector_t> targets;
-    for (const auto &[ch, pixels] : letters) {
-        inputs.push_back(encode(pixels));
-        targets.push_back(encode({ch}));
+    std::vector<input_vector_t> inputs(letters.size());
+    std::vector<output_vector_t> targets(letters.size());
+    for (const auto &[i, letter] : letters | std::views::enumerate) {
+        inputs[i] = encode(letter.pixels);
+        targets[i] = encode({letter.character});
     }
     classifier.train(inputs, targets, Builtin::PerceptronRule{1.0});
     // use net (inference)
