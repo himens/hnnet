@@ -87,7 +87,7 @@ int main() {
         samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
     }
     // train net
-    classifier.train(samples, Builtin::BackpropRule{0.25, 0.9, 32});
+    classifier.train(samples, Builtin::BackpropRule{0.25, Builtin::SGDMomentum{0.9}, 32});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};

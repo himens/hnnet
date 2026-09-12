@@ -4,37 +4,33 @@
 
 namespace hNNet::Builtin {
     template <typename T, typename View>
-        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
-            optimizer.apply(view, batch_deltas, batch_size);
+        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
+            optimizer.apply(view, batch_dweights, batch_size, learning_rate);
         };
     ///////////////////////
     // SGDMomentum class //
     ///////////////////////
     class SGDMomentum {
         public:
-            explicit SGDMomentum(const real_t learning_rate = 0.0, const real_t momentum = 0.0)
-                : _learning_rate(learning_rate), _momentum(momentum) {
-                    if (_learning_rate < 0.0) {
-                        throw std::invalid_argument("SGDMomentum::SGDMomentum: learning_rate must be >= 0");
-                    }
+            explicit SGDMomentum(const real_t momentum = 0.0)
+                : _momentum(momentum) {
                     if (_momentum < 0.0) {
                         throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
                     }
-                    std::println("SGDMomentum::SGDMomentum: learning rate: {}, momentum: {}", _learning_rate, _momentum);
+                    std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
                 }
             template <typename View>
-                void apply(View &view, const std::vector<real_t> &batch_deltas, const real_t batch_size) {
+                void apply(View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
                     if (_prev_dweights.empty()) {
-                        _prev_dweights.assign(batch_deltas.size(), 0.0);
+                        _prev_dweights.assign(batch_dweights.size(), 0.0);
                     }
-                    for (auto iconn{0}; iconn < std::ssize(batch_deltas); ++iconn) {
-                        const auto dweight = (_learning_rate * batch_deltas[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
+                    for (auto iconn{0}; iconn < std::ssize(batch_dweights); ++iconn) {
+                        const auto dweight = (learning_rate * batch_dweights[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
                         view.weight(iconn) += dweight;
                         _prev_dweights[iconn] = dweight;
                     }
                 }
         private:
-            real_t _learning_rate;
             real_t _momentum;
             std::vector<real_t> _prev_dweights{};
     };
@@ -42,16 +38,19 @@ namespace hNNet::Builtin {
     // BackpropRule class //
     ////////////////////////
     // Back-propagation learning rule: split samples into mini-batches and process batch samples in parallel
-    template <LossType Loss = MSELoss, typename Optimizer = SGDMomentum>
+    template <typename Optimizer = SGDMomentum, LossType Loss = MSELoss>
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(const real_t learning_rate, const real_t momentum = 0.0, const int_t batch_size = 1, Loss loss = {})
-                    : _batch_size(batch_size), _loss(std::move(loss)), _optimizer(learning_rate, momentum) {
+                explicit BackpropRule(const real_t learning_rate, const Optimizer optimizer = {}, const int_t batch_size = 1, Loss loss = {})
+                    : _learning_rate(learning_rate), _optimizer(std::move(optimizer)), _batch_size(batch_size), _loss(std::move(loss)) {
+                        if (_learning_rate < 0.0) {
+                            throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
+                        }
                         if (batch_size <= 0) {
                             throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
                         }
-                        std::println("BackpropRule:learn: batch size: {}", _batch_size);
+                        std::println("BackpropRule:learn: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
                     }
                 // Learn from a whole epoch of training samples
                 template <NNetType Net>
@@ -93,7 +92,7 @@ namespace hNNet::Builtin {
                             // single, sequential weight update
                             auto view = net.view();
                             if (thread_count == 1) {
-                                _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size));
+                                _optimizer.apply(view, _thread_dweights[0], static_cast<real_t>(batch_size), _learning_rate);
                             }
                             else {
                                 // sequential reduction: sum contribution of each thread
@@ -104,7 +103,7 @@ namespace hNNet::Builtin {
                                         _batch_dweights[iconn] += dweights[iconn];
                                     }
                                 }
-                                _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size));
+                                _optimizer.apply(view, _batch_dweights, static_cast<real_t>(batch_size), _learning_rate);
                             }
                         }
                         return loss / samples.size();
@@ -180,6 +179,7 @@ namespace hNNet::Builtin {
                         return loss;
                     }
                 // Data members
+                real_t _learning_rate;
                 int_t _batch_size{1};
                 Loss _loss;
                 Optimizer _optimizer;
