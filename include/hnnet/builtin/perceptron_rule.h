@@ -17,8 +17,8 @@ namespace hNNet::Builtin {
             }
             // Learn from a whole epoch of training samples (online: one immediate update per sample)
             real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
-                NNetState state(net.view().neuron_count());
                 auto view = net.view();
+                NNetState state(view.neuron_count());
                 real_t mean_squared_error{0.0};
                 for (const auto &[input, target] : std::views::zip(inputs, targets)) {
                     net.update(state, input);

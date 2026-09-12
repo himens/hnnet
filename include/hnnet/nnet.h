@@ -114,7 +114,7 @@ namespace hNNet {
             template <DatasetType Inputs, DatasetType Targets, LearningRuleType<NNet, Inputs, Targets> LearningRule>
                 void train(const Inputs &inputs, const Targets &targets, LearningRule rule) {
                     if (std::ranges::size(inputs) != std::ranges::size(targets)) {
-                        throw std::invalid_argument("NNet::train: input and target count mismatch!");
+                        throw std::invalid_argument("NNet::train: size error!");
                     }
                     constexpr real_t loss_threshold{1e-2};
                     constexpr int_t max_epochs{1'000'000};
