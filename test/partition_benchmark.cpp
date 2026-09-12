@@ -9,7 +9,7 @@ namespace {
     constexpr size_t hidden_count{4096};
     constexpr size_t output_count{256};
   
-    using Net = NNet<Data<real_t, input_count>, Data<real_t, output_count>>;
+    using Net = NNet;
 
     struct NoOpLearningRule {
         template <typename Network>

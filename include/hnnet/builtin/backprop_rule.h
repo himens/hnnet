@@ -3,8 +3,8 @@
 #include "hnnet/builtin/losses.h"
 
 namespace hNNet::Builtin {
-    template <typename T, typename View>
-        concept OptimizerType = requires (T &optimizer, View &view, const std::vector<real_t> &batch_dweights, const int_t batch_size, const real_t learning_rate) {
+    template <typename T>
+        concept OptimizerType = requires (T &optimizer, NNet::View &view, const std::vector<real_t> &batch_dweights, const int_t batch_size, const real_t learning_rate) {
             optimizer.update(view, batch_dweights, batch_size, learning_rate);
         };
     ///////////////////////
@@ -12,24 +12,22 @@ namespace hNNet::Builtin {
     ///////////////////////
     class SGDMomentum {
         public:
-            explicit SGDMomentum(const real_t momentum = 0.0)
-                : _momentum(momentum) {
-                    if (_momentum < 0.0) {
-                        throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
-                    }
-                    std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
+            explicit SGDMomentum(const real_t momentum = 0.0) : _momentum(momentum) {
+                if (_momentum < 0.0) {
+                    throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
                 }
-            template <typename View>
-                void update(View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
-                    if (_prev_dweights.empty()) {
-                        _prev_dweights.assign(batch_dweights.size(), 0.0);
-                    }
-                    for (auto iconn{0}; iconn < std::ssize(batch_dweights); ++iconn) {
-                        const auto dweight = (learning_rate * batch_dweights[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
-                        view.weight(iconn) += dweight;
-                        _prev_dweights[iconn] = dweight;
-                    }
+                std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
+            }
+            void update(NNet::View &view, const std::vector<real_t> &batch_dweights, const real_t batch_size, const real_t learning_rate) {
+                if (_prev_dweights.empty()) {
+                    _prev_dweights.assign(batch_dweights.size(), 0.0);
                 }
+                for (auto iconn{0}; iconn < std::ssize(batch_dweights); ++iconn) {
+                    const auto dweight = (learning_rate * batch_dweights[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
+                    view.weight(iconn) += dweight;
+                    _prev_dweights[iconn] = dweight;
+                }
+            }
         private:
             real_t _momentum;
             std::vector<real_t> _prev_dweights{};
@@ -38,143 +36,139 @@ namespace hNNet::Builtin {
     // BackpropRule class //
     ////////////////////////
     // Back-propagation learning rule: split samples into mini-batches and process batch samples in parallel
-    template <typename Optimizer = SGDMomentum, LossType Loss = MSELoss>
+    template <OptimizerType Optimizer = SGDMomentum, LossType Loss = MSELoss>
         class BackpropRule {
             public:
                 // Constructor
                 explicit BackpropRule(const real_t learning_rate, Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {})
                     : _learning_rate(learning_rate),_optimizer(std::move(optimizer)), _batch_size(batch_size), _loss(std::move(loss)) {
-                        if (_learning_rate < 0.0) {
-                            throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
-                        }
-                        if (batch_size <= 0) {
-                            throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
-                        }
-                        std::println("BackpropRule:BackpropRule: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
+                    if (_learning_rate < 0.0) {
+                        throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
                     }
+                    if (batch_size <= 0) {
+                        throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
+                    }
+                    std::println("BackpropRule:BackpropRule: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
+                }
                 // Learn from a whole epoch of training samples
-                template <NNetType Net>
-                    requires OptimizerType<Optimizer, typename Net::View>
-                    real_t learn(Net &net, const std::span<typename Net::TrainingData> samples) {
-                        const auto neuron_count = net.view().neuron_count();
-                        const auto connection_count = net.view().connection_count();
-                        const auto max_threads = omp_get_max_threads();
-                        const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(samples.size()) / _batch_size));
-                        const auto parallel = batch_count != std::ssize(samples);
-                        const auto thread_count = parallel ? max_threads : index_t{1};
-                        //std::ranges::shuffle(samples, random_generator());
-                        if (_states.empty()) {
-                            _states.reserve(max_threads);
-                            for (auto tid{0}; tid < max_threads; ++tid) {
-                                _states.emplace_back(neuron_count);
-                            }
-                            _deltas.assign(max_threads, std::vector<real_t>(neuron_count, 0.0));
-                            _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
-                            _batch_dweights.assign(connection_count, 0.0);
+                real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+                    const auto neuron_count = net.view().neuron_count();
+                    const auto connection_count = net.view().connection_count();
+                    const auto max_threads = omp_get_max_threads();
+                    const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
+                    const auto parallel = batch_count != std::ssize(inputs);
+                    const auto thread_count = parallel ? max_threads : index_t{1};
+                    //std::ranges::shuffle(samples, random_generator());
+                    if (_states.empty()) {
+                        _states.reserve(max_threads);
+                        for (auto tid{0}; tid < max_threads; ++tid) {
+                            _states.emplace_back(neuron_count);
                         }
-                        auto view = net.view();
-                        real_t loss{0.0};
-                        for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
-                            const auto batch_begin = ibatch * _batch_size;
-                            const auto batch_end = std::min<index_t>(samples.size(), batch_begin + _batch_size);
-                            for (auto tid{0}; tid < thread_count; ++tid) {
-                                std::ranges::fill(_thread_dweights[tid], 0.0);
-                            }
-                            #pragma omp parallel for if(parallel) reduction(+:loss)
-                            for (auto isample = batch_begin; isample < batch_end; ++isample) {
-                                const auto tid = omp_get_thread_num();
-                                auto &state = _states[tid];
-                                const auto &sample = samples[isample];
-                                net.update(state, sample.inputs);
-                                loss += backward(view, state, _deltas[tid], _thread_dweights[tid], sample.targets);
-                            }
-                            // single, sequential weight update
-                            if (thread_count == 1) {
-                                _optimizer.update(view, _thread_dweights[0], _batch_size, _learning_rate);
-                            }
-                            else {
-                                // sequential reduction: sum contribution of each thread
-                                std::ranges::fill(_batch_dweights, 0.0);
-                                for (auto tid{0}; tid < thread_count; ++tid) {
-                                    const auto &dweights = _thread_dweights[tid];
-                                    for (auto iconn{0}; iconn < connection_count; ++iconn) {
-                                        _batch_dweights[iconn] += dweights[iconn];
-                                    }
-                                }
-                                _optimizer.update(view, _batch_dweights, _batch_size, _learning_rate);
-                            }
-                        }
-                        return loss / samples.size();
+                        _deltas.assign(max_threads, std::vector<real_t>(neuron_count, 0.0));
+                        _thread_dweights.assign(max_threads, std::vector<real_t>(connection_count, 0.0));
+                        _batch_dweights.assign(connection_count, 0.0);
                     }
+                    auto view = net.view();
+                    real_t loss{0.0};
+                    for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
+                        const auto batch_begin = ibatch * _batch_size;
+                        const auto batch_end = std::min<index_t>(std::ranges::size(inputs), batch_begin + _batch_size);
+                        for (auto tid{0}; tid < thread_count; ++tid) {
+                            std::ranges::fill(_thread_dweights[tid], 0.0);
+                        }
+                        #pragma omp parallel for if(parallel) reduction(+:loss)
+                        for (auto isample = batch_begin; isample < batch_end; ++isample) {
+                            const auto tid = omp_get_thread_num();
+                            auto &state = _states[tid];
+                            net.update(state, inputs[isample]);
+                            loss += backward(view, state, _deltas[tid], _thread_dweights[tid], targets[isample]);
+                        }
+                        // single, sequential weight update
+                        if (thread_count == 1) {
+                            _optimizer.update(view, _thread_dweights[0], _batch_size, _learning_rate);
+                        }
+                        else {
+                            // sequential reduction: sum contribution of each thread
+                            std::ranges::fill(_batch_dweights, 0.0);
+                            for (auto tid{0}; tid < thread_count; ++tid) {
+                                const auto &dweights = _thread_dweights[tid];
+                                for (auto iconn{0}; iconn < connection_count; ++iconn) {
+                                    _batch_dweights[iconn] += dweights[iconn];
+                                }
+                            }
+                            _optimizer.update(view, _batch_dweights, _batch_size, _learning_rate);
+                        }
+                    }
+                    return loss / std::ranges::size(inputs);
+                }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                template <typename View>
-                    real_t backward(View &view, NNetState &state, std::vector<real_t> &deltas, std::vector<real_t> &dweights, const output_t<View> &targets) const {
-                        std::ranges::fill(deltas, 0.0);
-                        // seed output deltas using the loss
-                        real_t loss{0.0};
-                        for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
-                            const auto signal = state.signals[iout];
-                            loss += _loss(target, signal);
-                            deltas[iout] = _loss.derivative(target, signal) * view.neuron(iout).activation()->derivative(state.weighted_sums[iout]);
-                        }
-                        // partitions are already in topological order: walk them backwards
-                        const auto partitions = view.partitions();
-                        auto reversed_partitions = partitions | std::views::reverse;
-                        for (auto ipart{0}; ipart < std::ssize(reversed_partitions); ipart++) {
-                            const auto &partition = reversed_partitions[ipart];
-                            if (partition.is_dense()) {
-                                const auto iblock = partition.iblock;
-                                const auto &block = view.dense_block(iblock);
-                                for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                    const auto irx = block.irx_begin + irow;
-                                    const auto &rx = view.neuron(irx);
-                                    auto &delta_rx = deltas[irx];
-                                    if (rx.type() != NeuronType::output) {
-                                        delta_rx *= rx.activation()->derivative(state.weighted_sums[irx]);
-                                    }
-                                    const auto row_offset = block.weight_offset + irow * block.tx_count;
-                                    for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                        deltas[block.itx_begin + icol] += delta_rx * view.weight(row_offset + icol);
-                                    }
-                                }
-                                ipart += block.rx_count - 1;
-                                continue;
-                            }
-                            const auto &rx = view.neuron(partition.irx);
-                            auto &delta_rx = deltas[partition.irx];
-                            if (rx.type() != NeuronType::output) {
-                                delta_rx *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
-                            }
-                            for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
-                                const auto itx = view.connection(iconn).itx;
-                                deltas[itx] += delta_rx * view.weight(iconn);
-                            }
-                        }
-                        // per-connection delta_weight (pure, no learning rate/momentum)
-                        for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
-                            const auto &partition = partitions[ipart];
-                            if (partition.is_dense()) {
-                                const auto iblock = partition.iblock;
-                                const auto &block = view.dense_block(iblock);
-                                for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                    const auto delta_rx = deltas[block.irx_begin + irow];
-                                    const auto row_offset = block.weight_offset + irow * block.tx_count;
-                                    for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                        dweights[row_offset + icol] += delta_rx * state.signals[block.itx_begin + icol];
-                                    }
-                                }
-                                ipart += block.rx_count - 1;
-                                continue;
-                            }
-                            for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
-                                const auto irx = view.connection(iconn).irx;
-                                const auto itx = view.connection(iconn).itx;
-                                dweights[iconn] += deltas[irx] * state.signals[itx];
-                            }
-                        }
-                        return loss;
+                real_t backward(NNet::View &view, NNetState &state, std::vector<real_t> &deltas, std::vector<real_t> &dweights, const DataType auto &targets) const {
+                    std::ranges::fill(deltas, 0.0);
+                    // seed output deltas using the loss
+                    real_t loss{0.0};
+                    for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
+                        const auto signal = state.signals[iout];
+                        loss += _loss(target, signal);
+                        deltas[iout] = _loss.derivative(target, signal) * view.neuron(iout).activation()->derivative(state.weighted_sums[iout]);
                     }
+                    // partitions are already in topological order: walk them backwards
+                    const auto partitions = view.partitions();
+                    auto reversed_partitions = partitions | std::views::reverse;
+                    for (auto ipart{0}; ipart < std::ssize(reversed_partitions); ipart++) {
+                        const auto &partition = reversed_partitions[ipart];
+                        if (partition.is_dense()) {
+                            const auto iblock = partition.iblock;
+                            const auto &block = view.dense_block(iblock);
+                            for (auto irow{0}; irow < block.rx_count; ++irow) {
+                                const auto irx = block.irx_begin + irow;
+                                const auto &rx = view.neuron(irx);
+                                auto &delta_rx = deltas[irx];
+                                if (rx.type() != NeuronType::output) {
+                                    delta_rx *= rx.activation()->derivative(state.weighted_sums[irx]);
+                                }
+                                const auto row_offset = block.weight_offset + irow * block.tx_count;
+                                for (auto icol{0}; icol < block.tx_count; ++icol) {
+                                    deltas[block.itx_begin + icol] += delta_rx * view.weight(row_offset + icol);
+                                }
+                            }
+                            ipart += block.rx_count - 1;
+                            continue;
+                        }
+                        const auto &rx = view.neuron(partition.irx);
+                        auto &delta_rx = deltas[partition.irx];
+                        if (rx.type() != NeuronType::output) {
+                            delta_rx *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
+                        }
+                        for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            const auto itx = view.connection(iconn).itx;
+                            deltas[itx] += delta_rx * view.weight(iconn);
+                        }
+                    }
+                    // per-connection delta_weight (pure, no learning rate/momentum)
+                    for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
+                        const auto &partition = partitions[ipart];
+                        if (partition.is_dense()) {
+                            const auto iblock = partition.iblock;
+                            const auto &block = view.dense_block(iblock);
+                            for (auto irow{0}; irow < block.rx_count; ++irow) {
+                                const auto delta_rx = deltas[block.irx_begin + irow];
+                                const auto row_offset = block.weight_offset + irow * block.tx_count;
+                                for (auto icol{0}; icol < block.tx_count; ++icol) {
+                                    dweights[row_offset + icol] += delta_rx * state.signals[block.itx_begin + icol];
+                                }
+                            }
+                            ipart += block.rx_count - 1;
+                            continue;
+                        }
+                        for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            const auto irx = view.connection(iconn).irx;
+                            const auto itx = view.connection(iconn).itx;
+                            dweights[iconn] += deltas[irx] * state.signals[itx];
+                        }
+                    }
+                    return loss;
+                }
                 // Data members
                 real_t _learning_rate;
                 Optimizer _optimizer;

@@ -11,8 +11,8 @@ constexpr size_t nb_letters{26};
 // Aliases and data types
 using namespace hNNet;
 using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
-using InputData  = Data<int_t, nb_pixels>;
-using OutputData = Data<int_t, nb_letters>;
+using InputData  = std::array<real_t, nb_pixels>;
+using OutputData = std::array<real_t, nb_letters>;
 struct LetterData {
     char character{'\0'};
     Pixels pixels{};
@@ -43,7 +43,7 @@ OutputData encode(const std::initializer_list<char> &letters) {
     return data;
 }
 // Decode letters
-std::vector<char> decode(const OutputData &data) {
+std::vector<char> decode(const DataType auto &data) {
     std::vector<char> letters{};
     for (size_t idx{0}; idx < data.size(); idx++) {
         if (data[idx] == +1) {
@@ -90,10 +90,8 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 }
 // Classify letters using the trained perceptron neural network
 int main() {
-    // define net type
-    using Classifier = NNet<InputData, OutputData>;
     // create net
-    Classifier classifier;
+    NNet classifier;
     auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  Builtin::IdentityActivation{});
     auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, Builtin::PerceptronActivation{});
     classifier.connect(input_layer, output_layer);
@@ -102,11 +100,13 @@ int main() {
     letters.append_range(read_letters("data/letters/train_1.txt"));
     letters.append_range(read_letters("data/letters/train_2.txt"));
     letters.append_range(read_letters("data/letters/train_3.txt"));
-    std::vector<Classifier::TrainingData> samples;
+    std::vector<InputData> inputs;
+    std::vector<OutputData> targets;
     for (const auto &[ch, pixels] : letters) {
-        samples.push_back({.inputs = encode(pixels), .targets = encode({ch})});
+        inputs.push_back(encode(pixels));
+        targets.push_back(encode({ch}));
     }
-    classifier.train(samples, Builtin::PerceptronRule{1.0});
+    classifier.train(inputs, targets, Builtin::PerceptronRule{1.0});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));

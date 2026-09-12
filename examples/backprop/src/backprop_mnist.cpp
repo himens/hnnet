@@ -13,8 +13,8 @@ constexpr size_t nb_test_samples{10'000};
 constexpr size_t batch_size{nb_training_samples};
 // Aliases and data types
 using namespace hNNet;
-using InputData  = Data<real_t, nb_pixels>;
-using OutputData = Data<real_t, nb_classes>;
+using InputData  = std::array<real_t, nb_pixels>;
+using OutputData = std::array<real_t, nb_classes>;
 struct DigitData {
     int_t label{0};
     std::array<int_t, nb_pixels> pixels{};
@@ -38,7 +38,7 @@ OutputData encode(const int_t label) {
     return data;
 }
 // Decode digit label (index of the highest activation)
-int_t decode(const OutputData &data) {
+int_t decode(const DataType auto &data) {
     const auto it = std::ranges::max_element(data);
     return std::distance(data.begin(), it);
 }
@@ -72,8 +72,7 @@ std::vector<DigitData> read_digits(const std::string &filename, const size_t max
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
 int main() {
     // create net
-    using Classifier = Builtin::DenseForwardNet<InputData, OutputData>;
-    Classifier classifier{
+     Builtin::DenseForwardNet classifier{
         Builtin::Layer{nb_pixels,  NeuronType::input,  Builtin::IdentityActivation{}},
         Builtin::Layer{nb_hidden,  NeuronType::hidden, Builtin::SigmoidActivation{}},
         Builtin::Layer{nb_classes, NeuronType::output, Builtin::SigmoidActivation{}}
@@ -81,13 +80,14 @@ int main() {
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
-    std::vector<Classifier::TrainingData> samples;
-    samples.reserve(nb_training_samples);
-    for (const auto &[label, pixels] : train_digits) {
-        samples.push_back({.inputs = encode(pixels), .targets = encode(label)});
+    std::vector<InputData> inputs(nb_training_samples);
+    std::vector<OutputData> targets(nb_training_samples);
+    for (const auto &[i, digit] : train_digits | std::views::enumerate) {
+        inputs[i] = encode(digit.pixels);
+        targets[i] = encode(digit.label);
     }
     // train net
-    classifier.train(samples, Builtin::BackpropRule{0.25, Builtin::SGDMomentum{0.9}, 32});
+    classifier.train(inputs, targets, Builtin::BackpropRule{0.25, Builtin::SGDMomentum{0.9}, 32});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
