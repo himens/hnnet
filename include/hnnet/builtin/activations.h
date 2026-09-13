@@ -77,12 +77,11 @@ namespace hNNet::Builtin {
     class ReLUActivation : public Activation {
         public:
             real_t operator()(const real_t x) const override final {
-                return std::max(static_cast<real_t>(0.0), x - offset);
+                return std::max(static_cast<real_t>(0.0), x);
             }
             real_t derivative(const real_t x) const override final {
-                return x > offset ? 1.0 : 0.0;
+                return x > 0.0 ? 1.0 : 0.0;
             }
-            real_t offset{0.0};
     };
     class LeakyReLUActivation : public Activation {
         public:
