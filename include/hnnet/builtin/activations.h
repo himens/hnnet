@@ -84,6 +84,24 @@ namespace hNNet::Builtin {
             }
             real_t offset{0.0};
     };
+    class LeakyReLUActivation : public Activation {
+        public:
+            real_t operator()(const real_t x) const override final {
+                return x >= 0.0 ? x : 0.01 * x;
+            }
+            real_t derivative(const real_t x) const override final {
+                return x >= 0.0 ? 1.0 : 0.01;
+            }
+    };
+    class ELUActivation : public Activation {
+        public:
+            real_t operator()(const real_t x) const override final {
+                return x >= 0.0 ? x : 0.01 * (std::exp(x) - 1.0);
+            }
+            real_t derivative(const real_t x) const override final {
+                return x >= 0.0 ? 1.0 : 0.01 * std::exp(x);
+            }
+    };
     class GaussianActivation : public Activation {
         public:
             real_t operator()(const real_t x) const override final {
@@ -104,25 +122,7 @@ namespace hNNet::Builtin {
                 const auto t = (*this)(x);
                 return 1.0 - t * t;
             }
-    };
-    class LeakyReLUActivation : public Activation {
-        public:
-            real_t operator()(const real_t x) const override final {
-                return x >= 0.0 ? x : 0.01 * x;
-            }
-            real_t derivative(const real_t x) const override final {
-                return x >= 0.0 ? 1.0 : 0.01;
-            }
-    };
-    class ELUActivation : public Activation {
-        public:
-            real_t operator()(const real_t x) const override final {
-                return x >= 0.0 ? x : 0.01 * (std::exp(x) - 1.0);
-            }
-            real_t derivative(const real_t x) const override final {
-                return x >= 0.0 ? 1.0 : 0.01 * std::exp(x);
-            }
-    };
+    }; 
     class SoftplusActivation : public Activation {
         public:
             real_t operator()(const real_t x) const override final {
