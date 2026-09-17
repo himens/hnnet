@@ -1,6 +1,7 @@
 #pragma once
 #include "hnnet/nnet.h"
 #include "hnnet/builtin/activations.h"
+#include "hnnet/builtin/dag_net.h"
 
 namespace hNNet::Builtin {
     template <typename T>
@@ -19,7 +20,7 @@ namespace hNNet::Builtin {
     ///////////////////////////
     // DenseForwardNet class //
     ///////////////////////////
-    class DenseForwardNet : public NNet {
+    class DenseForwardNet : public DAGNet {
         public:
             // Constructor
             template <LayerType... Layers>

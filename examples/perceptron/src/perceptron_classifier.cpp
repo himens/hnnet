@@ -1,7 +1,7 @@
 #include <fstream>
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/perceptron_rule.h"
-#include "hnnet/nnet.h"
+#include "hnnet/builtin/dag_net.h"
 
 // Constants
 constexpr size_t nb_rows{9};
@@ -87,7 +87,7 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 // Classify letters using the trained perceptron neural network
 int main() {
     // create net
-    NNet classifier;
+    Builtin::DAGNet classifier;
     auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  Builtin::IdentityActivation{});
     auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, Builtin::PerceptronActivation{});
     classifier.connect(input_layer, output_layer);

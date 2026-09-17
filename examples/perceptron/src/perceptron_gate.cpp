@@ -1,12 +1,12 @@
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/perceptron_rule.h"
-#include "hnnet/nnet.h"
+#include "hnnet/builtin/dag_net.h"
 
 // Simple AND gate implementation using a perceptron neural network
 int main() {
     using namespace hNNet;
     // create net
-    NNet gate;
+    Builtin::DAGNet gate;
     auto input_layer  = gate.new_neurons(2, NeuronType::input,  Builtin::IdentityActivation{});
     auto output_layer = gate.new_neurons(1, NeuronType::output, Builtin::PerceptronActivation{});
     auto bias         = gate.new_neurons(1, NeuronType::bias,   Builtin::IdentityActivation{});
