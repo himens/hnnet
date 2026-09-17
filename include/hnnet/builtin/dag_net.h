@@ -140,7 +140,7 @@ namespace hNNet::Builtin {
             }
             // Update net state
             void update_state(NNetState &state) const override {
-                broadcast_signals(state);
+                propagate_signals(state);
             }
         private:
             // Data types
@@ -176,21 +176,21 @@ namespace hNNet::Builtin {
                     index_vector_t _roots;
                     std::vector<int_t> _ranks;
             };
-            // Broadcast signals through the net
-            void broadcast_signals(NNetState &state) const {
+            // Propagate signals through the net
+            void propagate_signals(NNetState &state) const {
                 for (auto ipart{0}; ipart < std::ssize(_partitions); ++ipart) {
                     const auto &partition = _partitions[ipart];
                     if (_iblocks[ipart] != DenseBlock::no_block) {
                         const auto &block = _dense_blocks[_iblocks[ipart]];
-                        broadcast_signals(state, block);
+                        propagate_signals(state, block);
                         ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                         continue;
                     }
-                    broadcast_signals(state, partition);
+                    propagate_signals(state, partition);
                 }
             }
             // Process a single partition
-            void broadcast_signals(NNetState &state, const Partition &partition) const {
+            void propagate_signals(NNetState &state, const Partition &partition) const {
                 real_t weighted_sum{0.0};
                 auto iconn = partition.iconn_begin;
                 for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
@@ -207,7 +207,7 @@ namespace hNNet::Builtin {
                 state.signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
             }
             // Process a dense block
-            void broadcast_signals(NNetState &state, const DenseBlock &block) const {
+            void propagate_signals(NNetState &state, const DenseBlock &block) const {
                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                     real_t weighted_sum{0.0};
                     const auto row_offset = block.weight_offset + irow * block.tx_count;
