@@ -18,14 +18,11 @@ namespace hNNet::Builtin {
             };
             class View : public NNet::View {
                 public:
-                    const DenseBlock& dense_block(const index_t index) const {
-                        return _net._dense_blocks[index];
+                    bool is_dense(const index_t ipart) const {
+                        return _net._iblocks[ipart] != DenseBlock::no_block;
                     }
-                    bool is_dense_partition(const index_t index) const {
-                        return _net._iblocks[index] != DenseBlock::no_block;
-                    }
-                    const DenseBlock& dense_block_for_partition(const index_t index) const {
-                        return _net._dense_blocks[_net._iblocks[index]];
+                    const DenseBlock& dense_block(const index_t ipart) const {
+                        return _net._dense_blocks[_net._iblocks[ipart]];
                     }
                 private:
                     friend class DAGNet;

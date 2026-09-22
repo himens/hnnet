@@ -118,8 +118,8 @@ namespace hNNet::Builtin {
                     const auto partitions = view.partitions();
                     for (auto ipart = std::ssize(partitions) - 1; ipart >= 0; --ipart) {
                         const auto &partition = partitions[ipart];
-                        if (view.is_dense_partition(ipart)) {
-                            const auto &block = view.dense_block_for_partition(ipart);
+                        if (view.is_dense(ipart)) {
+                            const auto &block = view.dense_block(ipart);
                             for (auto irow{0}; irow < block.rx_count; ++irow) {
                                 const auto irx = block.irx_begin + irow;
                                 const auto &rx = view.neuron(irx);
@@ -148,8 +148,8 @@ namespace hNNet::Builtin {
                     // per-connection delta_weight (pure, no learning rate/momentum)
                     for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
                         const auto &partition = partitions[ipart];
-                        if (view.is_dense_partition(ipart)) {
-                            const auto &block = view.dense_block_for_partition(ipart);
+                        if (view.is_dense(ipart)) {
+                            const auto &block = view.dense_block(ipart);
                             for (auto irow{0}; irow < block.rx_count; ++irow) {
                                 const auto delta_rx = deltas[block.irx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;

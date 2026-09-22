@@ -87,7 +87,7 @@ namespace hNNet {
                         }
                     }
                     return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
-            }
+                }
             // Connect neurons (cartesian product)
             void connect(const IndexRange auto &itxs, const IndexRange auto &irxs) {
                 _trained = false;
@@ -204,7 +204,7 @@ namespace hNNet {
             static void sort_connections(std::span<SynapticConn> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.irx, lhs.itx) < std::tie(rhs.irx, rhs.itx); });
             }
-            // Group connections sharing the same irx into contiguous partitions
+            // Group connections sharing the same rx into partitions
             static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
                 std::vector<Partition> partitions;
                 index_t iconn_begin{0};
