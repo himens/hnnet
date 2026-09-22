@@ -185,27 +185,27 @@ namespace hNNet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
-            // Update net state
-            virtual void update_state(NNetState &state) const = 0;
             // Prepare net (default: randomize weights, sort connections, group them into partitions)
             virtual void prepare() {
-                randomize_weights();
+                initialize_weights(-0.1, +0.1);
                 sort_connections(_connections);
-                _partitions = find_partitions(_connections);
+                _partitions = make_partitions(_connections);
             }
-            // Randomize weights
-            void randomize_weights() {
-                std::uniform_real_distribution<real_t> dist(-0.1, +0.1);
+            // Update net state
+            virtual void update_state(NNetState &state) const = 0;
+            // Initialize weights
+            void initialize_weights(const real_t min, const real_t max) {
+                std::uniform_real_distribution<real_t> dist(min, max);
                 for (auto &weight : _weights) {
                     weight = dist(random_generator());
                 }
             }
             // Sort connections per irx and itx
-            void sort_connections(std::vector<SynapticConn> &connections) const {
+            static void sort_connections(std::span<SynapticConn> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.irx, lhs.itx) < std::tie(rhs.irx, rhs.itx); });
             }
             // Group connections sharing the same irx into contiguous partitions
-            static std::vector<Partition> find_partitions(const std::vector<SynapticConn> &connections) {
+            static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
                 std::vector<Partition> partitions;
                 index_t iconn_begin{0};
                 while (iconn_begin < std::ssize(connections)) {

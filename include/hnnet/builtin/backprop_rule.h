@@ -83,7 +83,7 @@ namespace hNNet::Builtin {
                             const auto tid = omp_get_thread_num();
                             auto &state = _states[tid];
                             net.update(state, inputs[isample]);
-                            loss += backward(view, state, _deltas[tid], _thread_dweights[tid], targets[isample]);
+                            loss += backward(view, state, targets[isample], _deltas[tid], _thread_dweights[tid]);
                         }
                         // single, sequential weight update
                         if (thread_count == 1) {
@@ -105,7 +105,7 @@ namespace hNNet::Builtin {
                 }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                real_t backward(DAGNet::View &view, NNetState &state, delta_vector_t &deltas, grad_vector_t &dweights, const DataType auto &targets) const {
+                real_t backward(DAGNet::View &view, NNetState &state, const DataType auto &targets, delta_vector_t &deltas, grad_vector_t &dweights) const {
                     std::ranges::fill(deltas, 0.0);
                     // seed output deltas using the loss
                     real_t loss{0.0};

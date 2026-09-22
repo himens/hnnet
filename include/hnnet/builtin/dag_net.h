@@ -43,6 +43,10 @@ namespace hNNet::Builtin {
                     NNet::train(*this, inputs, targets, std::move(rule));
                 }
         protected:
+            // Update net state
+            void update_state(NNetState &state) const override {
+                propagate_signals(state);
+            }
             // Prepare net (order partitions topologically, find dense blocks...)
             void prepare() override {
                 NNet::prepare();
@@ -138,10 +142,6 @@ namespace hNNet::Builtin {
                 std::println("DAGNet::prepare: found {} partitions(s)", _partitions.size());
                 std::println("DAGNet::prepare: found {} dense block(s)", _dense_blocks.size());
             }
-            // Update net state
-            void update_state(NNetState &state) const override {
-                propagate_signals(state);
-            }
         private:
             // Data types
             class UnionFind {
@@ -182,19 +182,19 @@ namespace hNNet::Builtin {
                     const auto &partition = _partitions[ipart];
                     if (_iblocks[ipart] != DenseBlock::no_block) {
                         const auto &block = _dense_blocks[_iblocks[ipart]];
-                        propagate_signals(state, block);
+                        propagate_dense_block(state, block);
                         ipart += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                         continue;
                     }
-                    propagate_signals(state, partition);
+                    propagate_partition(state, partition);
                 }
             }
-            // Process a single partition
-            void propagate_signals(NNetState &state, const Partition &partition) const {
+            // Propagate signals in a single partition
+            void propagate_partition(NNetState &state, const Partition &partition) const {
                 real_t weighted_sum{0.0};
                 auto iconn = partition.iconn_begin;
                 for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
-                    weighted_sum +=  _weights[iconn]      * state.signals[_connections[iconn].itx]
+                    weighted_sum +=   _weights[iconn]     * state.signals[_connections[iconn].itx]
                                     + _weights[iconn + 1] * state.signals[_connections[iconn + 1].itx]
                                     + _weights[iconn + 2] * state.signals[_connections[iconn + 2].itx]
                                     + _weights[iconn + 3] * state.signals[_connections[iconn + 3].itx];
@@ -206,14 +206,14 @@ namespace hNNet::Builtin {
                 state.weighted_sums[partition.irx] = weighted_sum;
                 state.signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
             }
-            // Process a dense block
-            void propagate_signals(NNetState &state, const DenseBlock &block) const {
+            // Propagate signals in dense block
+            void propagate_dense_block(NNetState &state, const DenseBlock &block) const {
                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                     real_t weighted_sum{0.0};
                     const auto row_offset = block.weight_offset + irow * block.tx_count;
                     index_t icol{0};
                     for (; icol <= (block.tx_count - register_size); icol += register_size) {
-                        weighted_sum +=  _weights[row_offset  + icol]     * state.signals[block.itx_begin + icol]
+                        weighted_sum +=   _weights[row_offset + icol]     * state.signals[block.itx_begin + icol]
                                         + _weights[row_offset + icol + 1] * state.signals[block.itx_begin + icol + 1]
                                         + _weights[row_offset + icol + 2] * state.signals[block.itx_begin + icol + 2]
                                         + _weights[row_offset + icol + 3] * state.signals[block.itx_begin + icol + 3];
