@@ -7,8 +7,8 @@ namespace hNNet::Builtin {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     template <typename T>
-        concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const grad_vector_t &batch_dweights, const int_t batch_size, const real_t learning_rate) {
-            optimizer.update(view, batch_dweights, batch_size, learning_rate);
+        concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const real_t learning_rate, const int_t batch_size, const grad_vector_t &batch_dweights) {
+            optimizer.update(view, learning_rate, batch_size, batch_dweights);
         };
     ///////////////////////
     // SGDMomentum class //
@@ -21,7 +21,7 @@ namespace hNNet::Builtin {
                 }
                 std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
             }
-            void update(DAGNet::View &view, const grad_vector_t &batch_dweights, const real_t batch_size, const real_t learning_rate) {
+            void update(DAGNet::View &view, const real_t learning_rate, const int_t batch_size, const grad_vector_t &batch_dweights) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(batch_dweights.size(), 0.0);
                 }
@@ -87,7 +87,7 @@ namespace hNNet::Builtin {
                         }
                         // single, sequential weight update
                         if (thread_count == 1) {
-                            _optimizer.update(view, _thread_dweights[0], _batch_size, _learning_rate);
+                            _optimizer.update(view, _learning_rate, _batch_size, _thread_dweights[0]);
                         }
                         else {
                             // sequential reduction: sum contribution of each thread
@@ -98,7 +98,7 @@ namespace hNNet::Builtin {
                                     _batch_dweights[iconn] += dweights[iconn];
                                 }
                             }
-                            _optimizer.update(view, _batch_dweights, _batch_size, _learning_rate);
+                            _optimizer.update(view, _learning_rate, _batch_size, _batch_dweights);
                         }
                     }
                     return loss / std::ranges::size(inputs);
