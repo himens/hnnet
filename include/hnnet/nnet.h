@@ -185,14 +185,6 @@ namespace hNNet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
-            // Prepare net (default: randomize weights, sort connections, group them into partitions)
-            virtual void prepare() {
-                sort_connections(_connections);
-                _partitions = make_partitions(_connections);
-                _weights = utils::random::generate<real_t>(_weights.size(), -0.1, +0.1);
-            }
-            // Update net state
-            virtual void update_state(NNetState &state) const = 0;
             // Sort connections per irx and itx
             static void sort_connections(const std::span<SynapticConn> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.irx, lhs.itx) < std::tie(rhs.irx, rhs.itx); });
@@ -223,6 +215,14 @@ namespace hNNet {
                     state.signals[ibias] = _neurons[ibias].activate(1.0);
                 }
             }
+            // Prepare net (default: randomize weights, sort connections, group them into partitions)
+            virtual void prepare() {
+                sort_connections(_connections);
+                _partitions = make_partitions(_connections);
+                _weights = utils::random::generate<real_t>(_weights.size(), -0.1, +0.1);
+            }
+            // Update net state
+            virtual void update_state(NNetState &state) const = 0;
             // Data members
             std::vector<Neuron> _neurons{};
             std::vector<SynapticConn> _connections{};
