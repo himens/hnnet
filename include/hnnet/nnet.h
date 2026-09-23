@@ -124,7 +124,7 @@ namespace hNNet {
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
                     bool converged{false};
-                    Timer timer{};
+                    utils::Timer timer{};
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
                     std::println("NNet::train: ==================================");
@@ -187,21 +187,14 @@ namespace hNNet {
             };
             // Prepare net (default: randomize weights, sort connections, group them into partitions)
             virtual void prepare() {
-                initialize_weights(-0.1, +0.1);
                 sort_connections(_connections);
                 _partitions = make_partitions(_connections);
+                _weights = utils::random::generate<real_t>(_weights.size(), -0.1, +0.1);
             }
             // Update net state
             virtual void update_state(NNetState &state) const = 0;
-            // Initialize weights
-            void initialize_weights(const real_t min, const real_t max) {
-                std::uniform_real_distribution<real_t> dist(min, max);
-                for (auto &weight : _weights) {
-                    weight = dist(random_generator());
-                }
-            }
             // Sort connections per irx and itx
-            static void sort_connections(std::span<SynapticConn> connections) {
+            static void sort_connections(const std::span<SynapticConn> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.irx, lhs.itx) < std::tie(rhs.irx, rhs.itx); });
             }
             // Group connections sharing the same rx into partitions
