@@ -224,13 +224,11 @@ namespace hNNet {
             // Update net state
             virtual void update_state(NNetState &state) const = 0;
             // Data members
+            bool _trained{false};
             std::vector<Neuron> _neurons{};
             std::vector<SynapticConn> _connections{};
             std::vector<real_t> _weights{};
             std::vector<Partition> _partitions{};
-        private:
-            // Data members
-            bool _trained{false};
             index_vector_t _iin_neurons{};
             index_vector_t _iout_neurons{};
             index_vector_t _ibias_neurons{};
