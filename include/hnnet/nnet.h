@@ -223,6 +223,7 @@ namespace hNNet {
             }
             // Update net state
             virtual void update_state(NNetState &state) const = 0;
+        protected:
             // Data members
             bool _trained{false};
             std::vector<Neuron> _neurons{};
