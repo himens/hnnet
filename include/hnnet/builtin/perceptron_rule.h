@@ -52,6 +52,7 @@ namespace hNNet::Builtin {
                 }
                 return squared_error;
             }
+        private:
             // Data members
             real_t _learning_rate;
             MSELoss _mean_squared_error;

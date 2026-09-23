@@ -168,6 +168,7 @@ namespace hNNet::Builtin {
                     }
                     return loss;
                 }
+            private:
                 // Data members
                 real_t _learning_rate;
                 Optimizer _optimizer;

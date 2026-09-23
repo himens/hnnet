@@ -223,6 +223,7 @@ namespace hNNet::Builtin {
                     state.signals[block.irx_begin + irow] = _neurons[block.irx_begin + irow].activate(weighted_sum);
                 }
             }
+        private:
             // Data members
             std::vector<DenseBlock> _dense_blocks{};
             index_vector_t _iblocks{};
