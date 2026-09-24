@@ -3,7 +3,7 @@
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/dag_net.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     template <typename T>
         concept LayerType = requires(T layer) {
             { auto(layer.size) } -> std::same_as<int_t>;

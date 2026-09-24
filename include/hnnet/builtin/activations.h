@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/activation.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     class IdentityActivation : public Activation {
         public:
             real_t operator()(const real_t x) const override final {

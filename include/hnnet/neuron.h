@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/activation.h"
 
-namespace hNNet {
+namespace hnnet {
     //////////////////
     // Neuron class //
     //////////////////

@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/types.h"
 
-namespace hNNet {
+namespace hnnet {
     template <typename Rule, typename Net, typename Inputs, typename Targets>
         concept LearningRuleType =
             DatasetType<Inputs> and DatasetType<Targets> and

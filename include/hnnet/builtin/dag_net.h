@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/nnet.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     ///////////////////
     // DAGNet class  //
     ///////////////////

@@ -2,7 +2,7 @@
 #include "hnnet/neuron.h"
 #include "hnnet/learning_rule.h"
 
-namespace hNNet {
+namespace hnnet {
     using input_vector_t  = std::vector<real_t>;
     using output_vector_t = std::vector<real_t>;
     using index_vector_t  = std::vector<index_t>;

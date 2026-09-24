@@ -3,7 +3,7 @@
 #include "hnnet/builtin/dag_net.h"
 #include "hnnet/builtin/losses.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     template <typename T>

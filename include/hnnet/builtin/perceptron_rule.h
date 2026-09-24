@@ -2,7 +2,7 @@
 #include "hnnet/nnet.h"
 #include "hnnet/builtin/losses.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     //////////////////////////
     // PerceptronRule class //
     //////////////////////////

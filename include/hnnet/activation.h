@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/types.h"
 
-namespace hNNet {
+namespace hnnet {
     class Activation {
         public:
             virtual real_t operator()(const real_t x) const = 0;
