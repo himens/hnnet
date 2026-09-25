@@ -16,7 +16,7 @@
 #include "timer.h"
 #include "random.h"
 
-namespace hNNet {
+namespace hnnet {
     // Aliases for commonly used types
     using real_t  = std::float64_t;
     using int_t   = std::int64_t;

@@ -1,7 +1,7 @@
 #include <fstream>
 #include "hnnet/builtin/activations.h"
 #include "hnnet/builtin/perceptron_rule.h"
-#include "hnnet/nnet.h"
+#include "hnnet/builtin/dag_net.h"
 
 // Constants
 constexpr size_t nb_rows{9};
@@ -9,7 +9,7 @@ constexpr size_t nb_columns{7};
 constexpr size_t nb_pixels{nb_rows * nb_columns};
 constexpr size_t nb_letters{26};
 // Aliases and data types
-using namespace hNNet;
+using namespace hnnet;
 using Pixels = std::array<std::array<char, nb_columns>, nb_rows>;
 struct LetterData {
     char character{'\0'};
@@ -87,9 +87,9 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 // Classify letters using the trained perceptron neural network
 int main() {
     // create net
-    NNet classifier;
-    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  Builtin::IdentityActivation{});
-    auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, Builtin::PerceptronActivation{});
+    builtin::DAGNet classifier;
+    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  builtin::IdentityActivation{});
+    auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, builtin::PerceptronActivation{});
     classifier.connect(input_layer, output_layer);
     // train net
     std::vector<LetterData> letters{};
@@ -102,7 +102,7 @@ int main() {
         inputs[i] = encode(letter.pixels);
         targets[i] = encode({letter.character});
     }
-    classifier.train(inputs, targets, Builtin::PerceptronRule{1.0});
+    classifier.train(inputs, targets, builtin::PerceptronRule{1.0});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));

@@ -1,7 +1,7 @@
 #pragma once
 #include "hnnet/loss.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     ///////////////////  
     // MSELoss class //
     ///////////////////

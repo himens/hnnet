@@ -2,7 +2,7 @@
 #include "hnnet/nnet.h"
 #include "hnnet/builtin/losses.h"
 
-namespace hNNet::Builtin {
+namespace hnnet::builtin {
     //////////////////////////
     // PerceptronRule class //
     //////////////////////////
@@ -52,6 +52,7 @@ namespace hNNet::Builtin {
                 }
                 return squared_error;
             }
+        private:
             // Data members
             real_t _learning_rate;
             MSELoss _mean_squared_error;

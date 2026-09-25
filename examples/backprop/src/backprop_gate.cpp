@@ -3,12 +3,12 @@
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
-    using namespace hNNet;
+    using namespace hnnet;
     // create net
-    Builtin::DenseForwardNet gate{
-        Builtin::Layer{2, NeuronType::input,  Builtin::IdentityActivation{}},
-        Builtin::Layer{4, NeuronType::hidden, Builtin::SigmoidActivation{}, true},
-        Builtin::Layer{1, NeuronType::output, Builtin::SigmoidActivation{}, true}
+    builtin::DenseForwardNet gate{
+        builtin::Layer{2, NeuronType::input,  builtin::IdentityActivation{}},
+        builtin::Layer{4, NeuronType::hidden, builtin::SigmoidActivation{}, true},
+        builtin::Layer{1, NeuronType::output, builtin::SigmoidActivation{}, true}
     };
     // train net
     const std::array<input_vector_t, 4> inputs{{
@@ -29,7 +29,7 @@ int main() {
         {1}, 
         {0}
     }};
-    gate.train(inputs, targets, Builtin::BackpropRule{0.2});
+    gate.train(inputs, targets, builtin::BackpropRule{0.2});
 
     return 0;
 }
