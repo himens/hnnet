@@ -1,18 +1,19 @@
 # hNNet
 
-hNNet is a small C++ framework for building neural networks in a generic way. The core idea is not to hard-code a specific model but to provide:
+hNNet is a small C++26 framework for building neural networks. Its core separates network structure, signal propagation, and learning strategies:
 
-- a generic neural network, `NNet`, whose template parameters define the type and size of the input and output data
-- a single concrete `Neuron` class, whose type (`input`, `hidden`, `output`, `bias`) and activation function are set when it is created
-- a `LearningRule` strategy (e.g. `Builtin::PerceptronRule`, `Builtin::BackpropRule`) that plugs into `NNet::train(...)` without requiring virtual dispatch on the neuron
+- `NNet` owns neurons, connections, weights, and input/output metadata; `DAGNet` provides topologically ordered propagation over acyclic networks
+- `DenseForwardNet` builds fully connected feed-forward networks from a sequence of layer descriptions
+- `LearningRule` strategies such as `PerceptronRule` and `BackpropRule` plug into `DAGNet::train(...)`
 
-The perceptron and backprop rules in `include/hnnet/builtin` are only two concrete learning strategies that can be plugged into the generic framework.
+`Neuron` is a concrete type. Its role (`input`, `hidden`, `output`, or `bias`) and activation function are selected when it is created. The built-in learning rules are examples of strategies that operate on the network without making the neuron type depend on a particular learning algorithm.
 
 ## Requirements
 
 - CMake 4.4 or newer
 - g++ 16
 - C++26
+- OpenMP
 
 ## Build
 
@@ -33,7 +34,7 @@ Notes on current build configuration:
 
 ## Running the examples
 
-### 1. AND gate example
+### AND gate
 
 ```bash
 ./build/bin/hnnet-perceptron-gate
@@ -41,7 +42,7 @@ Notes on current build configuration:
 
 This example builds a small network with 3 inputs (2 + bias) and 1 output, trains it and checks that the result is the one of an AND gate.
 
-### 2. Letter classifier
+### Letter classifier
 
 ```bash
 ./build/bin/hnnet-perceptron-classifier
@@ -62,78 +63,80 @@ Classifier data representation details:
 
 > To make the classifier work correctly, run the command from the project root so that the paths `data/letters_*.txt` are resolved properly.
 
+### XOR with backpropagation
+
+```cpp
+#include <array>
+#include "hnnet/builtin/backprop_rule.h"
+#include "hnnet/builtin/dense_forward_net.h"
+
+int main() {
+    using namespace hnnet;
+    builtin::DenseForwardNet gate{
+        builtin::Layer{2, NeuronType::input, builtin::IdentityActivation{}},
+        builtin::Layer{4, NeuronType::hidden, builtin::SigmoidActivation{}, true},
+        builtin::Layer{1, NeuronType::output, builtin::SigmoidActivation{}, true}
+    };
+
+    const std::array<input_vector_t, 4> inputs{{
+        {1, 1}, {1, 0}, {0, 1}, {0, 0}
+    }};
+    const std::array<output_vector_t, 4> targets{{
+        {0}, {1}, {1}, {0}
+    }};
+    gate.train(inputs, targets, builtin::BackpropRule{0.2});
+}
+```
+
+Build and run the corresponding example with:
+
+```bash
+cmake --build build --target hnnet-backprop-gate
+./build/bin/hnnet-backprop-gate
+```
+
+### MNIST classifier
+
+`hnnet-backprop-mnist` trains a `784-512-512-512-10` network. It expects the CSV files `data/mnist/mnist_train.csv` and `data/mnist/mnist_test.csv` from the project root; each row contains a label followed by 784 pixel values. The example uses up to 60,000 training and 10,000 test samples.
+
+```bash
+./build/bin/hnnet-backprop-mnist
+```
+
 ## Project structure
 
 - `include/`: library headers
-    - `hnnet/types.h`: base types such as `Data`
-    - `hnnet/activation.h`: `ActivationType` concept
-    - `hnnet/neuron.h`: definition of the `Neuron` class
-    - `hnnet/loss.h`: `LossType` concept used by learning rules
-    - `hnnet/learning_rule.h`: `LearningRuleType` concept used by `NNet::train(...)`
-    - `hnnet/nnet.h`: implementation of the generic `NNet` network and `NNetState`
-    - `hnnet/builtin/`: built-in activations (`activations.h`), losses (`losses.h`), learning rules (`perceptron_rule.h`, `backprop_rule.h`) and the `DenseForwardNet` helper (`dense_forward_net.h`)
+    - `hnnet/types.h`: numeric aliases and range concepts for data and datasets
+    - `hnnet/activation.h`, `hnnet/neuron.h`: activation interface and neuron definition
+    - `hnnet/loss.h`, `hnnet/learning_rule.h`: concepts used by losses and learning rules
+    - `hnnet/nnet.h`: base network storage, `NNetState`, training loop, and inference API
+    - `hnnet/builtin/`: built-in activations, losses, learning rules, `DAGNet`, and `DenseForwardNet`
 - `examples/`: example implementations built on top of the generic framework
 - `data/`: datasets used by the examples
 - `scripts/`: helper scripts for generating or processing data
 
-## How the library is intended to be used
+## Network API
 
-The library is designed around three main pieces:
+The library is organized around three pieces:
 
-1. `NNet<InputData, OutputData>`
-    - defines the network input/output contract through `Data` types
-    - manages neuron creation and connections
-    - provides `train(...)` and `infer(...)` operations
+1. `NNet`
+    - non-template base class that stores neurons and weighted connections
+    - provides neuron creation, `infer(...)`, and the common training loop
+    - subclasses implement signal propagation
 
-`InputData` and `OutputData` must satisfy `DataType`, so in practice you pass aliases based on `Data<ValueType, Size>`.
+Input and output samples are contiguous ranges of `real_t`; datasets are contiguous ranges of those samples. The aliases `input_vector_t` and `output_vector_t` are both `std::vector<real_t>`.
 
-2. `Neuron`
-    - a single concrete class: its `NeuronType` (`input`, `hidden`, `output`, `bias`) is set at creation and used by `NNet` to identify input/output neurons
-    - owns an `Activation` strategy (e.g. `SigmoidActivation`, `PerceptronActivation`) used to convert weighted sums into output signals
+2. `DAGNet` and `DenseForwardNet`
+    - `DAGNet` rejects cyclic topologies and orders propagation topologically; compatible connections are grouped into dense blocks
+    - `DenseForwardNet` is a `DAGNet` convenience class that creates fully connected layers from `Layer` descriptions
 
-3. `LearningRule` (e.g. `Builtin::PerceptronRule`, `Builtin::BackpropRule`)
-    - implements `learn(net, targets)` and is passed to `NNet::train(...)`
-    - lets you swap the learning algorithm without changing `Neuron` or `NNet`
+3. `LearningRule`
+    - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`
+    - allows learning strategies to change independently of the network representation
 
-## Basic usage example
+`BackpropRule<Optimizer, Loss>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`. Samples in each multi-sample mini-batch are processed in parallel with OpenMP; gradients are accumulated for that batch and the optimizer updates weights at the end of each batch. The built-in `SGDMomentum` stores momentum state, while the learning rate belongs to `BackpropRule`.
 
-Here is a minimal example of how to create and train a network (XOR gate with a backprop rule and a hidden layer):
-
-```cpp
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/dense_forward_net.h"
-#include "hnnet/builtin/backprop_rule.h"
-
-using namespace hNNet;
-using Gate = Builtin::DenseForwardNet<Data<real_t, 2>, Data<real_t, 1>>;
-Gate gate{
-    Builtin::Layer{2, NeuronType::input,  Builtin::IdentityActivation{}},
-    Builtin::Layer{4, NeuronType::hidden, Builtin::SigmoidActivation{}, true},
-    Builtin::Layer{1, NeuronType::output, Builtin::SigmoidActivation{}, true}
-};
-
-std::vector<Gate::TrainingData> samples{
-    {{1, 1}, {0}},
-    {{1, 0}, {1}},
-    {{0, 1}, {1}},
-    {{0, 0}, {0}}
-};
-
-gate.train(samples, Builtin::BackpropRule{0.2});
-```
-
-The main operations are:
-
-- `DenseForwardNet<InputData, OutputData>{Layer{...}, ...}`: builds a fully-connected feed-forward network from a runtime list of `Layer` descriptions (size, `NeuronType`, activation, optional bias)
-- `new_neurons(n, type, activation)` / `connect(tx, rx)`: lower-level primitives used internally by `DenseForwardNet` if you need to build a custom topology by hand
-- `train(samples, rule)`: trains the network on the provided data using the given `LearningRule` for a whole epoch at a time
-- `infer(data)`: performs inference on new inputs
-
-`Builtin::BackpropRule<Loss, Optimizer>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`: samples are split into mini-batches, each mini-batch is processed sequentially by one thread (multiple mini-batches run in parallel across threads), and weights are updated once per epoch from the accumulated gradient. `Builtin::SGDMomentum` is the built-in optimizer, holding only the momentum-specific state (the learning rate lives on `BackpropRule`, not on the optimizer, so it stays generic across optimizers).
-
-Internally, `NNet` compiles the connection list into receiver partitions in topological order. Compatible contiguous partitions are grouped into dense blocks, so their forward pass uses sequential weight and signal buffers. Per-sample transient state (signals and weighted sums) lives in `NNetState`, separate from the network topology, so it can be duplicated per thread for parallel training.
-
-During `train(...)`, the current implementation prints epoch progress and, when converged, a short summary with elapsed time and total epochs.
+Training currently uses a fixed loss threshold and maximum epoch count and prints progress to standard output. Inference uses `NNetState` for signals and weighted sums, separately from the network topology.
 
 ## TODO
 
@@ -147,4 +150,4 @@ See [TODO.md](TODO.md) for the complete list of planned improvements and their p
 
 ## Notes
 
-The code is intended as a didactic example and shows a lightweight, extensible neural-network framework.
+The code is intended as a didactic example of a lightweight, extensible neural-network framework.

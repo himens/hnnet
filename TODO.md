@@ -18,26 +18,31 @@
   - Non c'è più alcuna deduzione basata su connessioni entranti/uscenti.
 
 - [x] **Gestire il bias come parte della rete, non come dato di training**
-  - `NNet::add_bias(neurons)` crea un neurone di bias per ciascun neurone del range passato, lo collega e lo attiva con segnale costante 1.0.
-  - Il bias non è più parte di `TrainingSample.inputs`: la topologia della rete non influenza più la forma dei dati di training.
+  - I neuroni di bias vengono creati con `new_neurons(..., NeuronType::bias, ...)`, collegati ai receiver e inizializzati con segnale costante 1.0 durante la propagazione.
+  - Il bias non è parte dei sample di training: la topologia della rete non influenza la forma dei dati.
 
 - [x] **Unificare gli overload di `connect`**
-  - `NNet::connect(tx, rx)` accetta ora, per ciascun lato, sia un singolo `Neuron` sia un `NeuronRange`, tramite un'unica funzione template invece di quattro overload distinti.
-  - Internamente entrambi gli argomenti vengono uniformati a una view di indici per riutilizzare la stessa logica di controllo/creazione delle connessioni.
+  - `NNet::connect(tx, rx)` crea il prodotto cartesiano tra due range di indici; la rete espone un'unica implementazione basata sul concept `IndexRange`.
+  - `zip_connect()` dovrebbe collegare elementi a coppie, ma non compila quando viene istanziato; il difetto è tracciato tra le priorità alte.
 
 - [x] **Compilare la topologia per il forward/backward pass**
   - Prima del training, `prepare()` ordina le connessioni per receiver, costruisce partition contigue e le ordina topologicamente; reti cicliche vengono rifiutate.
   - Partition dense compatibili vengono riconosciute come `DenseBlock` e percorse come prodotti matrice-vettore con pesi e segnali contigui.
 
 - [x] **Separare i segnali dalla struttura del neurone**
-  - I segnali vivono in `NNet::_signals`, un `std::vector<real_t>` allineato agli indici dei neuroni; `Neuron` conserva soltanto metadati, attivazione e weighted sum.
+  - Segnali e weighted sum vivono in `NNetState` in vettori allineati agli indici dei neuroni; lo stato è separato dalla topologia e può essere istanziato per ogni thread di training.
+  - `Neuron` conserva tipo e attivazione, non i segnali o i weighted sum.
 
 - [x] **Introdurre mini-batch e gradient accumulation**
-  - `BackpropRule` divide i sample in mini-batch; ciascun mini-batch viene elaborato sequenzialmente da un thread (più mini-batch in parallelo su thread diversi), accumulando i delta-weight in un buffer per-thread.
-  - I pesi vengono aggiornati una sola volta per epoca dalla somma dei gradienti di tutti i thread; lo stato per-sample (`NNetState`: segnali e weighted sum) è separato dalla topologia e duplicato per thread.
+  - `BackpropRule` divide i sample in mini-batch; i sample di ciascun batch vengono elaborati in parallelo, accumulando i gradienti in buffer per-thread.
+  - I gradienti dei thread vengono sommati e l'optimizer aggiorna i pesi alla fine di ogni mini-batch; lo stato per-thread (`NNetState`: segnali e weighted sum) è separato dalla topologia.
   - `learning_rate` è un parametro di `BackpropRule`, non dell'optimizer, per restare generico rispetto a `Optimizer`.
 
 ## Priorita alta
+- [ ] **Rendere operativo `zip_connect()`**
+  - L'implementazione corrente passa indici scalari a `connect()`, che accetta solo range; il template non compila quando viene istanziato.
+  - Collegare direttamente le coppie generate da `std::views::zip` o introdurre un helper one-to-one.
+
 
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam come primo optimizer adattivo; valutare RMSProp e RPROP in seguito.
@@ -46,26 +51,26 @@
 ## Priorita bassa
 
 - [ ] **Introdurre un'astrazione per layer o modelli di rete**
-  - Oggi l'utente deve creare e collegare manualmente ogni gruppo di neuroni.
-  - Aggiungere helper per costruire layer densi e collegamenti tra layer ridurrebbe il codice ripetitivo senza nascondere il grafo quando serve controllo fine.
+  - `DenseForwardNet` costruisce già reti feed-forward fully connected da descrizioni `Layer`.
+  - Valutare astrazioni per comporre modelli o topologie DAG non dense, mantenendo disponibili `DAGNet::new_neurons()` e `connect()` per il controllo fine.
 
 - [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
   - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
   - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
 
 - [ ] **Migliorare la configurazione dell'addestramento**
-  - Rendere configurabili soglia di errore, numero massimo di epoche, learning rate e strategia di aggiornamento.
+  - Rendere configurabili soglia di errore e numero massimo di epoche; learning rate, batch size, loss e optimizer sono già configurabili in `BackpropRule`.
   - Valutare metriche e callback separati dal logging diretto su stdout.
 
 ## Performance
 
-- [ ] **Rendere O(1) il controllo di connessione duplicata in `connect()`**
-  - Attualmente `std::ranges::any_of` scansiona tutte le connessioni esistenti per ogni nuova coppia (tx, rx): O(n²) nella costruzione di layer densi.
-  - Sostituire con una hash set su `(itx, irx)`.
+- [ ] **Correggere e rendere efficiente il controllo di connessioni duplicate in `connect()`**
+  - L'hash map attuale è locale alla chiamata e rileva duplicati solo nel prodotto cartesiano corrente; una connessione aggiunta da una chiamata precedente può essere reinserita.
+  - Conservare un indice delle coppie `(itx, irx)` nella rete, così il controllo resta efficiente anche durante la costruzione di layer densi.
 
 - [ ] **Ottimizzare i kernel dei dense block sulla base del profiling**
-  - La baseline Release per MNIST (60k sample, rete 784→128→10) è circa 6s per epoca: forward ~1.1s, backprop delta ~1.9s, update pesi ~3.0s.
-  - Il loop del delta dense è più veloce senza `#pragma omp simd`; le direttive SIMD e l'unrolling manuale vanno mantenuti solo dove il benchmark dimostra un vantaggio.
+  - I tempi storici (rete 784→128→10) non sono una baseline della configurazione MNIST corrente (784→512→512→512→10); usare benchmark riproducibili prima di confrontare modifiche.
+  - Le direttive SIMD e l'unrolling manuale vanno mantenuti solo dove il benchmark dimostra un vantaggio.
   - Valutare layout, blocking e riduzione del traffico read-modify-write nel passo di update prima di introdurre rappresentazioni duplicate dei pesi.
 
 - [ ] **Ridurre il dispatch di attivazione nei batch densi**
@@ -75,8 +80,7 @@
 ## Stress test / Benchmark
 
 - [x] **Aggiungere un esempio MNIST con una rete più grande**
-  - `examples/backprop/src/backprop_mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
-  - `examples/backprop/src/backprop_mnist.cpp` allena un MLP 784→128→10 sui 60k sample MNIST e misura il tempo per epoca.
+  - `examples/backprop/src/backprop_mnist.cpp` allena un MLP 784→512→512→512→10 usando fino a 60k sample di training e 10k di test.
 
 - [ ] **Rendere riproducibili i benchmark di performance**
   - Registrare configurazione CPU, compilatore, flag Release e seed del generatore casuale.
@@ -84,7 +88,7 @@
 
 ## Report di profiling storico (backprop_mnist, 2026-08-24)
 
-Questo report descrive l'implementazione precedente, basata su adjacency list e propagazione ricorsiva. I risultati non sono direttamente confrontabili con la versione corrente a partition/dense block; resta come traccia della procedura Callgrind.
+Questo report descrive l'implementazione precedente, basata su adjacency list e propagazione ricorsiva. I risultati non sono direttamente confrontabili con la versione corrente a partition/dense block né con l'esempio MNIST attuale; resta come traccia della procedura Callgrind.
 
 Contesto: si sospettava che `BackpropRule::learn()` (in `backprop_rule.h`) fosse il collo di
 bottiglia del training MNIST (~6 minuti per l'intero dataset, 60k campioni, rete 784→100→10).

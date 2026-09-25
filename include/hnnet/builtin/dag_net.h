@@ -186,7 +186,7 @@ namespace hnnet::builtin {
                     propagate_partition(state, partition);
                 }
             }
-            // Propagate signals in a single partition
+            // Propagate signals of a single partition
             void propagate_partition(NNetState &state, const Partition &partition) const {
                 real_t weighted_sum{0.0};
                 auto iconn = partition.iconn_begin;
@@ -203,7 +203,7 @@ namespace hnnet::builtin {
                 state.weighted_sums[partition.irx] = weighted_sum;
                 state.signals[partition.irx] = _neurons[partition.irx].activate(weighted_sum);
             }
-            // Propagate signals in dense block
+            // Propagate signals of a dense block
             void propagate_dense_block(NNetState &state, const DenseBlock &block) const {
                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                     real_t weighted_sum{0.0};
