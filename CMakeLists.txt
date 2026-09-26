@@ -10,8 +10,8 @@ add_library(hnnet_lib INTERFACE)
 add_library(hnnet::hnnet ALIAS hnnet_lib)
 target_include_directories(hnnet_lib INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-add_subdirectory(utility)
-target_link_libraries(hnnet_lib INTERFACE utility::utility)
+add_subdirectory(utils)
+target_link_libraries(hnnet_lib INTERFACE utils::utils)
 
 find_package(OpenMP REQUIRED) # make it optional
 target_link_libraries(hnnet_lib INTERFACE OpenMP::OpenMP_CXX)
