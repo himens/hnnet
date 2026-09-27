@@ -15,15 +15,15 @@ namespace hnnet {
                 }
             }
             // Get neuron type
-            constexpr NeuronType type() const {
+            NeuronType type() const {
                 return _type;
             }
             // Get the activation function
-            constexpr const Activation* activation() const {
+            const Activation* activation() const {
                 return _activation.get();
             }
             // Activate neuron (calculate activation value), returns the computed signal
-            constexpr real_t activate(const real_t weighted_sum) const {
+            real_t activate(const real_t weighted_sum) const {
                 return (*_activation)(weighted_sum);
             }
         private:

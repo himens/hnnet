@@ -30,25 +30,25 @@ namespace hnnet {
             virtual ~NNet() = default;
             class View {
                 public:
-                    constexpr int_t neuron_count() const {
+                    int_t neuron_count() const {
                         return _net._neurons.size();
                     }
-                    constexpr int_t connection_count() const {
+                    int_t connection_count() const {
                         return _net._connections.size();
                     }
-                    constexpr const Neuron& neuron(const index_t index) const {
+                    const Neuron& neuron(const index_t index) const {
                         return _net._neurons[index];
                     }
-                    constexpr const SynapticConn& connection(const index_t index) const {
+                    const SynapticConn& connection(const index_t index) const {
                         return _net._connections[index];
                     }
-                    constexpr real_t& weight(const index_t index) {
+                    real_t& weight(const index_t index) {
                         return _net._weights[index];
                     }
-                    constexpr const std::vector<Partition>& partitions() const {
+                    const std::vector<Partition>& partitions() const {
                         return _net._partitions;
                     }
-                    constexpr const index_vector_t& iout_neurons() const {
+                    const index_vector_t& iout_neurons() const {
                         return _net._iout_neurons;
                     }
                 protected:
@@ -89,7 +89,7 @@ namespace hnnet {
                     return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
                 }
             // Connect neurons (cartesian product)
-            void connect(const IndexRange auto &itxs, const IndexRange auto &irxs) {
+            void connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
                 _trained = false;
                 for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
                     if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
@@ -100,12 +100,16 @@ namespace hnnet {
                 }
             }
             // Connect neurons (zip)
-            void zip_connect(const IndexRange auto &itxs, const IndexRange auto &irxs) {
-                if (itxs.size() != irxs.size()) {
-                    throw std::invalid_argument("NNet::zip_connect: size error!");
+            void zip_connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
+                auto itx = std::ranges::begin(itxs);
+                auto irx = std::ranges::begin(irxs);
+                while (itx != std::ranges::end(itxs) && irx != std::ranges::end(irxs)) {
+                    connect(std::views::single(*itx), std::views::single(*irx));
+                    ++itx;
+                    ++irx;
                 }
-                for (const auto &[itx, irx] : std::views::zip(itxs, irxs)) {
-                    connect(std::views::single(itx), std::views::single(irx));
+                if (itx != std::ranges::end(itxs) || irx != std::ranges::end(irxs)) {
+                    throw std::invalid_argument("NNet::zip_connect: size error!");
                 }
             }
             // Train net using a set of training samples
@@ -180,22 +184,22 @@ namespace hnnet {
                 }
             };
             // Getters/setters
-            constexpr std::span<const Neuron> neurons() const {
+            std::span<const Neuron> neurons() const {
                 return _neurons;
             }
-            constexpr std::span<const Partition> partitions() const {
+            std::span<const Partition> partitions() const {
                 return _partitions;
             }
-            constexpr std::span<const SynapticConn> connections() const {
+            std::span<const SynapticConn> connections() const {
                 return _connections;
             }
-            constexpr std::span<const real_t> weights() const {
+            std::span<const real_t> weights() const {
                 return _weights;
             }
-            constexpr std::span<Partition> partitions() {
+            std::span<Partition> partitions() {
                 return _partitions;
             }
-            constexpr std::span<SynapticConn> connections() {
+            std::span<SynapticConn> connections() {
                 return _connections;
             }
             // Sort connections per irx and itx

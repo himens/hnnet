@@ -23,7 +23,8 @@
 
 - [x] **Unificare gli overload di `connect`**
   - `NNet::connect(tx, rx)` crea il prodotto cartesiano tra due range di indici; la rete espone un'unica implementazione basata sul concept `IndexRange`.
-  - `zip_connect()` dovrebbe collegare elementi a coppie, ma non compila quando viene istanziato; il difetto è tracciato tra le priorità alte.
+  - `connect()` e `zip_connect()` accettano range non const, incluse viste iterabili solo da non-const.
+  - `zip_connect()` collega gli elementi a coppie in lockstep e rileva lunghezze diverse durante l'iterazione, senza richiedere `size()`.
 
 - [x] **Compilare la topologia per il forward/backward pass**
   - Prima del training, `prepare()` ordina le connessioni per receiver, costruisce partition contigue e le ordina topologicamente; reti cicliche vengono rifiutate.
@@ -39,9 +40,8 @@
   - `learning_rate` è un parametro di `BackpropRule`, non dell'optimizer, per restare generico rispetto a `Optimizer`.
 
 ## Priorita alta
-- [ ] **Rendere operativo `zip_connect()`**
-  - L'implementazione corrente passa indici scalari a `connect()`, che accetta solo range; il template non compila quando viene istanziato.
-  - Collegare direttamente le coppie generate da `std::views::zip` o introdurre un helper one-to-one.
+- [x] **Rendere operativo `zip_connect()`**
+  - Collega gli elementi corrispondenti in lockstep; range di lunghezza diversa generano un'eccezione dopo aver processato il prefisso comune.
 
 
 - [ ] **Aggiungere optimizer adattivi**
@@ -64,9 +64,9 @@
 
 ## Performance
 
-- [ ] **Correggere e rendere efficiente il controllo di connessioni duplicate in `connect()`**
-  - L'hash map attuale è locale alla chiamata e rileva duplicati solo nel prodotto cartesiano corrente; una connessione aggiunta da una chiamata precedente può essere reinserita.
-  - Conservare un indice delle coppie `(itx, irx)` nella rete, così il controllo resta efficiente anche durante la costruzione di layer densi.
+- [x] **Rilevare connessioni duplicate prima di usare la rete**
+  - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
+  - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
 
 - [ ] **Ottimizzare i kernel dei dense block sulla base del profiling**
   - I tempi storici (rete 784→128→10) non sono una baseline della configurazione MNIST corrente (784→512→512→512→10); usare benchmark riproducibili prima di confrontare modifiche.

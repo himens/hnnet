@@ -25,10 +25,10 @@ namespace hnnet::builtin {
                 }
                 std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
             }
-            constexpr void update(DAGNet::View &view, 
-                                  const real_t learning_rate, 
-                                  const int_t batch_size, 
-                                  const grad_vector_t &batch_gradients) {
+            void update(DAGNet::View &view, 
+                        const real_t learning_rate, 
+                        const int_t batch_size, 
+                        const grad_vector_t &batch_gradients) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(batch_gradients.size(), 0.0);
                 }
@@ -114,11 +114,11 @@ namespace hnnet::builtin {
                 }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                constexpr real_t backward(DAGNet::View &view, 
-                                          NNetState &state, 
-                                          const DataType auto &targets, 
-                                          delta_vector_t &deltas, 
-                                          grad_vector_t &gradients) const {
+                real_t backward(DAGNet::View &view, 
+                                NNetState &state, 
+                                const DataType auto &targets, 
+                                delta_vector_t &deltas, 
+                                grad_vector_t &gradients) const {
                     std::ranges::fill(deltas, 0.0);
                     // seed output deltas using the loss
                     real_t loss{0.0};
