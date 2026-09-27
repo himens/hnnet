@@ -111,7 +111,7 @@ namespace hnnet {
                     throw std::invalid_argument("NNet::zip_connect: size error!");
                 }
                 for (const auto &[itx, irx] : std::views::zip(itxs, irxs)) {
-                    connect(itx, irx);
+                    connect(std::views::single(itx), std::views::single(irx));
                 }
             }
             // Train net using a set of training samples
