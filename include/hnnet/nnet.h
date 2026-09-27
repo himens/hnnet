@@ -91,7 +91,7 @@ namespace hnnet {
             // Connect neurons (cartesian product)
             void connect(const IndexRange auto &itxs, const IndexRange auto &irxs) {
                 _trained = false;
-                std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
+                static thread_local std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
                     if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
                         throw std::out_of_range("NNet::connect: index out-of-range!");
