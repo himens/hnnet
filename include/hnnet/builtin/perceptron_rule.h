@@ -16,7 +16,7 @@ namespace hnnet::builtin {
                 std::println("PerceptronRule::PerceptronRule: learning rate: {}", learning_rate);
             }
             // Learn from a whole epoch of training samples (online: one immediate update per sample)
-            real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+            constexpr real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                 auto view = net.view();
                 NNetState state(view.neuron_count());
                 real_t mean_squared_error{0.0};
@@ -28,7 +28,7 @@ namespace hnnet::builtin {
             }
         private:
             // Update weights from targets using the perceptron learning rule
-            real_t update_weights(NNet::View &view, NNetState &state, const DataType auto &targets) {
+            constexpr real_t update_weights(NNet::View &view, NNetState &state, const DataType auto &targets) {
                 if (view.partitions().size() != std::ranges::size(targets)) {
                     throw std::runtime_error("PerceptronRule::learn: invalid net!");
                 }
@@ -39,7 +39,7 @@ namespace hnnet::builtin {
                     if (std::abs(target - signal) < 1e-6) {
                         continue;  // No update needed if the error is negligible
                     }
-                    // Find the partition corresponding to this output neuron (irx == iout)
+                    // find the partition corresponding to this output neuron (irx == iout)
                     for (const auto &partition : view.partitions()) {
                         if (partition.irx != iout) {
                             continue;

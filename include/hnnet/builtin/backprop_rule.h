@@ -7,7 +7,11 @@ namespace hnnet::builtin {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     template <typename T>
-        concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const real_t learning_rate, const int_t batch_size, const grad_vector_t &batch_gradients) {
+        concept OptimizerType = requires (T &optimizer, 
+                                          DAGNet::View &view, 
+                                          const real_t learning_rate, 
+                                          const int_t batch_size, 
+                                          const grad_vector_t &batch_gradients) {
             optimizer.update(view, learning_rate, batch_size, batch_gradients);
         };
     ///////////////////////
@@ -21,7 +25,10 @@ namespace hnnet::builtin {
                 }
                 std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
             }
-            void update(DAGNet::View &view, const real_t learning_rate, const int_t batch_size, const grad_vector_t &batch_gradients) {
+            constexpr void update(DAGNet::View &view, 
+                                  const real_t learning_rate, 
+                                  const int_t batch_size, 
+                                  const grad_vector_t &batch_gradients) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(batch_gradients.size(), 0.0);
                 }
@@ -42,8 +49,10 @@ namespace hnnet::builtin {
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(const real_t learning_rate, Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {}) 
-                    : _learning_rate(learning_rate), _optimizer(std::move(optimizer)), _batch_size(batch_size), _loss(std::move(loss)) {
+                explicit BackpropRule(const real_t learning_rate, 
+                                      Optimizer optimizer = Optimizer{}, 
+                                      const int_t batch_size = 1, 
+                                      Loss loss = {}) : _learning_rate(learning_rate), _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
                     if (_learning_rate < 0.0) {
                         throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
                     }
@@ -105,7 +114,11 @@ namespace hnnet::builtin {
                 }
             private:
                 // Compute the error and delta weights contribution of a single sample
-                real_t backward(DAGNet::View &view, NNetState &state, const DataType auto &targets, delta_vector_t &deltas, grad_vector_t &gradients) const {
+                constexpr real_t backward(DAGNet::View &view, 
+                                          NNetState &state, 
+                                          const DataType auto &targets, 
+                                          delta_vector_t &deltas, 
+                                          grad_vector_t &gradients) const {
                     std::ranges::fill(deltas, 0.0);
                     // seed output deltas using the loss
                     real_t loss{0.0};
