@@ -41,6 +41,10 @@
   
 - [x] **Rendere operativo `zip_connect()`**
   - Collega gli elementi corrispondenti in lockstep; range di lunghezza diversa generano un'eccezione dopo aver processato il prefisso comune.
+    
+- [x] **Rilevare connessioni duplicate prima di usare la rete**
+  - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
+  - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
 
 ## Priorita alta
 
@@ -54,19 +58,11 @@
 
 ## Priorita bassa
 
-- [ ] **Introdurre un'astrazione per layer o modelli di rete**
-  - `DenseForwardNet` costruisce già reti feed-forward fully connected da descrizioni `Layer`.
-  - Valutare astrazioni per comporre modelli o topologie DAG non dense, mantenendo disponibili `DAGNet::new_neurons()` e `connect()` per il controllo fine.
-
 - [ ] **Migliorare la configurazione dell'addestramento**
   - Rendere configurabili soglia di errore e numero massimo di epoche; learning rate, batch size, loss e optimizer sono già configurabili in `BackpropRule`.
   - Valutare metriche e callback separati dal logging diretto su stdout.
 
 ## Performance
-
-- [x] **Rilevare connessioni duplicate prima di usare la rete**
-  - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
-  - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
 
 - [ ] **Ottimizzare i kernel dei dense block sulla base del profiling**
   - I tempi storici (rete 784→128→10) non sono una baseline della configurazione MNIST corrente (784→512→512→512→10); usare benchmark riproducibili prima di confrontare modifiche.
