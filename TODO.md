@@ -38,25 +38,25 @@
   - `BackpropRule` divide i sample in mini-batch; i sample di ciascun batch vengono elaborati in parallelo, accumulando i gradienti in buffer per-thread.
   - I gradienti dei thread vengono sommati e l'optimizer aggiorna i pesi alla fine di ogni mini-batch; lo stato per-thread (`NNetState`: segnali e weighted sum) è separato dalla topologia.
   - `learning_rate` è un parametro di `BackpropRule`, non dell'optimizer, per restare generico rispetto a `Optimizer`.
-
-## Priorita alta
+  
 - [x] **Rendere operativo `zip_connect()`**
   - Collega gli elementi corrispondenti in lockstep; range di lunghezza diversa generano un'eccezione dopo aver processato il prefisso comune.
 
+## Priorita alta
 
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam come primo optimizer adattivo; valutare RMSProp e RPROP in seguito.
   - Gli optimizer devono mantenere stato per peso e funzionare sia con SGD sia con mini-batch.
+    
+- [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
+  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
+  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
 
 ## Priorita bassa
 
 - [ ] **Introdurre un'astrazione per layer o modelli di rete**
   - `DenseForwardNet` costruisce già reti feed-forward fully connected da descrizioni `Layer`.
   - Valutare astrazioni per comporre modelli o topologie DAG non dense, mantenendo disponibili `DAGNet::new_neurons()` e `connect()` per il controllo fine.
-
-- [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
-  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
-  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
 
 - [ ] **Migliorare la configurazione dell'addestramento**
   - Rendere configurabili soglia di errore e numero massimo di epoche; learning rate, batch size, loss e optimizer sono già configurabili in `BackpropRule`.
