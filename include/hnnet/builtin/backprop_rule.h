@@ -133,7 +133,7 @@ namespace hnnet::builtin {
                         if (view.is_dense(ipart)) {
                             const auto &block = view.dense_block(ipart);
                             for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                const auto irx = block.irx_begin + irow;
+                                const auto irx = block.rx_begin + irow;
                                 const auto &rx = view.neuron(irx);
                                 auto &delta = deltas[irx];
                                 if (rx.type() != NeuronType::output) {
@@ -141,7 +141,7 @@ namespace hnnet::builtin {
                                 }
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    deltas[block.itx_begin + icol] += delta * view.weight(row_offset + icol);
+                                    deltas[block.tx_begin + icol] += delta * view.weight(row_offset + icol);
                                 }
                             }
                             ipart -= block.rx_count - 1;
@@ -153,7 +153,7 @@ namespace hnnet::builtin {
                             if (rx.type() != NeuronType::output) {
                                 delta *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
                             }
-                            for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
                                 const auto itx = view.connection(iconn).itx;
                                 deltas[itx] += delta * view.weight(iconn);
                             }
@@ -164,17 +164,17 @@ namespace hnnet::builtin {
                         if (view.is_dense(ipart)) {
                             const auto &block = view.dense_block(ipart);
                             for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                const auto delta = deltas[block.irx_begin + irow];
+                                const auto delta = deltas[block.rx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    gradients[row_offset + icol] += delta * state.signals[block.itx_begin + icol];
+                                    gradients[row_offset + icol] += delta * state.signals[block.tx_begin + icol];
                                 }
                             }
                             ipart += block.rx_count - 1;
                         }
                         else {
                             const auto &partition = partitions[ipart];
-                            for (const auto &iconn : std::views::iota(partition.iconn_begin, partition.iconn_end)) {
+                            for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
                                 const auto irx = view.connection(iconn).irx;
                                 const auto itx = view.connection(iconn).itx;
                                 gradients[iconn] += deltas[irx] * state.signals[itx];

@@ -24,8 +24,8 @@ namespace hnnet {
             };
             struct Partition {
                 index_t irx;
-                index_t iconn_begin;
-                index_t iconn_end;
+                index_t conn_begin;
+                index_t conn_end;
             };
             virtual ~NNet() = default;
             class View {
@@ -220,15 +220,15 @@ namespace hnnet {
             // Group connections sharing the same rx into partitions
             static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
                 std::vector<Partition> partitions;
-                index_t iconn_begin{0};
-                while (iconn_begin < std::ssize(connections)) {
-                    const auto &irx = connections[iconn_begin].irx;
-                    auto iconn_end = iconn_begin + 1;
-                    while ((iconn_end < std::ssize(connections)) and (connections[iconn_end].irx == irx)) {
-                        ++iconn_end;
+                index_t conn_begin{0};
+                while (conn_begin < std::ssize(connections)) {
+                    const auto &irx = connections[conn_begin].irx;
+                    auto conn_end = conn_begin + 1;
+                    while ((conn_end < std::ssize(connections)) and (connections[conn_end].irx == irx)) {
+                        ++conn_end;
                     }
-                    partitions.push_back({.irx = irx, .iconn_begin = iconn_begin, .iconn_end = iconn_end});
-                    iconn_begin = iconn_end;
+                    partitions.push_back({.irx = irx, .conn_begin = conn_begin, .conn_end = conn_end});
+                    conn_begin = conn_end;
                 }
                 return partitions;
             }

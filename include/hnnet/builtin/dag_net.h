@@ -2,17 +2,17 @@
 #include "hnnet/nnet.h"
 
 namespace hnnet::builtin {
-    ///////////////////
-    // DAGNet class  //
-    ///////////////////
+    //////////////////
+    // DAGNet class //
+    //////////////////
     class DAGNet : public NNet {
         public:
             // Data types
             struct DenseBlock {
                 static constexpr index_t no_block{-1};
-                index_t itx_begin;
+                index_t tx_begin;
                 int_t tx_count;
-                index_t irx_begin;
+                index_t rx_begin;
                 int_t rx_count;
                 index_t weight_offset;
             };
@@ -57,7 +57,7 @@ namespace hnnet::builtin {
                 }
                 std::vector<int_t> visits_left(neurons.size(), 0);
                 for (const auto &partition : partitions) {
-                    visits_left[partition.irx] = partition.iconn_end - partition.iconn_begin;
+                    visits_left[partition.irx] = partition.conn_end - partition.conn_begin;
                 }
                 index_vector_t visited_queue;
                 for (auto inr{0}; inr < std::ssize(neurons); ++inr) {
@@ -87,12 +87,12 @@ namespace hnnet::builtin {
                 UnionFind union_find(partitions.size());
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[ipart, partition] : partitions | std::views::enumerate) {
-                    const auto count = partition.iconn_end - partition.iconn_begin;
-                    const auto itx_begin = connections[partition.iconn_begin].itx;
-                    if ((connections[partition.iconn_end - 1].itx - itx_begin) != (count - 1)) {
+                    const auto count = partition.conn_end - partition.conn_begin;
+                    const auto tx_begin = connections[partition.conn_begin].itx;
+                    if ((connections[partition.conn_end - 1].itx - tx_begin) != (count - 1)) {
                         continue;  // itx range has gaps (e.g. a bias mixed in): not a pure dense candidate
                     }
-                    const auto [it, inserted] = hash_map.try_emplace(std::pair{itx_begin, count}, ipart);
+                    const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, ipart);
                     if (not inserted) {
                         union_find.unite(it->second, ipart);
                     }
@@ -117,7 +117,7 @@ namespace hnnet::builtin {
                     for (auto i{1}; i < std::ssize(members); ++i) {
                         const auto &prev = partitions[members[i - 1]];
                         const auto &curr = partitions[members[i]];
-                        if ((curr.irx != prev.irx + 1) or (curr.iconn_begin != prev.iconn_end)) {
+                        if ((curr.irx != prev.irx + 1) or (curr.conn_begin != prev.conn_end)) {
                             contiguous = false;
                             break;
                         }
@@ -127,11 +127,11 @@ namespace hnnet::builtin {
                     }
                     // add dense block
                     const auto &first = partitions[members.front()];
-                    _dense_blocks.push_back({.itx_begin    = connections[first.iconn_begin].itx,
-                                            .tx_count      = first.iconn_end - first.iconn_begin,
-                                            .irx_begin     = first.irx,
+                    _dense_blocks.push_back({.tx_begin    = connections[first.conn_begin].itx,
+                                            .tx_count      = first.conn_end - first.conn_begin,
+                                            .rx_begin     = first.irx,
                                             .rx_count      = std::ssize(members),
-                                            .weight_offset = first.iconn_begin});
+                                            .weight_offset = first.conn_begin});
                     for (auto &ipart : members) {
                         _iblocks[ipart] = _dense_blocks.size() - 1;
                     }
@@ -194,8 +194,8 @@ namespace hnnet::builtin {
                 const auto weights = this->weights();
                 const auto connections = this->connections();
                 const auto neurons = this->neurons();
-                auto iconn = partition.iconn_begin;
-                for (; iconn <= (partition.iconn_end - register_size); iconn += register_size) {
+                auto iconn = partition.conn_begin;
+                for (; iconn <= (partition.conn_end - register_size); iconn += register_size) {
                     weighted_sum += 
                         + weights[iconn]     * state.signals[connections[iconn].itx]
                         + weights[iconn + 1] * state.signals[connections[iconn + 1].itx]
@@ -203,7 +203,7 @@ namespace hnnet::builtin {
                         + weights[iconn + 3] * state.signals[connections[iconn + 3].itx];
                 }
                 //#pragma omp simd reduction(+:weighted_sum)
-                for (; iconn < partition.iconn_end; iconn++) {
+                for (; iconn < partition.conn_end; iconn++) {
                     weighted_sum += weights[iconn] * state.signals[connections[iconn].itx];
                 }
                 state.weighted_sums[partition.irx] = weighted_sum;
@@ -219,17 +219,17 @@ namespace hnnet::builtin {
                     index_t icol{0};
                     for (; icol <= (block.tx_count - register_size); icol += register_size) {
                         weighted_sum +=   
-                            + weights[row_offset + icol]     * state.signals[block.itx_begin + icol]
-                            + weights[row_offset + icol + 1] * state.signals[block.itx_begin + icol + 1]
-                            + weights[row_offset + icol + 2] * state.signals[block.itx_begin + icol + 2]
-                            + weights[row_offset + icol + 3] * state.signals[block.itx_begin + icol + 3];
+                            + weights[row_offset + icol]     * state.signals[block.tx_begin + icol]
+                            + weights[row_offset + icol + 1] * state.signals[block.tx_begin + icol + 1]
+                            + weights[row_offset + icol + 2] * state.signals[block.tx_begin + icol + 2]
+                            + weights[row_offset + icol + 3] * state.signals[block.tx_begin + icol + 3];
                     }
                     //#pragma omp simd reduction(+:weighted_sum)
                     for (; icol < block.tx_count; ++icol) {
-                        weighted_sum +=  weights[row_offset + icol] * state.signals[block.itx_begin + icol];
+                        weighted_sum +=  weights[row_offset + icol] * state.signals[block.tx_begin + icol];
                     }
-                    state.weighted_sums[block.irx_begin + irow] = weighted_sum;
-                    state.signals[block.irx_begin + irow] = neurons[block.irx_begin + irow].activate(weighted_sum);
+                    state.weighted_sums[block.rx_begin + irow] = weighted_sum;
+                    state.signals[block.rx_begin + irow] = neurons[block.rx_begin + irow].activate(weighted_sum);
                 }
             }
         private:
