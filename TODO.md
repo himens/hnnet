@@ -55,6 +55,9 @@
 - [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
   - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
   - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
+   
+- [ ] **Use literals**
+  - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
 
 ## Priorita bassa
 
