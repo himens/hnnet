@@ -127,9 +127,9 @@ namespace hnnet::builtin {
                     }
                     // add dense block
                     const auto &first = partitions[members.front()];
-                    _dense_blocks.push_back({.tx_begin    = connections[first.conn_begin].itx,
+                    _dense_blocks.push_back({.tx_begin     = connections[first.conn_begin].itx,
                                             .tx_count      = first.conn_end - first.conn_begin,
-                                            .rx_begin     = first.irx,
+                                            .rx_begin      = first.irx,
                                             .rx_count      = std::ssize(members),
                                             .weight_offset = first.conn_begin});
                     for (auto &ipart : members) {
