@@ -59,23 +59,20 @@ namespace hnnet::builtin {
                 }
                 // Learn from a whole epoch of training samples
                 real_t learn(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
-                    const auto neuron_count = net.view().neuron_count();
-                    const auto connection_count = net.view().connection_count();
+                    auto view = net.view();
+                    const auto neuron_count = view.neuron_count();
+                    const auto connection_count = view.connection_count();
                     const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
-                    const auto parallel = batch_count != std::ssize(inputs);
                     const auto max_threads = omp_get_max_threads();
+                    const auto parallel = batch_count != std::ssize(inputs);
                     const auto thread_count = parallel ? max_threads : index_t{1};
                     //std::ranges::shuffle(samples, random_generator());
                     if (_states.empty()) {
-                        _states.reserve(max_threads);
-                        for (auto tid{0}; tid < max_threads; ++tid) {
-                            _states.emplace_back(neuron_count);
-                        }
+                        _states.assign(max_threads, NNetState{neuron_count});
                         _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
                         _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0));
                         _batch_gradient.assign(connection_count, 0.0);
                     }
-                    auto view = net.view();
                     real_t loss{0.0};
                     for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                         const auto batch_begin = ibatch * _batch_size;
