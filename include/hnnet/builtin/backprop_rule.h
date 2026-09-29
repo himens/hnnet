@@ -10,9 +10,8 @@ namespace hnnet::builtin {
         concept OptimizerType = requires (T &optimizer, 
                                           DAGNet::View &view, 
                                           const real_t learning_rate, 
-                                          const int_t batch_size, 
-                                          const grad_vector_t &batch_gradients) {
-            optimizer.update(view, learning_rate, batch_size, batch_gradients);
+                                          const grad_vector_t &gradient) {
+            optimizer.update(view, learning_rate, gradient);
         };
     ///////////////////////
     // SGDMomentum class //
@@ -25,15 +24,12 @@ namespace hnnet::builtin {
                 }
                 std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
             }
-            void update(DAGNet::View &view, 
-                        const real_t learning_rate, 
-                        const int_t batch_size, 
-                        const grad_vector_t &batch_gradients) {
+            void update(DAGNet::View &view, const real_t learning_rate, const grad_vector_t &gradient) {
                 if (_prev_dweights.empty()) {
-                    _prev_dweights.assign(batch_gradients.size(), 0.0);
+                    _prev_dweights.assign(gradient.size(), 0.0);
                 }
-                for (auto iconn{0}; iconn < std::ssize(batch_gradients); ++iconn) {
-                    const auto dweight = (learning_rate * batch_gradients[iconn] / batch_size) + (_momentum * _prev_dweights[iconn]);
+                for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
+                    const auto dweight = (learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
                     view.weight(iconn) += dweight;
                     _prev_dweights[iconn] = dweight;
                 }
@@ -65,9 +61,9 @@ namespace hnnet::builtin {
                 real_t learn(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                     const auto neuron_count = net.view().neuron_count();
                     const auto connection_count = net.view().connection_count();
-                    const auto max_threads = omp_get_max_threads();
                     const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
                     const auto parallel = batch_count != std::ssize(inputs);
+                    const auto max_threads = omp_get_max_threads();
                     const auto thread_count = parallel ? max_threads : index_t{1};
                     //std::ranges::shuffle(samples, random_generator());
                     if (_states.empty()) {
@@ -76,38 +72,38 @@ namespace hnnet::builtin {
                             _states.emplace_back(neuron_count);
                         }
                         _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
-                        _thread_gradients.assign(max_threads, grad_vector_t(connection_count, 0.0));
-                        _batch_gradients.assign(connection_count, 0.0);
+                        _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0));
+                        _batch_gradient.assign(connection_count, 0.0);
                     }
                     auto view = net.view();
                     real_t loss{0.0};
                     for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                         const auto batch_begin = ibatch * _batch_size;
                         const auto batch_end = std::min<index_t>(std::ranges::size(inputs), batch_begin + _batch_size);
+                        const auto batch_size = batch_end - batch_begin;
                         for (auto tid{0}; tid < thread_count; ++tid) {
-                            std::ranges::fill(_thread_gradients[tid], 0.0);
+                            std::ranges::fill(_gradients[tid], 0.0);
                         }
                         #pragma omp parallel for if(parallel) reduction(+:loss)
                         for (auto isample = batch_begin; isample < batch_end; ++isample) {
                             const auto tid = omp_get_thread_num();
                             auto &state = _states[tid];
                             net.update(state, inputs[isample]);
-                            loss += backward(view, state, targets[isample], _deltas[tid], _thread_gradients[tid]);
+                            loss += backward(view, state, targets[isample], _deltas[tid], _gradients[tid]);
                         }
-                        // single, sequential weight update
-                        if (thread_count == 1) {
-                            _optimizer.update(view, _learning_rate, _batch_size, _thread_gradients[0]);
-                        }
-                        else {
+                        if (parallel) {
                             // sequential reduction: sum contribution of each thread
-                            std::ranges::fill(_batch_gradients, 0.0);
+                            std::ranges::fill(_batch_gradient, 0.0);
                             for (auto tid{0}; tid < thread_count; ++tid) {
-                                const auto &gradients = _thread_gradients[tid];
+                                const auto &gradient = _gradients[tid];
                                 for (auto iconn{0}; iconn < connection_count; ++iconn) {
-                                    _batch_gradients[iconn] += gradients[iconn];
+                                    _batch_gradient[iconn] += gradient[iconn] / batch_size;
                                 }
                             }
-                            _optimizer.update(view, _learning_rate, _batch_size, _batch_gradients);
+                            _optimizer.update(view, _learning_rate, _batch_gradient);
+                        }
+                        else {
+                            _optimizer.update(view, _learning_rate, _gradients.front());
                         }
                     }
                     return loss / std::ranges::size(inputs);
@@ -118,16 +114,16 @@ namespace hnnet::builtin {
                                 NNetState &state, 
                                 const DataType auto &targets, 
                                 delta_vector_t &deltas, 
-                                grad_vector_t &gradients) const {
+                                grad_vector_t &gradient) const {
                     std::ranges::fill(deltas, 0.0);
-                    // seed output deltas using the loss
+                    // compute loss and output deltas
                     real_t loss{0.0};
                     for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                         const auto signal = state.signals[iout];
                         loss += _loss(target, signal);
                         deltas[iout] = _loss.derivative(target, signal) * view.neuron(iout).activation()->derivative(state.weighted_sums[iout]);
                     }
-                    // partitions are already in topological order: walk them backwards
+                    // walk backwards and compute other deltas (partitions are in topological order)
                     const auto partitions = view.partitions();
                     for (auto ipart = std::ssize(partitions) - 1; ipart >= 0; --ipart) {
                         if (view.is_dense(ipart)) {
@@ -159,7 +155,7 @@ namespace hnnet::builtin {
                             }
                         }
                     }
-                    // per-connection gradients
+                    // compute gradient
                     for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
                         if (view.is_dense(ipart)) {
                             const auto &block = view.dense_block(ipart);
@@ -167,7 +163,8 @@ namespace hnnet::builtin {
                                 const auto delta = deltas[block.rx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    gradients[row_offset + icol] += delta * state.signals[block.tx_begin + icol];
+                                    // sum grads since a thread could process multiple samples
+                                    gradient[row_offset + icol] += delta * state.signals[block.tx_begin + icol]; 
                                 }
                             }
                             ipart += block.rx_count - 1;
@@ -177,7 +174,7 @@ namespace hnnet::builtin {
                             for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
                                 const auto irx = view.connection(iconn).irx;
                                 const auto itx = view.connection(iconn).itx;
-                                gradients[iconn] += deltas[irx] * state.signals[itx];
+                                gradient[iconn] += deltas[irx] * state.signals[itx];
                             }
                         }
                     }
@@ -191,8 +188,8 @@ namespace hnnet::builtin {
                 Loss _loss;
                 std::vector<NNetState> _states{};
                 std::vector<delta_vector_t> _deltas{};
-                std::vector<grad_vector_t> _thread_gradients{};
-                grad_vector_t _batch_gradients{};
+                std::vector<grad_vector_t> _gradients{};
+                grad_vector_t _batch_gradient{};
         };
 }
 
