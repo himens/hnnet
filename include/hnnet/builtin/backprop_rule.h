@@ -63,8 +63,8 @@ namespace hnnet::builtin {
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
                     const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
-                    const auto max_threads = omp_get_max_threads();
                     const auto parallel = batch_count != std::ssize(inputs);
+                    const auto max_threads = omp_get_max_threads();
                     const auto thread_count = parallel ? max_threads : index_t{1};
                     //std::ranges::shuffle(samples, random_generator());
                     if (_states.empty()) {
