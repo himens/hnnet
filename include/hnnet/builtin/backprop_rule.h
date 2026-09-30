@@ -63,7 +63,7 @@ namespace hnnet::builtin {
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
                     const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
-                    const auto parallel = batch_count != std::ssize(inputs);
+                    const auto parallel = (batch_count != std::ssize(inputs));
                     const auto max_threads = omp_get_max_threads();
                     const auto thread_count = parallel ? max_threads : index_t{1};
                     //std::ranges::shuffle(samples, random_generator());
@@ -152,7 +152,7 @@ namespace hnnet::builtin {
                             }
                         }
                     }
-                    // compute gradient
+                    // compute gradient (sum gradient since a thread could process multiple samples)
                     for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
                         if (view.is_dense(ipart)) {
                             const auto &block = view.dense_block(ipart);
@@ -160,7 +160,6 @@ namespace hnnet::builtin {
                                 const auto delta = deltas[block.rx_begin + irow];
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
                                 for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    // sum grads since a thread could process multiple samples
                                     gradient[row_offset + icol] += delta * state.signals[block.tx_begin + icol]; 
                                 }
                             }
