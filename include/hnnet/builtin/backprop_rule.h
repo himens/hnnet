@@ -74,9 +74,7 @@ namespace hnnet::builtin {
                         prev_grad = grad;
                     }
                     else if (sign_prod < 0) {
-                        const auto prev_dweight = - utils::math::sign(prev_grad) * delta;
                         delta = utils::math::max(_eta_minus * delta, delta_min);
-                        view.weight(iconn) -= prev_dweight;
                         prev_grad = 0.0;
                     }
                     else {
