@@ -29,7 +29,7 @@ namespace hnnet::builtin {
                     _prev_dweights.assign(gradient.size(), 0.0);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    const auto dweight = (-_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
+                    const auto dweight = - (_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
                     view.weight(iconn) += dweight;
                     _prev_dweights[iconn] = dweight;
                 }
