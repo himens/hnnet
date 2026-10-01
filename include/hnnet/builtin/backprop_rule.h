@@ -29,7 +29,7 @@ namespace hnnet::builtin {
                     _prev_dweights.assign(gradient.size(), 0.0);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    const auto dweight = (_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
+                    const auto dweight = (-_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
                     view.weight(iconn) += dweight;
                     _prev_dweights[iconn] = dweight;
                 }
@@ -80,29 +80,27 @@ namespace hnnet::builtin {
                     auto &delta = _deltas[iconn];
                     const auto &grad = gradient[iconn];
                     const auto sign_prod = prev_grad * grad;
-                    if (sign_prod >= 0) {
-                        if (sign_prod) {
-                            delta *= _eta_plus;
-                        }
+                    if (sign_prod > 0) {
+                        delta *= _eta_plus;
                         const auto dweight = - utils::math::sign(grad) * delta;
                         view.weight(iconn) += dweight;
-                        _prev_gradient[iconn] = grad;
-                        _prev_dweight = dweight;
-                        //if (grad > 0) {
-                        //    std::println("iconn: {}, dweight: {}, delta: {}, grad: {}", iconn, dweight, delta, grad);
-                        //}
+                        prev_grad = grad;
+                    }
+                    else if (sign_prod < 0) {
+                        view.weight(iconn) -= - utils::math::sign(prev_grad) * delta;
+                        delta *= _eta_minus;
+                        prev_grad = 0.0;
                     }
                     else {
-                        delta *= _eta_minus;
-                        view.weight(iconn) -= _prev_dweight;
-                        prev_grad = 0.0;
+                        const auto dweight = - utils::math::sign(grad) * delta;
+                        view.weight(iconn) += dweight;
+                        prev_grad = grad;
                     }
                 }
             }
         private:
             real_t _eta_plus{0.0};
             real_t _eta_minus{0.0};
-            real_t _prev_dweight{0.0};
             std::vector<real_t> _deltas{};
             grad_vector_t _prev_gradient{};
     };
