@@ -7,62 +7,123 @@ namespace hnnet::builtin {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     template <typename T>
-        concept OptimizerType = requires (T &optimizer, 
-                                          DAGNet::View &view, 
-                                          const real_t learning_rate, 
-                                          const grad_vector_t &gradient) {
-            optimizer.update(view, learning_rate, gradient);
+        concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const grad_vector_t &gradient) {
+            optimizer.update(view, gradient);
         };
     ///////////////////////
     // SGDMomentum class //
     ///////////////////////
     class SGDMomentum {
         public:
-            explicit SGDMomentum(const real_t momentum = 0.0) : _momentum(momentum) {
+            explicit SGDMomentum(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {
+                if (_learning_rate < 0.0) {
+                    throw std::invalid_argument("SGDMomentum::SGDMomentum: learning_rate must be >= 0");
+                }
                 if (_momentum < 0.0) {
                     throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
                 }
-                std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
+                std::println("SGDMomentum::SGDMomentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
-            void update(DAGNet::View &view, const real_t learning_rate, const grad_vector_t &gradient) {
+            void update(DAGNet::View &view, const grad_vector_t &gradient) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(gradient.size(), 0.0);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    const auto dweight = (learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
+                    const auto dweight = (_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
                     view.weight(iconn) += dweight;
                     _prev_dweights[iconn] = dweight;
                 }
             }
         private:
-            real_t _momentum;
+            real_t _learning_rate{0.0};
+            real_t _momentum{0.0};
             grad_vector_t _prev_dweights{};
+    };
+    /////////////////
+    // Rprop class //
+    /////////////////
+    class Rprop {
+        public:
+            explicit Rprop(const real_t eta_plus, const real_t eta_minus) : _eta_plus(eta_plus), _eta_minus(eta_minus) {
+                if (_eta_plus <= 1.0) {
+                    throw std::invalid_argument("Rprop::Rprop: eta_plus must be > 1");
+                }
+                if (_eta_minus <= 0.0 or _eta_minus >= 1.0) {
+                    throw std::invalid_argument("Rprop::Rprop: eta_minus must between 0 and 1");
+                }
+                std::println("Rprop::Rprop: eta_plus: {}, eta_minus: {}", _eta_plus, _eta_minus);
+            }
+            void update(DAGNet::View &view, const grad_vector_t &gradient) {
+                if (_prev_gradient.empty()) {
+                    _prev_gradient.assign(gradient.size(), 0.0);
+                }
+                if (_deltas.empty()) {
+                    _deltas.assign(gradient.size(), 0.01);
+                }
+                //for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
+                //    const auto sign_prod = _prev_gradient[iconn] * gradient[iconn];
+                //    if (sign_prod >= 0) {
+                //        if (sign_prod) {
+                //            _deltas[iconn] *= _eta_plus;
+                //        }
+                //        view.weight(iconn) += - utils::math::sign(gradient[iconn]) * _deltas[iconn];
+                //        _prev_gradient[iconn] = gradient[iconn];
+                //    }
+                //    else {
+                //        view.weight(iconn) -= - utils::math::sign(_prev_gradient[iconn]) * _deltas[iconn];
+                //        _deltas[iconn] *= _eta_minus;
+                //        _prev_gradient[iconn] = 0.0;
+                //    }
+                //}
+                for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
+                    auto &prev_grad = _prev_gradient[iconn];
+                    auto &delta = _deltas[iconn];
+                    const auto &grad = gradient[iconn];
+                    const auto sign_prod = prev_grad * grad;
+                    if (sign_prod >= 0) {
+                        if (sign_prod) {
+                            delta *= _eta_plus;
+                        }
+                        const auto dweight = - utils::math::sign(grad) * delta;
+                        view.weight(iconn) += dweight;
+                        _prev_gradient[iconn] = grad;
+                        _prev_dweight = dweight;
+                        //if (grad > 0) {
+                        //    std::println("iconn: {}, dweight: {}, delta: {}, grad: {}", iconn, dweight, delta, grad);
+                        //}
+                    }
+                    else {
+                        delta *= _eta_minus;
+                        view.weight(iconn) -= _prev_dweight;
+                        prev_grad = 0.0;
+                    }
+                }
+            }
+        private:
+            real_t _eta_plus{0.0};
+            real_t _eta_minus{0.0};
+            real_t _prev_dweight{0.0};
+            std::vector<real_t> _deltas{};
+            grad_vector_t _prev_gradient{};
     };
     ////////////////////////
     // BackpropRule class //
     ////////////////////////
-    template <OptimizerType Optimizer = SGDMomentum, LossType Loss = MSELoss>
+    template <OptimizerType Optimizer, LossType Loss = MSELoss>
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(const real_t learning_rate, 
-                                      Optimizer optimizer = Optimizer{}, 
-                                      const int_t batch_size = 1, 
-                                      Loss loss = {}) : _learning_rate(learning_rate), _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
-                    if (_learning_rate < 0.0) {
-                        throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
-                    }
+                explicit BackpropRule(Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {}) : _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
                     if (batch_size <= 0) {
                         throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
                     }
-                    std::println("BackpropRule:BackpropRule: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
                 }
                 // Learn from a whole epoch of training samples
                 real_t learn(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                     auto view = net.view();
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
-                    const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
+                    const auto batch_count = utils::math::ceil(static_cast<int_t>(std::ranges::size(inputs)), _batch_size);
                     const auto parallel = (batch_count != std::ssize(inputs));
                     const auto max_threads = omp_get_max_threads();
                     const auto thread_count = parallel ? max_threads : index_t{1};
@@ -97,10 +158,10 @@ namespace hnnet::builtin {
                                     _batch_gradient[iconn] += gradient[iconn] / batch_size;
                                 }
                             }
-                            _optimizer.update(view, _learning_rate, _batch_gradient);
+                            _optimizer.update(view, _batch_gradient);
                         }
                         else {
-                            _optimizer.update(view, _learning_rate, _gradients.front());
+                            _optimizer.update(view, _gradients.front());
                         }
                     }
                     return loss / std::ranges::size(inputs);
@@ -178,7 +239,6 @@ namespace hnnet::builtin {
                 }
             private:
                 // Data members
-                real_t _learning_rate;
                 Optimizer _optimizer;
                 int_t _batch_size{1};
                 Loss _loss;
