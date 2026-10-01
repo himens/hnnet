@@ -10,19 +10,19 @@ namespace hnnet::builtin {
         concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const grad_vector_t &gradient) {
             optimizer.update(view, gradient);
         };
-    ///////////////////////
-    // SGDMomentum class //
-    ///////////////////////
-    class SGDMomentum {
+    ////////////////////
+    // Momentum class //
+    ////////////////////
+    class Momentum {
         public:
-            explicit SGDMomentum(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {
+            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {
                 if (_learning_rate < 0.0) {
-                    throw std::invalid_argument("SGDMomentum::SGDMomentum: learning_rate must be >= 0");
+                    throw std::invalid_argument("Momentum::Momentum: learning_rate must be >= 0");
                 }
                 if (_momentum < 0.0) {
-                    throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
+                    throw std::invalid_argument("Momentum::Momentum: momentum must be >= 0");
                 }
-                std::println("SGDMomentum::SGDMomentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
+                std::println("Momentum::Momentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
             void update(DAGNet::View &view, const grad_vector_t &gradient) {
                 if (_prev_dweights.empty()) {
