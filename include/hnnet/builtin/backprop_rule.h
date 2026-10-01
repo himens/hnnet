@@ -58,37 +58,25 @@ namespace hnnet::builtin {
                     _prev_gradient.assign(gradient.size(), 0.0);
                 }
                 if (_deltas.empty()) {
-                    _deltas.assign(gradient.size(), 0.01);
+                    _deltas.assign(gradient.size(), 0.1);
                 }
-                //for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                //    const auto sign_prod = _prev_gradient[iconn] * gradient[iconn];
-                //    if (sign_prod >= 0) {
-                //        if (sign_prod) {
-                //            _deltas[iconn] *= _eta_plus;
-                //        }
-                //        view.weight(iconn) += - utils::math::sign(gradient[iconn]) * _deltas[iconn];
-                //        _prev_gradient[iconn] = gradient[iconn];
-                //    }
-                //    else {
-                //        view.weight(iconn) -= - utils::math::sign(_prev_gradient[iconn]) * _deltas[iconn];
-                //        _deltas[iconn] *= _eta_minus;
-                //        _prev_gradient[iconn] = 0.0;
-                //    }
-                //}
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    auto &prev_grad = _prev_gradient[iconn];
+                    constexpr real_t delta_min{1e-6};
+                    constexpr real_t delta_max{50.0};
                     auto &delta = _deltas[iconn];
+                    auto &prev_grad = _prev_gradient[iconn];
                     const auto &grad = gradient[iconn];
                     const auto sign_prod = prev_grad * grad;
                     if (sign_prod > 0) {
-                        delta *= _eta_plus;
+                        delta = utils::math::min(_eta_plus * delta, delta_max);
                         const auto dweight = - utils::math::sign(grad) * delta;
                         view.weight(iconn) += dweight;
                         prev_grad = grad;
                     }
                     else if (sign_prod < 0) {
-                        view.weight(iconn) -= - utils::math::sign(prev_grad) * delta;
-                        delta *= _eta_minus;
+                        const auto prev_dweight = - utils::math::sign(prev_grad) * delta;
+                        delta = utils::math::max(_eta_minus * delta, delta_min);
+                        view.weight(iconn) -= prev_dweight;
                         prev_grad = 0.0;
                     }
                     else {
@@ -128,7 +116,7 @@ namespace hnnet::builtin {
                     const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
                     const auto batch_count = utils::math::ceil(sample_count, batch_size);
                     const auto max_threads = omp_get_max_threads();
-                    //std::ranges::shuffle(samples, random_generator());
+                    //std::ranges::shuffle(inputs, utils::random::generator());
                     if (_states.empty()) {
                         _states.assign(max_threads, NNetState{neuron_count});
                         _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
