@@ -112,8 +112,8 @@ namespace hnnet::builtin {
             public:
                 // Constructor
                 explicit BackpropRule(Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {}) : _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
-                    if (batch_size <= 0) {
-                        throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
+                    if (batch_size == 0) {
+                        throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must not be zero");
                     }
                 }
                 // Learn from a whole epoch of training samples
@@ -121,10 +121,13 @@ namespace hnnet::builtin {
                     auto view = net.view();
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
-                    const auto batch_count = utils::math::ceil(static_cast<int_t>(std::ranges::size(inputs)), _batch_size);
-                    const auto parallel = (batch_count != std::ssize(inputs));
+                    const auto sample_count = static_cast<index_t>(std::ranges::size(inputs));
+                    if (sample_count == 0) {
+                        throw std::invalid_argument("BackpropRule::learn: inputs must not be empty");
+                    }
+                    const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
+                    const auto batch_count = utils::math::ceil(sample_count, batch_size);
                     const auto max_threads = omp_get_max_threads();
-                    const auto thread_count = parallel ? max_threads : index_t{1};
                     //std::ranges::shuffle(samples, random_generator());
                     if (_states.empty()) {
                         _states.assign(max_threads, NNetState{neuron_count});
@@ -134,9 +137,11 @@ namespace hnnet::builtin {
                     }
                     real_t loss{0.0};
                     for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
-                        const auto batch_begin = ibatch * _batch_size;
-                        const auto batch_end = std::min<index_t>(std::ranges::size(inputs), batch_begin + _batch_size);
+                        const auto batch_begin = ibatch * batch_size;
+                        const auto batch_end = std::min(sample_count, batch_begin + batch_size);
                         const auto batch_size = batch_end - batch_begin;
+                        const auto parallel = batch_size > 1;
+                        const auto thread_count = parallel ? max_threads : index_t{1};
                         for (auto tid{0}; tid < thread_count; ++tid) {
                             std::ranges::fill(_gradients[tid], 0.0);
                         }
