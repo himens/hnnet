@@ -42,6 +42,7 @@ namespace hnnet::builtin {
     /////////////////
     // Rprop class //
     /////////////////
+    // NOTE: Rprop comes in several variants. This class implements iRprop-
     class Rprop {
         public:
             explicit Rprop(const real_t eta_plus, const real_t eta_minus) : _eta_plus(eta_plus), _eta_minus(eta_minus) {
