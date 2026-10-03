@@ -15,18 +15,18 @@ namespace hnnet::builtin {
     ////////////////////
     class Momentum {
         public:
-            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {
-                if (_learning_rate < 0.0) {
+            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0_real) : _learning_rate(learning_rate), _momentum(momentum) {
+                if (_learning_rate < 0.0_real) {
                     throw std::invalid_argument("Momentum::Momentum: learning_rate must be >= 0");
                 }
-                if (_momentum < 0.0) {
+                if (_momentum < 0.0_real) {
                     throw std::invalid_argument("Momentum::Momentum: momentum must be >= 0");
                 }
                 std::println("Momentum::Momentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
             void update(DAGNet::View &view, const grad_vector_t &gradient) {
                 if (_prev_dweights.empty()) {
-                    _prev_dweights.assign(gradient.size(), 0.0);
+                    _prev_dweights.assign(gradient.size(), 0.0_real);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
                     const auto dweight = - (_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
@@ -35,8 +35,8 @@ namespace hnnet::builtin {
                 }
             }
         private:
-            real_t _learning_rate{0.0};
-            real_t _momentum{0.0};
+            real_t _learning_rate{0.0_real};
+            real_t _momentum{0.0_real};
             grad_vector_t _prev_dweights{};
     };
     /////////////////
@@ -46,37 +46,37 @@ namespace hnnet::builtin {
     class Rprop {
         public:
             explicit Rprop(const real_t eta_plus, const real_t eta_minus) : _eta_plus(eta_plus), _eta_minus(eta_minus) {
-                if (_eta_plus <= 1.0) {
+                if (_eta_plus <= 1.0_real) {
                     throw std::invalid_argument("Rprop::Rprop: eta_plus must be > 1");
                 }
-                if (_eta_minus <= 0.0 or _eta_minus >= 1.0) {
+                if (_eta_minus <= 0.0_real or _eta_minus >= 1.0_real) {
                     throw std::invalid_argument("Rprop::Rprop: eta_minus must between 0 and 1");
                 }
                 std::println("Rprop::Rprop: eta_plus: {}, eta_minus: {}", _eta_plus, _eta_minus);
             }
             void update(DAGNet::View &view, const grad_vector_t &gradient) {
                 if (_prev_gradient.empty()) {
-                    _prev_gradient.assign(gradient.size(), 0.0);
+                    _prev_gradient.assign(gradient.size(), 0.0_real);
                 }
                 if (_deltas.empty()) {
-                    _deltas.assign(gradient.size(), 0.1);
+                    _deltas.assign(gradient.size(), 0.1_real);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    constexpr real_t delta_min{1e-6};
-                    constexpr real_t delta_max{50.0};
+                    constexpr real_t delta_min{1e-6_real};
+                    constexpr real_t delta_max{50.0_real};
                     auto &delta = _deltas[iconn];
                     auto &prev_grad = _prev_gradient[iconn];
                     const auto &grad = gradient[iconn];
                     const auto sign_prod = prev_grad * grad;
-                    if (sign_prod > 0) {
+                    if (sign_prod > 0_real) {
                         delta = utils::math::min(_eta_plus * delta, delta_max);
                         const auto dweight = - utils::math::sign(grad) * delta;
                         view.weight(iconn) += dweight;
                         prev_grad = grad;
                     }
-                    else if (sign_prod < 0) {
+                    else if (sign_prod < 0_real) {
                         delta = utils::math::max(_eta_minus * delta, delta_min);
-                        prev_grad = 0.0;
+                        prev_grad = 0.0_real;
                     }
                     else {
                         const auto dweight = - utils::math::sign(grad) * delta;
@@ -86,8 +86,8 @@ namespace hnnet::builtin {
                 }
             }
         private:
-            real_t _eta_plus{0.0};
-            real_t _eta_minus{0.0};
+            real_t _eta_plus{0.0_real};
+            real_t _eta_minus{0.0_real};
             std::vector<real_t> _deltas{};
             grad_vector_t _prev_gradient{};
     };
@@ -118,11 +118,11 @@ namespace hnnet::builtin {
                     //std::ranges::shuffle(inputs, utils::random::generator());
                     if (_states.empty()) {
                         _states.assign(max_threads, NNetState{neuron_count});
-                        _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
-                        _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0));
-                        _batch_gradient.assign(connection_count, 0.0);
+                        _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
+                        _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
+                        _batch_gradient.assign(connection_count, 0.0_real);
                     }
-                    real_t loss{0.0};
+                    real_t loss{0.0_real};
                     for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                         const auto batch_begin = ibatch * batch_size;
                         const auto batch_end = std::min(sample_count, batch_begin + batch_size);
@@ -130,7 +130,7 @@ namespace hnnet::builtin {
                         const auto parallel = batch_size > 1;
                         const auto thread_count = parallel ? max_threads : index_t{1};
                         for (auto tid{0}; tid < thread_count; ++tid) {
-                            std::ranges::fill(_gradients[tid], 0.0);
+                            std::ranges::fill(_gradients[tid], 0.0_real);
                         }
                         #pragma omp parallel for if(parallel) reduction(+:loss)
                         for (auto isample = batch_begin; isample < batch_end; ++isample) {
@@ -141,7 +141,7 @@ namespace hnnet::builtin {
                         }
                         if (parallel) {
                             // sequential reduction: sum contribution of each thread
-                            std::ranges::fill(_batch_gradient, 0.0);
+                            std::ranges::fill(_batch_gradient, 0.0_real);
                             for (auto tid{0}; tid < thread_count; ++tid) {
                                 const auto &gradient = _gradients[tid];
                                 for (auto iconn{0}; iconn < connection_count; ++iconn) {
@@ -163,9 +163,9 @@ namespace hnnet::builtin {
                                 const DataType auto &targets, 
                                 delta_vector_t &deltas, 
                                 grad_vector_t &gradient) const {
-                    std::ranges::fill(deltas, 0.0);
+                    std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
-                    real_t loss{0.0};
+                    real_t loss{0.0_real};
                     for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                         const auto signal = state.signals[iout];
                         loss += _loss(target, signal);

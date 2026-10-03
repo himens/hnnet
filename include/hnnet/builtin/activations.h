@@ -8,7 +8,7 @@ namespace hnnet::builtin {
                 return x;
             }
             constexpr real_t derivative(const real_t x) const final {
-                return 1.0;
+                return 1.0_real;
             }
     };
     class LinearActivation : public Activation {
@@ -19,98 +19,98 @@ namespace hnnet::builtin {
             constexpr real_t derivative(const real_t x) const final {
                 return slope;
             }
-            real_t slope{1.0};
-            real_t offset{0.0};
+            real_t slope{1.0_real};
+            real_t offset{0.0_real};
     };
     class StepActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x >= threshold ? 1.0 : 0.0;
+                return x >= threshold ? 1.0_real : 0.0_real;
             }
             constexpr real_t derivative(const real_t x) const final {
-                return 0.0;
+                return 0.0_real;
             }
-            real_t threshold{0.0};
+            real_t threshold{0.0_real};
     };
     class BipolarStepActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x >= threshold ? +1.0 : -1.0;
+                return x >= threshold ? +1.0_real : -1.0_real;
             }
             constexpr real_t derivative(const real_t x) const final {
-                return 0.0;
+                return 0.0_real;
             }
-            real_t threshold{0.0};
+            real_t threshold{0.0_real};
     };
     class PerceptronActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x > threshold ? +1 : x < -threshold ? -1 : 0;
+                return x > threshold ? +1_real : x < -threshold ? -1_real : 0_real;
             }
             constexpr real_t derivative(const real_t x) const final {
-                return 0.0;
+                return 0.0_real;
             }
-            real_t threshold{0.2};
+            real_t threshold{0.2_real};
     };
     class SigmoidActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return 1.0 / (1.0 + std::exp(-sigma * x));
+                return 1.0_real / (1.0_real + std::exp(-sigma * x));
             }
             constexpr real_t derivative(const real_t x) const final {
                 const auto sig = (*this)(x);
-                return sigma * sig * (1.0 - sig);
+                return sigma * sig * (1.0_real - sig);
             }
-            real_t sigma{1.0};
+            real_t sigma{1.0_real};
     };
     class BipolarSigmoidActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return 2.0 / (1.0 + std::exp(-sigma * x)) - 1.0;
+                return 2.0_real / (1.0_real + std::exp(-sigma * x)) - 1.0_real;
             }
             constexpr real_t derivative(const real_t x) const final {
                 const auto sig = (*this)(x);
-                return 0.5 * sigma * (1.0 + sig) * (1.0 - sig);
+                return 0.5_real * sigma * (1.0_real + sig) * (1.0_real - sig);
             }
-            real_t sigma{1.0};
+            real_t sigma{1.0_real};
     };
     class ReLUActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return std::max(static_cast<real_t>(0.0), x);
+                return std::max(0.0_real, x);
             }
             constexpr real_t derivative(const real_t x) const final {
-                return x > 0.0 ? 1.0 : 0.0;
+                return x > 0.0_real ? 1.0_real : 0.0_real;
             }
     };
     class LeakyReLUActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x >= 0.0 ? x : 0.01 * x;
+                return x >= 0.0_real ? x : 0.01_real * x;
             }
             constexpr real_t derivative(const real_t x) const final {
-                return x >= 0.0 ? 1.0 : 0.01;
+                return x >= 0.0_real ? 1.0_real : 0.01_real;
             }
     };
     class ELUActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x >= 0.0 ? x : 0.01 * (std::exp(x) - 1.0);
+                return x >= 0.0_real ? x : 0.01_real * (std::exp(x) - 1.0_real);
             }
             constexpr real_t derivative(const real_t x) const final {
-                return x >= 0.0 ? 1.0 : 0.01 * std::exp(x);
+                return x >= 0.0_real ? 1.0_real : 0.01_real * std::exp(x);
             }
     };
     class GaussianActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return std::exp(-std::pow(x - mean, 2) / (2 * sigma * sigma));
+                return std::exp(-std::pow(x - mean, 2_real) / (2_real * sigma * sigma));
             }
             constexpr real_t derivative(const real_t x) const final {
                 return - (x - mean) / (sigma * sigma) * (*this)(x);
             }
-            real_t mean{0.0};
-            real_t sigma{1.0};
+            real_t mean{0.0_real};
+            real_t sigma{1.0_real};
     };
     class TanhActivation : public Activation {
         public:
@@ -119,26 +119,26 @@ namespace hnnet::builtin {
             }
             constexpr real_t derivative(const real_t x) const final {
                 const auto t = (*this)(x);
-                return 1.0 - t * t;
+                return 1.0_real - t * t;
             }
     }; 
     class SoftplusActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return std::log(1.0 + std::exp(x));
+                return std::log(1.0_real + std::exp(x));
             }
             constexpr real_t derivative(const real_t x) const final {
-                return 1.0 / (1.0 + std::exp(-x));
+                return 1.0_real / (1.0_real + std::exp(-x));
             }
     };
     class SoftsignActivation : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
-                return x / (1.0 + std::abs(x));
+                return x / (1.0_real + std::abs(x));
             }
             constexpr real_t derivative(const real_t x) const final {
-                const auto denom = 1.0 + std::abs(x);
-                return 1.0 / (denom * denom);
+                const auto denom = 1.0_real + std::abs(x);
+                return 1.0_real / (denom * denom);
             }
     };
 }

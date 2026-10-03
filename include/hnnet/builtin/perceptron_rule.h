@@ -10,7 +10,7 @@ namespace hnnet::builtin {
         public:
             // Constructor
             explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {
-                if (_learning_rate < 0.0) {
+                if (_learning_rate < 0.0_real) {
                     throw std::invalid_argument("PerceptronRule::PerceptronRule: learning_rate must be >= 0");
                 }
                 std::println("PerceptronRule::PerceptronRule: learning rate: {}", learning_rate);
@@ -19,7 +19,7 @@ namespace hnnet::builtin {
             real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                 auto view = net.view();
                 NNetState state(view.neuron_count());
-                real_t mean_squared_error{0.0};
+                real_t mean_squared_error{0.0_real};
                 for (const auto &[input, target] : std::views::zip(inputs, targets)) {
                     net.update(state, input);
                     mean_squared_error += update_weights(view, state, target);
@@ -32,11 +32,11 @@ namespace hnnet::builtin {
                 if (view.partitions().size() != std::ranges::size(targets)) {
                     throw std::runtime_error("PerceptronRule::learn: invalid net!");
                 }
-                real_t squared_error{0};
+                real_t squared_error{0_real};
                 for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                     const auto signal = state.signals[iout];
                     squared_error += _mean_squared_error(target, signal);
-                    if (std::abs(target - signal) < 1e-6) {
+                    if (std::abs(target - signal) < 1e-6_real) {
                         continue;  // No update needed if the error is negligible
                     }
                     // find the partition corresponding to this output neuron (irx == iout)

@@ -10,7 +10,7 @@ namespace hnnet {
         std::vector<real_t> signals{};
         std::vector<real_t> weighted_sums{};
         NNetState() = default;
-        explicit NNetState(const int_t neuron_count) : signals(neuron_count, 0.0), weighted_sums(neuron_count, 0.0) {}
+        explicit NNetState(const int_t neuron_count) : signals(neuron_count, 0.0_real), weighted_sums(neuron_count, 0.0_real) {}
     };
     ////////////////
     // NNet class //
@@ -96,7 +96,7 @@ namespace hnnet {
                         throw std::out_of_range("NNet::connect: index out-of-range!");
                     }
                     _connections.push_back({.itx = itx, .irx = irx});
-                    _weights.push_back(0.0);
+                    _weights.push_back(0.0_real);
                 }
             }
             // Connect neurons (zip)
@@ -118,7 +118,7 @@ namespace hnnet {
                     if (std::ranges::size(inputs) != std::ranges::size(targets)) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }
-                    constexpr real_t loss_threshold{5e-3};
+                    constexpr real_t loss_threshold{5e-3_real};
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
                     bool converged{false};
@@ -239,7 +239,7 @@ namespace hnnet {
                 }
                 sort_connections(_connections);
                 _partitions = make_partitions(_connections);
-                _weights = utils::random::generate<real_t>(_weights.size(), -0.1, +0.1);
+                _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
                 std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
             }
             // Update net state
@@ -252,8 +252,8 @@ namespace hnnet {
                     state.signals[iin] = _neurons[iin].activate(input);
                 }
                 for (const auto &ibias : _ibias_neurons) {
-                    state.weighted_sums[ibias] = 1.0;
-                    state.signals[ibias] = _neurons[ibias].activate(1.0);
+                    state.weighted_sums[ibias] = 1.0_real;
+                    state.signals[ibias] = _neurons[ibias].activate(1.0_real);
                 }
             }
         private:
