@@ -180,7 +180,7 @@ namespace hnnet::builtin {
                                 const auto irx = block.rx_begin + irow;
                                 const auto &rx = view.neuron(irx);
                                 auto &delta = deltas[irx];
-                                if (rx.type() != NeuronType::output) {
+                                if (rx.type() != NeuronType::output) { // si puo' eliminare?
                                     delta *= rx.activation()->derivative(state.weighted_sums[irx]);
                                 }
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
@@ -194,7 +194,7 @@ namespace hnnet::builtin {
                             const auto &partition = partitions[ipart];
                             const auto &rx = view.neuron(partition.irx);
                             auto &delta = deltas[partition.irx];
-                            if (rx.type() != NeuronType::output) {
+                            if (rx.type() != NeuronType::output) { // si puo' eliminare?
                                 delta *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
                             }
                             for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
