@@ -29,7 +29,7 @@ int main() {
         {1}, 
         {0}
     }};
-    gate.train(inputs, targets, builtin::BackpropRule{0.2});
+    gate.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.2}});
 
     return 0;
 }

@@ -7,8 +7,8 @@
 // Constants
 constexpr size_t nb_pixels{784};
 constexpr size_t nb_digits{10};
-constexpr size_t nb_hidden{512};
-//constexpr size_t nb_hidden{128};
+//constexpr size_t nb_hidden{512};
+constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60'000};
 constexpr size_t nb_test_samples{10'000};
 // Aliases and data types
@@ -72,10 +72,10 @@ int main() {
     // create net
     builtin::DenseForwardNet classifier{
         builtin::Layer{nb_pixels, NeuronType::input,  builtin::IdentityActivation{}},
-        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::SigmoidActivation{}},
-        builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
-        builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
-        builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
+        builtin::Layer{nb_hidden, NeuronType::hidden, builtin::SigmoidActivation{}},
+        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
+        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
+        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
         builtin::Layer{nb_digits, NeuronType::output, builtin::SigmoidActivation{}}
     };
     // read train and test samples
@@ -88,8 +88,9 @@ int main() {
         targets[i] = encode(digit.label);
     }
     // train net
-    classifier.train(inputs, targets, builtin::BackpropRule{0.25, builtin::SGDMomentum{0.5}, 64});
-    //classifier.train(inputs, targets, builtin::BackpropRule{0.05, builtin::SGDMomentum{0.9}, 1});
+    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.25, 0.5}, 64});
+    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.05, 0.9}, 1});
+    classifier.train(inputs, targets, builtin::BackpropRule{builtin::Rprop{1.2, 0.5}, 1});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};

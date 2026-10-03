@@ -118,7 +118,7 @@ namespace hnnet {
                     if (std::ranges::size(inputs) != std::ranges::size(targets)) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }
-                    constexpr real_t loss_threshold{1e-2};
+                    constexpr real_t loss_threshold{5e-3};
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
                     bool converged{false};

@@ -3,7 +3,8 @@
 
 namespace hnnet {
     template <typename Rule, typename Net, typename Inputs, typename Targets>
-        concept LearningRuleType = DatasetType<Inputs> and DatasetType<Targets> and
+        concept LearningRuleType = DatasetType<Inputs> and
+                                   DatasetType<Targets> and
                                    requires(Rule& rule,
                                             Net& net,
                                             const Inputs &inputs,

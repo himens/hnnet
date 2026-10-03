@@ -7,66 +7,115 @@ namespace hnnet::builtin {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     template <typename T>
-        concept OptimizerType = requires (T &optimizer, 
-                                          DAGNet::View &view, 
-                                          const real_t learning_rate, 
-                                          const grad_vector_t &gradient) {
-            optimizer.update(view, learning_rate, gradient);
+        concept OptimizerType = requires (T &optimizer, DAGNet::View &view, const grad_vector_t &gradient) {
+            optimizer.update(view, gradient);
         };
-    ///////////////////////
-    // SGDMomentum class //
-    ///////////////////////
-    class SGDMomentum {
+    ////////////////////
+    // Momentum class //
+    ////////////////////
+    class Momentum {
         public:
-            explicit SGDMomentum(const real_t momentum = 0.0) : _momentum(momentum) {
-                if (_momentum < 0.0) {
-                    throw std::invalid_argument("SGDMomentum::SGDMomentum: momentum must be >= 0");
+            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0) : _learning_rate(learning_rate), _momentum(momentum) {
+                if (_learning_rate < 0.0) {
+                    throw std::invalid_argument("Momentum::Momentum: learning_rate must be >= 0");
                 }
-                std::println("SGDMomentum::SGDMomentum: momentum: {}", _momentum);
+                if (_momentum < 0.0) {
+                    throw std::invalid_argument("Momentum::Momentum: momentum must be >= 0");
+                }
+                std::println("Momentum::Momentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
-            void update(DAGNet::View &view, const real_t learning_rate, const grad_vector_t &gradient) {
+            void update(DAGNet::View &view, const grad_vector_t &gradient) {
                 if (_prev_dweights.empty()) {
                     _prev_dweights.assign(gradient.size(), 0.0);
                 }
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
-                    const auto dweight = (learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
+                    const auto dweight = - (_learning_rate * gradient[iconn]) + (_momentum * _prev_dweights[iconn]);
                     view.weight(iconn) += dweight;
                     _prev_dweights[iconn] = dweight;
                 }
             }
         private:
-            real_t _momentum;
+            real_t _learning_rate{0.0};
+            real_t _momentum{0.0};
             grad_vector_t _prev_dweights{};
+    };
+    /////////////////
+    // Rprop class //
+    /////////////////
+    // NOTE: Rprop comes in several variants. This class implements iRprop-
+    class Rprop {
+        public:
+            explicit Rprop(const real_t eta_plus, const real_t eta_minus) : _eta_plus(eta_plus), _eta_minus(eta_minus) {
+                if (_eta_plus <= 1.0) {
+                    throw std::invalid_argument("Rprop::Rprop: eta_plus must be > 1");
+                }
+                if (_eta_minus <= 0.0 or _eta_minus >= 1.0) {
+                    throw std::invalid_argument("Rprop::Rprop: eta_minus must between 0 and 1");
+                }
+                std::println("Rprop::Rprop: eta_plus: {}, eta_minus: {}", _eta_plus, _eta_minus);
+            }
+            void update(DAGNet::View &view, const grad_vector_t &gradient) {
+                if (_prev_gradient.empty()) {
+                    _prev_gradient.assign(gradient.size(), 0.0);
+                }
+                if (_deltas.empty()) {
+                    _deltas.assign(gradient.size(), 0.1);
+                }
+                for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
+                    constexpr real_t delta_min{1e-6};
+                    constexpr real_t delta_max{50.0};
+                    auto &delta = _deltas[iconn];
+                    auto &prev_grad = _prev_gradient[iconn];
+                    const auto &grad = gradient[iconn];
+                    const auto sign_prod = prev_grad * grad;
+                    if (sign_prod > 0) {
+                        delta = utils::math::min(_eta_plus * delta, delta_max);
+                        const auto dweight = - utils::math::sign(grad) * delta;
+                        view.weight(iconn) += dweight;
+                        prev_grad = grad;
+                    }
+                    else if (sign_prod < 0) {
+                        delta = utils::math::max(_eta_minus * delta, delta_min);
+                        prev_grad = 0.0;
+                    }
+                    else {
+                        const auto dweight = - utils::math::sign(grad) * delta;
+                        view.weight(iconn) += dweight;
+                        prev_grad = grad;
+                    }
+                }
+            }
+        private:
+            real_t _eta_plus{0.0};
+            real_t _eta_minus{0.0};
+            std::vector<real_t> _deltas{};
+            grad_vector_t _prev_gradient{};
     };
     ////////////////////////
     // BackpropRule class //
     ////////////////////////
-    template <OptimizerType Optimizer = SGDMomentum, LossType Loss = MSELoss>
+    template <OptimizerType Optimizer, LossType Loss = MSELoss>
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(const real_t learning_rate, 
-                                      Optimizer optimizer = Optimizer{}, 
-                                      const int_t batch_size = 1, 
-                                      Loss loss = {}) : _learning_rate(learning_rate), _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
-                    if (_learning_rate < 0.0) {
-                        throw std::invalid_argument("BackpropRule::BackpropRule: learning_rate must be >= 0");
+                explicit BackpropRule(Optimizer optimizer = Optimizer{}, const int_t batch_size = 1, Loss loss = {}) : _optimizer(optimizer), _batch_size(batch_size), _loss(loss) {
+                    if (batch_size == 0) {
+                        throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must not be zero");
                     }
-                    if (batch_size <= 0) {
-                        throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must be > 0");
-                    }
-                    std::println("BackpropRule:BackpropRule: learning rate: {}, batch size: {}", _learning_rate, _batch_size);
                 }
                 // Learn from a whole epoch of training samples
                 real_t learn(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                     auto view = net.view();
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
-                    const auto batch_count = static_cast<int_t>(std::ceil(static_cast<real_t>(std::ranges::size(inputs)) / _batch_size));
-                    const auto parallel = (batch_count != std::ssize(inputs));
+                    const auto sample_count = static_cast<index_t>(std::ranges::size(inputs));
+                    if (sample_count == 0) {
+                        throw std::invalid_argument("BackpropRule::learn: inputs must not be empty");
+                    }
+                    const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
+                    const auto batch_count = utils::math::ceil(sample_count, batch_size);
                     const auto max_threads = omp_get_max_threads();
-                    const auto thread_count = parallel ? max_threads : index_t{1};
-                    //std::ranges::shuffle(samples, random_generator());
+                    //std::ranges::shuffle(inputs, utils::random::generator());
                     if (_states.empty()) {
                         _states.assign(max_threads, NNetState{neuron_count});
                         _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0));
@@ -75,9 +124,11 @@ namespace hnnet::builtin {
                     }
                     real_t loss{0.0};
                     for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
-                        const auto batch_begin = ibatch * _batch_size;
-                        const auto batch_end = std::min<index_t>(std::ranges::size(inputs), batch_begin + _batch_size);
+                        const auto batch_begin = ibatch * batch_size;
+                        const auto batch_end = std::min(sample_count, batch_begin + batch_size);
                         const auto batch_size = batch_end - batch_begin;
+                        const auto parallel = batch_size > 1;
+                        const auto thread_count = parallel ? max_threads : index_t{1};
                         for (auto tid{0}; tid < thread_count; ++tid) {
                             std::ranges::fill(_gradients[tid], 0.0);
                         }
@@ -97,10 +148,10 @@ namespace hnnet::builtin {
                                     _batch_gradient[iconn] += gradient[iconn] / batch_size;
                                 }
                             }
-                            _optimizer.update(view, _learning_rate, _batch_gradient);
+                            _optimizer.update(view, _batch_gradient);
                         }
                         else {
-                            _optimizer.update(view, _learning_rate, _gradients.front());
+                            _optimizer.update(view, _gradients.front());
                         }
                     }
                     return loss / std::ranges::size(inputs);
@@ -129,7 +180,7 @@ namespace hnnet::builtin {
                                 const auto irx = block.rx_begin + irow;
                                 const auto &rx = view.neuron(irx);
                                 auto &delta = deltas[irx];
-                                if (rx.type() != NeuronType::output) {
+                                if (rx.type() != NeuronType::output) { // si puo' eliminare?
                                     delta *= rx.activation()->derivative(state.weighted_sums[irx]);
                                 }
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
@@ -143,7 +194,7 @@ namespace hnnet::builtin {
                             const auto &partition = partitions[ipart];
                             const auto &rx = view.neuron(partition.irx);
                             auto &delta = deltas[partition.irx];
-                            if (rx.type() != NeuronType::output) {
+                            if (rx.type() != NeuronType::output) { // si puo' eliminare?
                                 delta *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
                             }
                             for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
@@ -178,7 +229,6 @@ namespace hnnet::builtin {
                 }
             private:
                 // Data members
-                real_t _learning_rate;
                 Optimizer _optimizer;
                 int_t _batch_size{1};
                 Loss _loss;

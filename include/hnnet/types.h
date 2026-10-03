@@ -13,6 +13,7 @@
 #include <memory>
 #include <unordered_map>
 #include <omp.h>
+#include "math.h"
 #include "timer.h"
 #include "random.h"
 

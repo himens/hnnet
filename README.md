@@ -134,7 +134,7 @@ Input and output samples are contiguous ranges of `real_t`; datasets are contigu
     - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`
     - allows learning strategies to change independently of the network representation
 
-`BackpropRule<Optimizer, Loss>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`. Samples in each multi-sample mini-batch are processed in parallel with OpenMP; gradients are accumulated for that batch and the optimizer updates weights at the end of each batch. The built-in `SGDMomentum` stores momentum state, while the learning rate belongs to `BackpropRule`.
+`BackpropRule<Optimizer, Loss>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`. Samples in each multi-sample mini-batch are processed in parallel with OpenMP; gradients are accumulated for that batch and the optimizer updates weights at the end of each batch. The built-in `Momentum` optimizer stores momentum state, while the learning rate belongs to `BackpropRule`.
 
 Training currently uses a fixed loss threshold and maximum epoch count and prints progress to standard output. Inference uses `NNetState` for signals and weighted sums, separately from the network topology.
 
