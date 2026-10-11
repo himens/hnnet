@@ -5,9 +5,9 @@
 
 namespace hnnet::builtin {
     using delta_vector_t = std::vector<real_t>;
-    //////////////////
-    // OpenMP class //
-    //////////////////
+    /////////////////////////
+    // OpenMPBackend class //
+    /////////////////////////
     class OpenMPBackend {
         public:
             // Initialize the backend
