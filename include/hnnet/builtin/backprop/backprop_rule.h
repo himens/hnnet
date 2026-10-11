@@ -33,7 +33,7 @@ namespace hnnet::builtin {
                             throw std::invalid_argument("BackpropRule::learn: inputs must not be empty");
                         }
                         const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
-                        const auto batch_count = utils::math::ceil(sample_count, batch_size);
+                        const auto batch_count = utils::math::ceil_div(sample_count, batch_size);
                         _backend.to_device(net, inputs, targets);
                         real_t loss{0.0_real};
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
