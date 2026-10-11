@@ -4,7 +4,7 @@ namespace utils::math {
     // Return ceil of division
     template<typename T>
         requires (std::integral<T> or std::floating_point<T>)
-        constexpr T ceil(const T &num, const T &denum) {
+        constexpr T ceil_div(const T &num, const T &denum) {
             return num / denum + (num % denum != 0);
         }
     // Return sign of value
