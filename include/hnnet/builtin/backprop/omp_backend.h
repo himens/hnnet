@@ -22,7 +22,8 @@ namespace hnnet::builtin {
                 _batch_gradient.assign(connection_count, 0.0_real);
             }
             // Transfer the network and data to the device
-            void to_device(DAGNet &, const DatasetType auto &inputs, const DatasetType auto &targets) {
+            void to_device(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+                _weights = net.view().weights();
                 _inputs.clear();
                 _targets.clear();
                 for (const auto &sample : inputs) {
@@ -68,9 +69,8 @@ namespace hnnet::builtin {
             // Update the weights
             template <typename Optimizer>
                 requires OptimizerType<Optimizer, std::span<real_t>, grad_vector_t>
-                void update_weights(DAGNet &net, Optimizer &optimizer) {
-                    auto view = net.view();
-                    optimizer.update(view.weights(), _batch_gradient);
+                void update_weights(Optimizer &optimizer) {
+                    optimizer.update(_weights, _batch_gradient);
             }
             // Transfer the net to host memory (if needed)
             void to_host(DAGNet &) {}
@@ -156,6 +156,7 @@ namespace hnnet::builtin {
             // Data members
             std::vector<std::span<const real_t>> _inputs{};
             std::vector<std::span<const real_t>> _targets{};
+            std::span<real_t> _weights{};
             std::vector<NNet::State> _states{};
             std::vector<delta_vector_t> _deltas{};
             std::vector<grad_vector_t> _gradients{};

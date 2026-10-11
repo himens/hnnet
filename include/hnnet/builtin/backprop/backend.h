@@ -17,7 +17,7 @@ namespace hnnet::builtin {
                                           { backend.init(net) } -> std::same_as<void>;
                                           { backend.to_device(net, inputs, targets) } -> std::same_as<void>;
                                           { backend.forward_backward(net, begin, end, loss) } -> std::same_as<real_t>;
-                                          { backend.update_weights(net, optimizer) } -> std::same_as<void>;
+                                          { backend.update_weights(optimizer) } -> std::same_as<void>;
                                           { backend.to_host(net) } -> std::same_as<void>;
                                       };
 }
