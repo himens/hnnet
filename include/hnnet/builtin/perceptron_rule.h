@@ -15,6 +15,8 @@ namespace hnnet::builtin {
                 }
                 std::println("PerceptronRule::PerceptronRule: learning rate: {}", learning_rate);
             }
+            // Initialize the perceptron rule (if needed)
+            void init(NNet &) {}
             // Learn from a whole epoch of training samples (online: one immediate update per sample)
             real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                 auto view = net.view();

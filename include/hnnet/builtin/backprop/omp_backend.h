@@ -10,8 +10,19 @@ namespace hnnet::builtin {
     //////////////////
     class OpenMPBackend {
             public:
+                // Initialize the backend
+                void init(DAGNet &net) {
+                    auto view = net.view();
+                    const auto neuron_count = view.neuron_count();
+                    const auto connection_count = view.connection_count();
+                    const auto max_threads = omp_get_max_threads();
+                    _states.assign(max_threads, NNetState{neuron_count});
+                    _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
+                    _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
+                    _batch_gradient.assign(connection_count, 0.0_real);
+                }
                 // Transfer the network and data to the device
-                void to_device(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+                void to_device(DAGNet &, const DatasetType auto &inputs, const DatasetType auto &targets) {
                     _inputs.clear();
                     _targets.clear();
                     for (const auto &sample : inputs) {
@@ -19,16 +30,6 @@ namespace hnnet::builtin {
                     }
                     for (const auto &sample : targets) {
                         _targets.emplace_back(sample);
-                    }
-                    auto view = net.view();
-                    const auto neuron_count = view.neuron_count();
-                    const auto connection_count = view.connection_count();
-                    const auto max_threads = omp_get_max_threads();
-                    if (_states.empty()) {
-                        _states.assign(max_threads, NNetState{neuron_count});
-                        _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
-                        _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
-                        _batch_gradient.assign(connection_count, 0.0_real);
                     }
                 }
                 // Perform forward and backward passes for a batch of data
@@ -65,10 +66,11 @@ namespace hnnet::builtin {
                     return loss;
                 }
                 // Update the weights
-                void update_weights(DAGNet &net, OptimizerType auto &optimizer) {
-                    auto view = net.view();
-                    optimizer.update(view, _batch_gradient);
-                }
+                template <OptimizerType Optimizer>
+                    void update_weights(DAGNet &net, Optimizer &optimizer) {
+                        auto view = net.view();
+                        optimizer.update(view, _batch_gradient);
+                    }
                 // Transfer the net to host memory (if needed)
                 void to_host(DAGNet &) {}
             private:

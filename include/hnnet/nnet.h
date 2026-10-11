@@ -27,7 +27,6 @@ namespace hnnet {
                 index_t conn_begin;
                 index_t conn_end;
             };
-            virtual ~NNet() = default;
             class View {
                 public:
                     int_t neuron_count() const {
@@ -58,6 +57,8 @@ namespace hnnet {
                     NNet& _net;
             };
         public:
+            // Destructor
+            virtual ~NNet() = default;
             // Create a view of the net
             View view() {
                 return View(*this);
@@ -131,6 +132,7 @@ namespace hnnet {
                     std::println("NNet::train: ==================================");
                     timer.start();
                     prepare();
+                    rule.init(self);
                     for (const auto &[input, target] : std::views::zip(inputs, targets)) {
                         if (std::ssize(input) != std::ssize(_iin_neurons) or (std::ssize(target) != std::ssize(_iout_neurons))) {
                             throw std::invalid_argument("NNet::train: size error!");
@@ -186,6 +188,18 @@ namespace hnnet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
+            // Prepare net (default: randomize weights, sort connections, group them into partitions)
+            virtual void prepare() {
+                if (find_duplicate_connection(_connections)) {
+                    throw std::invalid_argument("NNet::prepare: duplicate connection!");
+                }
+                sort_connections(_connections);
+                _partitions = make_partitions(_connections);
+                _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
+                std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
+            }
+            // Update net state
+            virtual void update_state(NNetState &state) const = 0;
             // Getters/setters
             std::span<const Neuron> neurons() const {
                 return _neurons;
@@ -235,18 +249,6 @@ namespace hnnet {
                 }
                 return partitions;
             }
-            // Prepare net (default: randomize weights, sort connections, group them into partitions)
-            virtual void prepare() {
-                if (find_duplicate_connection(_connections)) {
-                    throw std::invalid_argument("NNet::prepare: duplicate connection!");
-                }
-                sort_connections(_connections);
-                _partitions = make_partitions(_connections);
-                _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
-                std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
-            }
-            // Update net state
-            virtual void update_state(NNetState &state) const = 0;
         private:
             // Seed a net state from input data
             void seed_state(NNetState &state, const DataType auto &inputs) const {

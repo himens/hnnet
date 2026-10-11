@@ -19,6 +19,11 @@ namespace hnnet::builtin {
                         throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must not be zero");
                     }
                 }
+                // Initialize the rule
+                void init(auto &net) {
+                    _optimizer.init(net.view().connection_count());
+                    _backend.init(net);
+                }
                 // Learn from a whole epoch of training samples
                 template <typename Net, DatasetType Inputs, DatasetType Targets>
                     requires BackpropBackendType<Backend, Net, Inputs, Targets, Optimizer, Loss>
@@ -41,6 +46,7 @@ namespace hnnet::builtin {
                         return loss / sample_count;
                     }
             private:
+                // Data members
                 Optimizer _optimizer;
                 Backend _backend;
                 int_t _batch_size{1};

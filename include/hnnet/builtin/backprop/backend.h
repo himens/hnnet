@@ -3,7 +3,6 @@
 #include "hnnet/builtin/backprop/optimizer.h"
 
 namespace hnnet::builtin {
-    // Backprop backend concept
     template <typename Backend, typename Net, typename Inputs, typename Targets, typename Optimizer, typename Loss>
         concept BackpropBackendType = DatasetType<Inputs> and 
                                       DatasetType<Targets> and 
@@ -17,6 +16,7 @@ namespace hnnet::builtin {
                                                index_t end, 
                                                Optimizer &optimizer, 
                                                const Loss &loss) {
+                                          { backend.init(net) } -> std::same_as<void>;
                                           { backend.to_device(net, inputs, targets) } -> std::same_as<void>;
                                           { backend.forward_backward(net, begin, end, loss) } -> std::same_as<real_t>;
                                           { backend.update_weights(net, optimizer) } -> std::same_as<void>;

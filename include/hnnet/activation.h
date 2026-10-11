@@ -2,6 +2,9 @@
 #include "hnnet/types.h"
 
 namespace hnnet {
+    //////////////////////
+    // Activation class //
+    //////////////////////
     class Activation {
         public:
             virtual constexpr real_t operator()(const real_t x) const = 0;

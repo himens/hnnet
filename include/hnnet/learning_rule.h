@@ -9,6 +9,7 @@ namespace hnnet {
                                             Net& net,
                                             const Inputs &inputs,
                                             const Targets &targets) {
+                                       { rule.init(net) } -> std::same_as<void>;
                                        { rule.learn(net, inputs, targets) } -> std::same_as<real_t>;
                                    };
 }
