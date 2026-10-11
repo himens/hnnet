@@ -13,9 +13,9 @@
 #include <memory>
 #include <unordered_map>
 #include <omp.h>
-#include "math.h"
-#include "timer.h"
-#include "random.h"
+#include "utils/math.h"
+#include "utils/timer.h"
+#include "utils/random.h"
 
 namespace hnnet {
     // Aliases for commonly used types

@@ -1,6 +1,5 @@
 #pragma once
 #include "hnnet/builtin/backprop/optimizer.h"
-#include "math.h"
 
 namespace hnnet::builtin {
     ////////////////////
