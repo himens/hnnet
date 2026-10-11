@@ -114,7 +114,10 @@ namespace hnnet {
             }
             // Train net using a set of training samples
             template <typename Self, DatasetType Inputs, DatasetType Targets, typename LearningRule>
-                void train(Self &self, const Inputs &inputs, const Targets &targets, LearningRule rule) {
+                void train(Self &self, 
+                           const Inputs &inputs, 
+                           const Targets &targets, 
+                           LearningRule rule) {
                     if (std::ranges::size(inputs) != std::ranges::size(targets)) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }

@@ -1,4 +1,5 @@
 #pragma once
+#include "hnnet/builtin/losses.h"
 #include "hnnet/builtin/backprop/optimizers.h"
 #include "hnnet/builtin/backprop/omp_backend.h"
 
@@ -10,7 +11,10 @@ namespace hnnet::builtin {
         class BackpropRule {
             public:
                 // Constructor
-                explicit BackpropRule(Optimizer optimizer = Optimizer{}, Backend backend = {}, const int_t batch_size = 1, Loss loss = {}) : _optimizer(optimizer), _backend(backend), _batch_size(batch_size), _loss(loss) {
+                explicit BackpropRule(Optimizer optimizer = Optimizer{}, 
+                                      Backend backend = {}, 
+                                      const int_t batch_size = 1, 
+                                      Loss loss = {}) : _optimizer(optimizer), _backend(backend), _batch_size(batch_size), _loss(loss) {
                     if (batch_size == 0) {
                         throw std::invalid_argument("BackpropRule::BackpropRule: batch_size must not be zero");
                     }
@@ -30,7 +34,7 @@ namespace hnnet::builtin {
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
-                            loss += _backend.forward_backward(net, inputs, targets, batch_begin, batch_end, _loss);
+                            loss += _backend.forward_backward(net, batch_begin, batch_end, _loss);
                             _backend.update_weights(net, _optimizer);
                         }
                         _backend.to_host(net);
@@ -38,8 +42,8 @@ namespace hnnet::builtin {
                     }
             private:
                 Optimizer _optimizer;
+                Backend _backend;
                 int_t _batch_size{1};
                 Loss _loss;
-                Backend _backend;
         };
 }

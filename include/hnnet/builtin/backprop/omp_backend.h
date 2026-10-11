@@ -11,14 +11,20 @@ namespace hnnet::builtin {
     class OpenMPBackend {
             public:
                 // Transfer the network and data to the device
-                void to_device(DAGNet &net, const DatasetType auto &, const DatasetType auto &) {
+                void to_device(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+                    _inputs.clear();
+                    _targets.clear();
+                    for (const auto &sample : inputs) {
+                        _inputs.emplace_back(sample);
+                    }
+                    for (const auto &sample : targets) {
+                        _targets.emplace_back(sample);
+                    }
                     auto view = net.view();
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
                     const auto max_threads = omp_get_max_threads();
-                    if (std::ssize(_states) != max_threads or
-                        std::ssize(_states.front().signals) != neuron_count or
-                        std::ssize(_batch_gradient) != connection_count) {
+                    if (_states.empty()) {
                         _states.assign(max_threads, NNetState{neuron_count});
                         _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
                         _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
@@ -26,9 +32,10 @@ namespace hnnet::builtin {
                     }
                 }
                 // Perform forward and backward passes for a batch of data
-                real_t forward_backward(DAGNet &net, const DatasetType auto &inputs,
-                                        const DatasetType auto &targets, const index_t batch_begin,
-                                        const index_t batch_end, const LossType auto &loss_function) {
+                real_t forward_backward(DAGNet &net, 
+                                        const index_t batch_begin,
+                                        const index_t batch_end, 
+                                        const LossType auto &loss_function) {
                     auto view = net.view();
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
@@ -40,9 +47,8 @@ namespace hnnet::builtin {
                     #pragma omp parallel for if(parallel) reduction(+:loss)
                     for (auto isample = batch_begin; isample < batch_end; ++isample) {
                         const auto tid = omp_get_thread_num();
-                        auto &state = _states[tid];
-                        net.update(state, inputs[isample]);
-                        loss += backward(view, state, targets[isample], _deltas[tid], _gradients[tid], loss_function);
+                        net.update(_states[tid], _inputs[isample]);
+                        loss += backward(view, tid, isample, loss_function);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
@@ -58,19 +64,23 @@ namespace hnnet::builtin {
                     }
                     return loss;
                 }
+                // Update the weights
                 void update_weights(DAGNet &net, OptimizerType auto &optimizer) {
                     auto view = net.view();
                     optimizer.update(view, _batch_gradient);
                 }
+                // Transfer the net to host memory (if needed)
                 void to_host(DAGNet &) {}
             private:
                 // Compute the error and delta weights contribution of a single sample
-                real_t backward(DAGNet::View &view,
-                                NNetState &state,
-                                const DataType auto &targets,
-                                delta_vector_t &deltas,
-                                grad_vector_t &gradient,
-                                const LossType auto &loss_function) const {
+                real_t backward(DAGNet::View &view, 
+                                const index_t tid,
+                                const index_t isample,
+                                const LossType auto &loss_function) {
+                    auto &state = _states[tid];
+                    auto &deltas = _deltas[tid];
+                    auto &gradient = _gradients[tid];
+                    const auto targets = _targets[isample];
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss{0.0_real};
@@ -88,7 +98,7 @@ namespace hnnet::builtin {
                                 const auto irx = block.rx_begin + irow;
                                 const auto &rx = view.neuron(irx);
                                 auto &delta = deltas[irx];
-                                if (rx.type() != NeuronType::output) { // si puo' eliminare?
+                                if (rx.type() != NeuronType::output) {
                                     delta *= rx.activation()->derivative(state.weighted_sums[irx]);
                                 }
                                 const auto row_offset = block.weight_offset + irow * block.tx_count;
@@ -102,7 +112,7 @@ namespace hnnet::builtin {
                             const auto &partition = partitions[ipart];
                             const auto &rx = view.neuron(partition.irx);
                             auto &delta = deltas[partition.irx];
-                            if (rx.type() != NeuronType::output) { // si puo' eliminare?
+                            if (rx.type() != NeuronType::output) {
                                 delta *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
                             }
                             for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
@@ -136,6 +146,9 @@ namespace hnnet::builtin {
                     return loss;
                 }
             private:
+                // Data members
+                std::vector<std::span<const real_t>> _inputs{};
+                std::vector<std::span<const real_t>> _targets{};
                 std::vector<NNetState> _states{};
                 std::vector<delta_vector_t> _deltas{};
                 std::vector<grad_vector_t> _gradients{};

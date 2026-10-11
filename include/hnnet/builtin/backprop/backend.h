@@ -18,7 +18,7 @@ namespace hnnet::builtin {
                                                Optimizer &optimizer, 
                                                const Loss &loss) {
                                           { backend.to_device(net, inputs, targets) } -> std::same_as<void>;
-                                          { backend.forward_backward(net, inputs, targets, begin, end, loss) } -> std::same_as<real_t>;
+                                          { backend.forward_backward(net, begin, end, loss) } -> std::same_as<real_t>;
                                           { backend.update_weights(net, optimizer) } -> std::same_as<void>;
                                           { backend.to_host(net) } -> std::same_as<void>;
                                       };

@@ -1,7 +1,7 @@
 #include <fstream>
 #include <sstream>
 #include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/backprop_rule.h"
+#include "hnnet/builtin/backprop/backprop_rule.h"
 #include "hnnet/builtin/dense_forward_net.h"
 
 // Constants
@@ -90,7 +90,7 @@ int main() {
     // train net
     //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.25, 0.5}, 64});
     //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.05, 0.9}, 1});
-    classifier.train(inputs, targets, builtin::BackpropRule{builtin::Rprop{1.2, 0.5}, 1});
+    classifier.train(inputs, targets, builtin::BackpropRule{builtin::Rprop{1.2, 0.5}, builtin::OpenMPBackend{}, 1});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
