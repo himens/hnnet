@@ -8,6 +8,7 @@
 #include <numeric>
 #include <array>
 #include <vector>
+#include <span>
 #include <algorithm>
 #include <string>
 #include <memory>

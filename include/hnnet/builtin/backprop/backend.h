@@ -1,12 +1,10 @@
 #pragma once
 #include "hnnet/loss.h"
-#include "hnnet/builtin/backprop/optimizer.h"
 
 namespace hnnet::builtin {
     template <typename Backend, typename Net, typename Inputs, typename Targets, typename Optimizer, typename Loss>
         concept BackpropBackendType = DatasetType<Inputs> and 
                                       DatasetType<Targets> and 
-                                      OptimizerType<Optimizer> and
                                       LossType<Loss> and
                                       requires(Backend &backend, 
                                                Net &net, 

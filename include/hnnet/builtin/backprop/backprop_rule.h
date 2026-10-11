@@ -40,7 +40,7 @@ namespace hnnet::builtin {
                             const auto batch_begin = ibatch * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
                             loss += _backend.forward_backward(net, batch_begin, batch_end, _loss);
-                            _backend.update_weights(net, _optimizer);
+                            _backend.update_weights(net, _optimizer); // si puo' scrivere update_weights(net.view().weights(), _optimizer)??
                         }
                         _backend.to_host(net);
                         return loss / sample_count;

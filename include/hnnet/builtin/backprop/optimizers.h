@@ -1,7 +1,9 @@
 #pragma once
+#include <span>
 #include "hnnet/builtin/backprop/optimizer.h"
+#include "hnnet/builtin/dag_net.h"
 
-namespace hnnet::builtin {
+namespace hnnet::builtin::omp {
     ////////////////////
     // Momentum class //
     ////////////////////
@@ -27,10 +29,10 @@ namespace hnnet::builtin {
                 _state = State{weight_count};
             }
             // Update the weights
-            void update(DAGNet::View &view, const grad_vector_t &gradient) {
+            void update(std::span<real_t> weights, const grad_vector_t &gradient) {
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
                     const auto dweight = - (_learning_rate * gradient[iconn]) + (_momentum * _state.prev_dweights[iconn]);
-                    view.weight(iconn) += dweight;
+                    weights[iconn] += dweight;
                     _state.prev_dweights[iconn] = dweight;
                 }
             }
@@ -67,7 +69,7 @@ namespace hnnet::builtin {
                 _state = State{weight_count};
             }
             // Update the weights
-            void update(DAGNet::View &view, const grad_vector_t &gradient) {
+            void update(std::span<real_t> weights, const grad_vector_t &gradient) {
                 for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
                     constexpr real_t delta_min{1e-6_real};
                     constexpr real_t delta_max{50.0_real};
@@ -78,7 +80,7 @@ namespace hnnet::builtin {
                     if (sign_prod > 0_real) {
                         delta = utils::math::min(_eta_plus * delta, delta_max);
                         const auto dweight = - utils::math::sign(grad) * delta;
-                        view.weight(iconn) += dweight;
+                        weights[iconn] += dweight;
                         prev_grad = grad;
                     }
                     else if (sign_prod < 0_real) {
@@ -87,7 +89,7 @@ namespace hnnet::builtin {
                     }
                     else {
                         const auto dweight = - utils::math::sign(grad) * delta;
-                        view.weight(iconn) += dweight;
+                        weights[iconn] += dweight;
                         prev_grad = grad;
                     }
                 }

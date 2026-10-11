@@ -18,7 +18,7 @@ namespace hnnet::builtin {
             };
             class View : public NNet::View {
                 public:
-                    bool is_dense(const index_t ipart) const {
+                    bool is_dense(index_t ipart) const {
                         return _net._iblocks[ipart] != DenseBlock::no_block;
                     }
                     const DenseBlock& dense_block(const index_t ipart) const {

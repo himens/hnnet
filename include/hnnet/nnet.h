@@ -35,19 +35,19 @@ namespace hnnet {
                     int_t connection_count() const {
                         return _net._connections.size();
                     }
-                    const Neuron& neuron(const index_t index) const {
-                        return _net._neurons[index];
+                    std::span<const Neuron> neurons() const {
+                        return _net._neurons;
                     }
-                    const SynapticConn& connection(const index_t index) const {
-                        return _net._connections[index];
+                    std::span<const SynapticConn> connections() const {
+                        return _net._connections;
                     }
-                    real_t& weight(const index_t index) {
-                        return _net._weights[index];
+                    std::span<real_t> weights() const {
+                        return _net._weights;
                     }
-                    const std::vector<Partition>& partitions() const {
+                    std::span<const Partition> partitions() const {
                         return _net._partitions;
                     }
-                    const index_vector_t& iout_neurons() const {
+                    std::span<const index_t> iout_neurons() const {
                         return _net._iout_neurons;
                     }
                 protected:

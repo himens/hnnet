@@ -35,6 +35,8 @@ namespace hnnet::builtin {
                     throw std::runtime_error("PerceptronRule::learn: invalid net!");
                 }
                 real_t squared_error{0_real};
+                const auto connections = view.connections();
+                const auto weights = view.weights();
                 for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
                     const auto signal = state.signals[iout];
                     squared_error += _mean_squared_error(target, signal);
@@ -47,8 +49,8 @@ namespace hnnet::builtin {
                             continue;
                         }
                         for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                            const auto itx = view.connection(iconn).itx;
-                            view.weight(iconn) += _learning_rate * target * state.signals[itx];
+                            const auto itx = connections[iconn].itx;
+                            weights[iconn] += _learning_rate * target * state.signals[itx];
                         }
                     }
                 }

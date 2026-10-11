@@ -88,9 +88,9 @@ int main() {
         targets[i] = encode(digit.label);
     }
     // train net
-    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.25, 0.5}, 64});
-    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.05, 0.9}, 1});
-    classifier.train(inputs, targets, builtin::BackpropRule{builtin::Rprop{1.2, 0.5}, builtin::OpenMPBackend{}, 1});
+    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Momentum{0.25, 0.5}, 64});
+    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Momentum{0.05, 0.9}, 1});
+    classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Rprop{1.2, 0.5}, builtin::OpenMPBackend{}, 1});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
