@@ -5,13 +5,7 @@
 namespace hnnet {
     using input_vector_t  = std::vector<real_t>;
     using output_vector_t = std::vector<real_t>;
-    using index_vector_t  = std::vector<index_t>;
-    struct NNetState {
-        std::vector<real_t> signals{};
-        std::vector<real_t> weighted_sums{};
-        NNetState() = default;
-        explicit NNetState(const int_t neuron_count) : signals(neuron_count, 0.0_real), weighted_sums(neuron_count, 0.0_real) {}
-    };
+    using index_vector_t  = std::vector<index_t>; 
     ////////////////
     // NNet class //
     ////////////////
@@ -26,6 +20,12 @@ namespace hnnet {
                 index_t irx;
                 index_t conn_begin;
                 index_t conn_end;
+            };
+            struct State {
+                State() = default;
+                explicit State(const int_t neuron_count) : signals(neuron_count, 0.0_real), weighted_sums(neuron_count, 0.0_real) {}
+                std::vector<real_t> signals{};
+                std::vector<real_t> weighted_sums{};
             };
             class View {
                 public:
@@ -164,7 +164,7 @@ namespace hnnet {
                 if (std::ranges::size(inputs) != std::ranges::size(_iin_neurons)) {
                     throw std::invalid_argument("NNet::infer: size error!");
                 }
-                static thread_local NNetState state(_neurons.size());
+                static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_iout_neurons.size());
                 for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
@@ -173,7 +173,7 @@ namespace hnnet {
                 return outputs;
             }
             // Update a net state from input data
-            void update(NNetState &state, const DataType auto &inputs) const {
+            void update(State &state, const DataType auto &inputs) const {
                 if (std::ssize(inputs) != std::ssize(_iin_neurons)) {
                     throw std::invalid_argument("NNet::update: size error!");
                 }
@@ -199,7 +199,7 @@ namespace hnnet {
                 std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
             }
             // Update net state
-            virtual void update_state(NNetState &state) const = 0;
+            virtual void update_state(State &state) const = 0;
             // Getters/setters
             std::span<const Neuron> neurons() const {
                 return _neurons;
@@ -251,7 +251,7 @@ namespace hnnet {
             }
         private:
             // Seed a net state from input data
-            void seed_state(NNetState &state, const DataType auto &inputs) const {
+            void seed_state(State &state, const DataType auto &inputs) const {
                 for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
                     state.weighted_sums[iin] = input;
                     state.signals[iin] = _neurons[iin].activate(input);

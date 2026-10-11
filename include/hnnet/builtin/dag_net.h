@@ -41,7 +41,7 @@ namespace hnnet::builtin {
                 }
         protected:
             // Update net state
-            void update_state(NNetState &state) const override {
+            void update_state(State &state) const override {
                 propagate_signals(state);
             }
             // Prepare net (order partitions topologically, find dense blocks...)
@@ -174,7 +174,7 @@ namespace hnnet::builtin {
                     std::vector<int_t> _ranks;
             };
             // Propagate signals through the net
-            void propagate_signals(NNetState &state) const {
+            void propagate_signals(State &state) const {
                 const auto partitions = this->partitions();
                 for (auto ipart{0}; ipart < std::ssize(partitions); ++ipart) {
                     const auto &partition = partitions[ipart];
@@ -189,7 +189,7 @@ namespace hnnet::builtin {
                 }
             }
             // Propagate signals of a single partition
-            void propagate_partition(NNetState &state, const Partition &partition) const {
+            void propagate_partition(State &state, const Partition &partition) const {
                 real_t weighted_sum{0.0_real};
                 const auto weights = this->weights();
                 const auto connections = this->connections();
@@ -210,7 +210,7 @@ namespace hnnet::builtin {
                 state.signals[partition.irx] = neurons[partition.irx].activate(weighted_sum);
             }
             // Propagate signals of a dense block
-            void propagate_dense_block(NNetState &state, const DenseBlock &block) const {
+            void propagate_dense_block(State &state, const DenseBlock &block) const {
                 for (auto irow{0}; irow < block.rx_count; ++irow) {
                     real_t weighted_sum{0.0_real};
                     const auto weights = this->weights();
