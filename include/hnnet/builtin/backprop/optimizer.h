@@ -9,6 +9,6 @@ namespace hnnet::builtin {
                                           const grad_vector_t &gradient,
                                           int_t weight_count) {
                                     { optimizer.init(weight_count) } -> std::same_as<void>;
-                                    optimizer.update(view, gradient);
+                                    { optimizer.update(view, gradient) } -> std::same_as<void>;
                                 };
 }
