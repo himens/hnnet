@@ -1,6 +1,19 @@
 #pragma once
+#include <algorithm>
+#include <functional>
+#include <iterator>
+#include <memory>
+#include <print>
+#include <ranges>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include "hnnet/neuron.h"
-#include "hnnet/learning_rule.h"
+#include "utils/random.h"
+#include "utils/timer.h"
 
 namespace hnnet {
     using input_vector_t  = std::vector<real_t>;
@@ -122,10 +135,8 @@ namespace hnnet {
                     if (std::ranges::size(inputs) != std::ranges::size(targets)) {
                         throw std::invalid_argument("NNet::train: size error!");
                     }
-                    constexpr real_t loss_threshold{5e-3_real};
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
-                    bool converged{false};
                     utils::Timer timer{};
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
@@ -138,20 +149,17 @@ namespace hnnet {
                             throw std::invalid_argument("NNet::train: size error!");
                         }
                     }
-                    while (not converged and (epoch <= max_epochs)) {
-                        const auto loss = rule.learn(self, inputs, targets);
-                        converged = (loss < loss_threshold);
+                    while (not _trained and (epoch <= max_epochs)) {
+                        _trained = rule.learn(self, inputs, targets);
                         epoch++;
-                        std::println("NNet::train: epoch: {}, elapsed time: {}s, loss: {:.6f}", epoch, timer.get_elapsed_time_s(), loss);
+                        std::println("NNet::train: epoch: {}, elapsed time: {}s", epoch, timer.get_elapsed_time_s());
                     }
-                    if (converged) {
-                        _trained = true;
+                    if (_trained) {
                         std::println("NNet::train: Training summary:");
                         std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
                         std::println("NNet::train: epochs: {}", epoch);
                     }
                     else {
-                        _trained = false;
                         std::println("NNet::train: net training failed!");
                     }
                 }

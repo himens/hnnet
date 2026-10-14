@@ -1,17 +1,28 @@
 #pragma once
-#include "hnnet/builtin/backprop/backend.h"
-#include "hnnet/builtin/backprop/optimizer.h"
-#include "hnnet/builtin/dag_net.h"
+#include <algorithm>
+#include <iterator>
+#include <ranges>
+#include <span>
+#include <utility>
+#include <vector>
+#include <omp.h>
+#include "hnnet/loss_type.h"
+#include "hnnet/builtin/omp/backprop/optimizer_type.h"
+#include "hnnet/builtin/nets/dag_net.h"
 
-namespace hnnet::builtin {
+namespace hnnet::builtin::omp::backprop {
     using delta_vector_t = std::vector<real_t>;
-    /////////////////////////
-    // OpenMPBackend class //
-    /////////////////////////
-    class OpenMPBackend {
+    using grad_vector_t = std::vector<real_t>;
+    ///////////////////
+    // Backend class //
+    ///////////////////
+    template <OptimizerType Optimizer>
+    class Backend {
         public:
+            // Constructor
+            explicit Backend(Optimizer optimizer) : _optimizer(std::move(optimizer)) {}
             // Initialize the backend
-            void init(DAGNet &net) {
+            void init(net::DAGNet &net) {
                 auto view = net.view();
                 const auto neuron_count = view.neuron_count();
                 const auto connection_count = view.connection_count();
@@ -20,9 +31,10 @@ namespace hnnet::builtin {
                 _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
                 _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
                 _batch_gradient.assign(connection_count, 0.0_real);
+                _optimizer.init(connection_count);
             }
             // Transfer the network and data to the device
-            void to_device(DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+            void to_device(net::DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                 _weights = net.view().weights();
                 _inputs.clear();
                 _targets.clear();
@@ -34,9 +46,9 @@ namespace hnnet::builtin {
                 }
             }
             // Perform forward and backward passes for a batch of data
-            real_t forward_backward(DAGNet &net, 
+            real_t forward_backward(net::DAGNet &net,
                                     const index_t batch_begin,
-                                    const index_t batch_end, 
+                                    const index_t batch_end,
                                     const LossType auto &loss_function) {
                 auto view = net.view();
                 const auto batch_size = batch_end - batch_begin;
@@ -67,16 +79,14 @@ namespace hnnet::builtin {
                 return loss;
             }
             // Update the weights
-            template <typename Optimizer>
-                requires OptimizerType<Optimizer, std::span<real_t>, grad_vector_t>
-                void update_weights(Optimizer &optimizer) {
-                    optimizer.update(_weights, _batch_gradient);
+            void update_weights() {
+                _optimizer.update(_weights, _batch_gradient);
             }
             // Transfer the net to host memory (if needed)
-            void to_host(DAGNet &) {}
+            void to_host(net::DAGNet &) {}
         private:
             // Compute the error and delta weights contribution of a single sample
-            real_t backward(DAGNet::View &view, 
+            real_t backward(net::DAGNet::View &view,
                             const index_t tid,
                             const index_t isample,
                             const LossType auto &loss_function) {
@@ -88,11 +98,11 @@ namespace hnnet::builtin {
                 const auto connections = view.connections();
                 const auto weights = view.weights();
                 const auto partitions = view.partitions();
-                const auto iout_neurons = view.iout_neurons();
+                const auto output_neurons = view.iout_neurons();
                 std::ranges::fill(deltas, 0.0_real);
                 // compute loss and output deltas
                 real_t loss{0.0_real};
-                for (const auto &[target, iout] : std::views::zip(targets, iout_neurons)) {
+                for (const auto &[target, iout] : std::views::zip(targets, output_neurons)) {
                     const auto signal = state.signals[iout];
                     loss += loss_function(target, signal);
                     deltas[iout] = loss_function.derivative(target, signal) * neurons[iout].activation()->derivative(state.weighted_sums[iout]);
@@ -103,10 +113,10 @@ namespace hnnet::builtin {
                         const auto &block = view.dense_block(ipart);
                         for (auto irow{0}; irow < block.rx_count; ++irow) {
                             const auto irx = block.rx_begin + irow;
-                            const auto &rx = neurons[irx];
+                            const auto &neuron = neurons[irx];
                             auto &delta = deltas[irx];
-                            if (rx.type() != NeuronType::output) {
-                                delta *= rx.activation()->derivative(state.weighted_sums[irx]);
+                            if (neuron.type() != NeuronType::output) {
+                                delta *= neuron.activation()->derivative(state.weighted_sums[irx]);
                             }
                             const auto row_offset = block.weight_offset + irow * block.tx_count;
                             for (auto icol{0}; icol < block.tx_count; ++icol) {
@@ -117,10 +127,10 @@ namespace hnnet::builtin {
                     }
                     else {
                         const auto &partition = partitions[ipart];
-                        const auto &rx = neurons[partition.irx];
+                        const auto &neuron = neurons[partition.irx];
                         auto &delta = deltas[partition.irx];
-                        if (rx.type() != NeuronType::output) {
-                            delta *= rx.activation()->derivative(state.weighted_sums[partition.irx]);
+                        if (neuron.type() != NeuronType::output) {
+                            delta *= neuron.activation()->derivative(state.weighted_sums[partition.irx]);
                         }
                         for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
                             const auto itx = connections[iconn].itx;
@@ -129,7 +139,7 @@ namespace hnnet::builtin {
                     }
                 }
                 // compute gradient (sum gradient since a thread could process multiple samples)
-                for (auto ipart{0}; ipart < std::ssize(partitions); ipart++) {
+                for (auto ipart{0}; ipart < std::ssize(partitions); ++ipart) {
                     if (view.is_dense(ipart)) {
                         const auto &block = view.dense_block(ipart);
                         for (auto irow{0}; irow < block.rx_count; ++irow) {
@@ -161,5 +171,6 @@ namespace hnnet::builtin {
             std::vector<delta_vector_t> _deltas{};
             std::vector<grad_vector_t> _gradients{};
             grad_vector_t _batch_gradient{};
+            Optimizer _optimizer;
     };
 }

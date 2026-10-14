@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #include "hnnet/types.h"
 
 namespace hnnet {
@@ -10,6 +11,6 @@ namespace hnnet {
                                             const Inputs &inputs,
                                             const Targets &targets) {
                                        { rule.init(net) } -> std::same_as<void>;
-                                       { rule.learn(net, inputs, targets) } -> std::same_as<real_t>;
+                                       { rule.learn(net, inputs, targets) } -> std::same_as<bool>;
                                    };
 }

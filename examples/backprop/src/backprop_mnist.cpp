@@ -1,8 +1,19 @@
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <fstream>
+#include <iterator>
+#include <print>
+#include <ranges>
 #include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 #include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/backprop/backprop_rule.h"
-#include "hnnet/builtin/dense_forward_net.h"
+#include "hnnet/builtin/backprop.h"
+#include "hnnet/builtin/losses.h"
+#include "hnnet/builtin/nets.h"
+#include "hnnet/builtin/omp.h"
 
 // Constants
 constexpr size_t nb_pixels{784};
@@ -70,13 +81,13 @@ std::vector<DigitData> read_digits(const std::string &filename, const size_t max
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
 int main() {
     // create net
-    builtin::DenseForwardNet classifier{
-        builtin::Layer{nb_pixels, NeuronType::input,  builtin::IdentityActivation{}},
-        builtin::Layer{nb_hidden, NeuronType::hidden, builtin::SigmoidActivation{}},
-        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
-        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
-        //builtin::Layer{nb_hidden, NeuronType::hidden, builtin::ReLUActivation{}},
-        builtin::Layer{nb_digits, NeuronType::output, builtin::SigmoidActivation{}}
+    builtin::net::DenseForwardNet classifier{
+        builtin::net::DenseLayer{nb_pixels, NeuronType::input,  builtin::activation::Identity{}},
+        builtin::net::DenseLayer{nb_hidden, NeuronType::hidden, builtin::activation::Sigmoid{}},
+        //builtin::net::DenseLayer{nb_hidden, NeuronType::hidden, builtin::activation::ReLU{}},
+        //builtin::net::DenseLayer{nb_hidden, NeuronType::hidden, builtin::activation::ReLU{}},
+        //builtin::net::DenseLayer{nb_hidden, NeuronType::hidden, builtin::activation::ReLU{}},
+        builtin::net::DenseLayer{nb_digits, NeuronType::output, builtin::activation::Sigmoid{}}
     };
     // read train and test samples
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
@@ -88,9 +99,9 @@ int main() {
         targets[i] = encode(digit.label);
     }
     // train net
-    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Momentum{0.25, 0.5}, 64});
-    //classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Momentum{0.05, 0.9}, 1});
-    classifier.train(inputs, targets, builtin::BackpropRule{builtin::omp::Rprop{1.2, 0.5}, builtin::OpenMPBackend{}, 1});
+    //classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Momentum{0.25_real, 0.5_real}}, builtin::loss::MSE{}, 64});
+    //classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Momentum{0.05_real, 0.9_real}}, builtin::loss::MSE{}, 1});
+    classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Rprop{1.2_real, 0.5_real}}, builtin::loss::MSE{}, 1});
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};

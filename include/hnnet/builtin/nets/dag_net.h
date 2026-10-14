@@ -1,7 +1,17 @@
 #pragma once
+#include <algorithm>
+#include <iterator>
+#include <numeric>
+#include <print>
+#include <ranges>
+#include <stdexcept>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+#include "hnnet/learning_rule_type.h"
 #include "hnnet/nnet.h"
 
-namespace hnnet::builtin {
+namespace hnnet::builtin::net {
     //////////////////
     // DAGNet class //
     //////////////////

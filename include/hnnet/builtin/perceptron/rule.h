@@ -1,24 +1,28 @@
 #pragma once
+#include <cmath>
+#include <print>
+#include <ranges>
+#include <stdexcept>
 #include "hnnet/nnet.h"
-#include "hnnet/builtin/losses.h"
+#include "hnnet/builtin/losses/mse.h"
 
-namespace hnnet::builtin {
-    //////////////////////////
-    // PerceptronRule class //
-    //////////////////////////
-    class PerceptronRule {
+namespace hnnet::builtin::perceptron {
+    ////////////////
+    // Rule class //
+    ////////////////
+    class Rule {
         public:
             // Constructor
-            explicit PerceptronRule(const real_t learning_rate) : _learning_rate(learning_rate) {
+            explicit Rule(const real_t learning_rate) : _learning_rate(learning_rate) {
                 if (_learning_rate < 0.0_real) {
-                    throw std::invalid_argument("PerceptronRule::PerceptronRule: learning_rate must be >= 0");
+                    throw std::invalid_argument("perceptron::Rule: learning_rate must be >= 0");
                 }
-                std::println("PerceptronRule::PerceptronRule: learning rate: {}", learning_rate);
+                std::println("perceptron::Rule: learning rate: {}", learning_rate);
             }
             // Initialize the perceptron rule (if needed)
             void init(NNet &) {}
             // Learn from a whole epoch of training samples (online: one immediate update per sample)
-            real_t learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
+            bool learn(NNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                 auto view = net.view();
                 NNet::State state(view.neuron_count());
                 real_t mean_squared_error{0.0_real};
@@ -26,15 +30,16 @@ namespace hnnet::builtin {
                     net.update(state, input);
                     mean_squared_error += update_weights(view, state, target);
                 }
-                return mean_squared_error / std::ranges::size(inputs);
+                constexpr real_t loss_threshold{5e-3_real};
+                return mean_squared_error / std::ranges::size(inputs) < loss_threshold;
             }
         private:
             // Update weights from targets using the perceptron learning rule
             real_t update_weights(NNet::View &view, NNet::State &state, const DataType auto &targets) {
                 if (view.partitions().size() != std::ranges::size(targets)) {
-                    throw std::runtime_error("PerceptronRule::learn: invalid net!");
+                    throw std::runtime_error("perceptron::Rule::learn: invalid net!");
                 }
-                real_t squared_error{0_real};
+                real_t squared_error{0.0_real};
                 const auto connections = view.connections();
                 const auto weights = view.weights();
                 for (const auto &[target, iout] : std::views::zip(targets, view.iout_neurons())) {
@@ -56,9 +61,8 @@ namespace hnnet::builtin {
                 }
                 return squared_error;
             }
-        private:
             // Data members
             real_t _learning_rate;
-            MSELoss _mean_squared_error;
+            loss::MSE _mean_squared_error;
     };
 }

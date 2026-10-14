@@ -1,22 +1,8 @@
 #pragma once
-#include <print>
-#include <stdexcept>
-#include <ranges>
 #include <concepts>
+#include <cstdint>
+#include <ranges>
 #include <stdfloat>
-#include <cmath>
-#include <numeric>
-#include <array>
-#include <vector>
-#include <span>
-#include <algorithm>
-#include <string>
-#include <memory>
-#include <unordered_map>
-#include <omp.h>
-#include "utils/math.h"
-#include "utils/timer.h"
-#include "utils/random.h"
 
 namespace hnnet {
     // Aliases for commonly used types

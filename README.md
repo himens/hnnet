@@ -67,15 +67,18 @@ Classifier data representation details:
 
 ```cpp
 #include <array>
-#include "hnnet/builtin/backprop_rule.h"
-#include "hnnet/builtin/dense_forward_net.h"
+#include "hnnet/builtin/activations.h"
+#include "hnnet/builtin/backprop.h"
+#include "hnnet/builtin/losses.h"
+#include "hnnet/builtin/nets.h"
+#include "hnnet/builtin/omp.h"
 
 int main() {
     using namespace hnnet;
-    builtin::DenseForwardNet gate{
-        builtin::Layer{2, NeuronType::input, builtin::IdentityActivation{}},
-        builtin::Layer{4, NeuronType::hidden, builtin::SigmoidActivation{}, true},
-        builtin::Layer{1, NeuronType::output, builtin::SigmoidActivation{}, true}
+    builtin::net::DenseForwardNet gate{
+        builtin::net::DenseLayer{2, NeuronType::input, builtin::activation::Identity{}},
+        builtin::net::DenseLayer{4, NeuronType::hidden, builtin::activation::Sigmoid{}, true},
+        builtin::net::DenseLayer{1, NeuronType::output, builtin::activation::Sigmoid{}, true}
     };
 
     const std::array<input_vector_t, 4> inputs{{
@@ -84,7 +87,13 @@ int main() {
     const std::array<output_vector_t, 4> targets{{
         {0}, {1}, {1}, {0}
     }};
-    gate.train(inputs, targets, builtin::BackpropRule{0.2});
+    gate.train(inputs, targets, builtin::backprop::Rule{
+        builtin::omp::backprop::Backend{
+            builtin::omp::backprop::optimizer::Momentum{0.2_real}
+        },
+        builtin::loss::MSE{},
+        1
+    });
 }
 ```
 
@@ -108,7 +117,7 @@ cmake --build build --target hnnet-backprop-gate
 - `include/`: library headers
     - `hnnet/types.h`: numeric aliases and range concepts for data and datasets
     - `hnnet/activation.h`, `hnnet/neuron.h`: activation interface and neuron definition
-    - `hnnet/loss.h`, `hnnet/learning_rule.h`: concepts used by losses and learning rules
+    - `hnnet/loss_type.h`, `hnnet/learning_rule_type.h`: concepts used by losses and learning rules
     - `hnnet/nnet.h`: base network storage, `NNetState`, training loop, and inference API
     - `hnnet/builtin/`: built-in activations, losses, learning rules, `DAGNet`, and `DenseForwardNet`
 - `examples/`: example implementations built on top of the generic framework
@@ -134,7 +143,7 @@ Input and output samples are contiguous ranges of `real_t`; datasets are contigu
     - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`
     - allows learning strategies to change independently of the network representation
 
-`BackpropRule<Optimizer, Loss>` takes `(learning_rate, optimizer = {}, batch_size = 1, loss = {})`. Samples in each multi-sample mini-batch are processed in parallel with OpenMP; gradients are accumulated for that batch and the optimizer updates weights at the end of each batch. The built-in `Momentum` optimizer stores momentum state, while the learning rate belongs to `BackpropRule`.
+`builtin::backprop::Rule<Backend, Loss>` takes `(backend, loss, batch_size)`. The OpenMP backend is constructed as `builtin::omp::backprop::Backend{optimizer}`; class template argument deduction selects `Backend<Optimizer>`. Its concrete optimizers, `builtin::omp::backprop::optimizer::{Momentum, Rprop}`, own their parameters and state and are defined in `builtin/omp/backprop/optimizers.h`. The backend owns only the selected optimizer by value, initializes it in `init(net)`, computes forward/backward passes and delegates weight updates through `update_weights()`. The rule does not store or pass an optimizer. There are no tags, type mappings, factories or virtual optimizer calls. Samples in each multi-sample mini-batch are processed in parallel with OpenMP; gradients are accumulated for that batch and weights are updated at the end of each batch. The Backprop backend concept checks the backend operations independently of the optimizer implementation.
 
 Training currently uses a fixed loss threshold and maximum epoch count and prints progress to standard output. Inference uses `NNetState` for signals and weighted sums, separately from the network topology.
 

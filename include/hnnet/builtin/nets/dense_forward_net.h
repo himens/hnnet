@@ -1,17 +1,20 @@
 #pragma once
-#include "hnnet/nnet.h"
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/dag_net.h"
+#include <concepts>
+#include <cstddef>
+#include <stdexcept>
+#include <utility>
+#include "hnnet/builtin/activations/identity.h"
+#include "hnnet/builtin/nets/dag_net.h"
 
-namespace hnnet::builtin {
+namespace hnnet::builtin::net {
     template <typename T>
-        concept LayerType = requires(T layer) {
+        concept DenseLayerType = requires(T layer) {
             { auto(layer.size) } -> std::same_as<int_t>;
             { auto(layer.type) } -> std::same_as<NeuronType>;
             { auto(layer.activation) } -> ActivationType;
         };
     template <ActivationType Activation>
-        struct Layer {
+        struct DenseLayer {
             int_t size;
             NeuronType type;
             Activation activation;
@@ -23,7 +26,7 @@ namespace hnnet::builtin {
     class DenseForwardNet : public DAGNet {
         public:
             // Constructor
-            template <LayerType... Layers>
+            template <DenseLayerType... Layers>
                 requires (sizeof...(Layers) > 0)
                 explicit DenseForwardNet(const Layers &...layers) {
                     if (layers...[0].type != NeuronType::input) {
@@ -37,7 +40,7 @@ namespace hnnet::builtin {
                         const auto rx_neurons = this->new_neurons(layer.size, layer.type, layer.activation);
                         this->connect(tx_neurons, rx_neurons);
                         if (layer.biased) {
-                            const auto bias = this->new_neurons(1, NeuronType::bias, IdentityActivation{});
+                            const auto bias = this->new_neurons(1, NeuronType::bias, activation::Identity{});
                             this->connect(bias, rx_neurons);
                         }
                         tx_neurons = rx_neurons;
