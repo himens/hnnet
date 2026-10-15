@@ -13,8 +13,7 @@
 #include "hnnet/builtin/activations/sigmoid.h"
 #include "hnnet/builtin/losses/mse.h"
 #include "hnnet/builtin/nets/dense_forward_net.h"
-#include "hnnet/builtin/backends/omp/backprop/momentum.h"
-#include "hnnet/builtin/backends/omp/backprop/rprop.h"
+#include "hnnet/builtin/backends/omp/backprop/backprop.h"
 #include "hnnet/builtin/rules/backprop.h"
 
 // Constants

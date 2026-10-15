@@ -31,6 +31,7 @@ namespace hnnet::builtin::backend::omp::backprop {
                     _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
                     _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
                     _batch_gradient.assign(connection_count, 0.0_real);
+                    _optimizer.init(connection_count);
                 }
                 // Transfer the network and data to the device
                 void to_device(net::DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
@@ -76,6 +77,10 @@ namespace hnnet::builtin::backend::omp::backprop {
                         std::ranges::copy(_gradients.front(), _batch_gradient.begin());
                     }
                     return loss;
+                }
+                // Update the weights
+                void update_weights() {
+                    _optimizer.update(_weights, _batch_gradient);
                 }
                 // Transfer the net to host memory (if needed)
                 void to_host(net::DAGNet &) {}
