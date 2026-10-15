@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <vector>
 #include "hnnet/types.h"
-#include "hnnet/builtin/backends/omp/backprop/optimizers/optimizer_type.h"
 
 namespace hnnet::builtin::backend::omp::backprop::optimizer {
     ////////////////////
@@ -13,14 +12,14 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
     class Momentum {
         public:
             // Constructor
-            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0_real)
-                : _learning_rate(learning_rate), _momentum(momentum) {
+            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0_real) : _learning_rate(learning_rate), _momentum(momentum) {
                 if (learning_rate < 0.0_real) {
                     throw std::invalid_argument("Momentum: learning_rate must be >= 0");
                 }
                 if (momentum < 0.0_real) {
                     throw std::invalid_argument("Momentum: momentum must be >= 0");
                 }
+                std::println("Momentum::Momentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
             // Initialize the state
             void init(const int_t weight_count) {
@@ -40,5 +39,4 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
             real_t _momentum;
             std::vector<real_t> _previous_delta;
     };
-    static_assert(OptimizerType<Momentum>);
 }

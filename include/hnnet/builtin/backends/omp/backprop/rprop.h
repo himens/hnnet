@@ -6,12 +6,9 @@ namespace hnnet::builtin::backend::omp::backprop {
     /////////////////
     // Rprop class //
     /////////////////
-    // OpenMP backprop backend using the Rprop optimizer
-    class Rprop : public Backend {
+    class Rprop : public Backend<optimizer::Rprop> {
         public:
-            // Constructor
-            explicit Rprop(const real_t eta_plus, const real_t eta_minus)
-                : _optimizer(eta_plus, eta_minus) {}
+            using Backend<optimizer::Rprop>::Backend;
             // Initialize the backend
             void init(net::DAGNet &net) {
                 Backend::init(net);
@@ -21,8 +18,5 @@ namespace hnnet::builtin::backend::omp::backprop {
             void update_weights() {
                 _optimizer.update(_weights, _batch_gradient);
             }
-        private:
-            // Data members
-            optimizer::Rprop _optimizer;
     };
 }

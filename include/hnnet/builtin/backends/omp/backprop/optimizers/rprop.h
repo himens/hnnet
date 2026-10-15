@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <vector>
 #include "hnnet/types.h"
-#include "hnnet/builtin/backends/omp/backprop/optimizers/optimizer_type.h"
 #include "utils/math.h"
 
 namespace hnnet::builtin::backend::omp::backprop::optimizer {
@@ -15,14 +14,14 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
     class Rprop {
         public:
             // Constructor
-            explicit Rprop(const real_t eta_plus, const real_t eta_minus)
-                : _eta_plus(eta_plus), _eta_minus(eta_minus) {
+            explicit Rprop(const real_t eta_plus, const real_t eta_minus) : _eta_plus(eta_plus), _eta_minus(eta_minus) {
                 if (eta_plus <= 1.0_real) {
                     throw std::invalid_argument("Rprop: eta_plus must be > 1");
                 }
                 if (eta_minus <= 0.0_real or eta_minus >= 1.0_real) {
                     throw std::invalid_argument("Rprop: eta_minus must be between 0 and 1");
                 }
+                std::println("Rprop::Rprop: eta_plus: {}, eta_minus: {}", _eta_plus, _eta_minus);
             }
             // Initialize the state
             void init(const int_t weight_count) {
@@ -60,5 +59,4 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
             std::vector<real_t> _delta;
             std::vector<real_t> _previous_gradient;
     };
-    static_assert(OptimizerType<Rprop>);
 }

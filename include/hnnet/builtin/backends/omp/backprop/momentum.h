@@ -6,11 +6,9 @@ namespace hnnet::builtin::backend::omp::backprop {
     ////////////////////
     // Momentum class //
     ////////////////////
-    // OpenMP backprop backend using the Momentum optimizer
-    class Momentum : public Backend {
+    class Momentum : public Backend<optimizer::Momentum> {
         public:
-            // Constructor
-            explicit Momentum(const real_t learning_rate, const real_t momentum = 0.0_real) : _optimizer(learning_rate, momentum) {}
+            using Backend<optimizer::Momentum>::Backend;
             // Initialize the backend
             void init(net::DAGNet &net) {
                 Backend::init(net);
@@ -20,8 +18,5 @@ namespace hnnet::builtin::backend::omp::backprop {
             void update_weights() {
                 _optimizer.update(_weights, _batch_gradient);
             }
-        private:
-            // Data members
-            optimizer::Momentum _optimizer;
     };
 }
