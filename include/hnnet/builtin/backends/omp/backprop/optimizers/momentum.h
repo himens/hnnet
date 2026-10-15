@@ -27,7 +27,8 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
             }
             // Update the weights
             void update(std::span<real_t> weights, std::span<const real_t> gradient) {
-                for (auto iconn{0}; iconn < std::ssize(gradient); ++iconn) {
+                #pragma omp parallel for
+                for (index_t iconn = 0; iconn < std::ssize(gradient); ++iconn) {
                     const auto delta = - (_learning_rate * gradient[iconn]) + (_momentum * _previous_delta[iconn]);
                     weights[iconn] += delta;
                     _previous_delta[iconn] = delta;
