@@ -2,7 +2,7 @@
 #include <concepts>
 #include "hnnet/types.h"
 
-namespace hnnet::builtin {
+namespace hnnet {
     template <typename Backend, typename Net, typename Inputs, typename Targets>
         concept BackendType = DatasetType<Inputs> and
                               DatasetType<Targets> and

@@ -8,9 +8,10 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/nets.h"
-#include "hnnet/builtin/perceptron.h"
+#include "hnnet/builtin/activations/identity.h"
+#include "hnnet/builtin/activations/perceptron.h"
+#include "hnnet/builtin/nets/dag_net.h"
+#include "hnnet/builtin/rules/perceptron.h"
 
 // Constants
 constexpr size_t nb_rows{9};
@@ -111,7 +112,7 @@ int main() {
         inputs[i] = encode(letter.pixels);
         targets[i] = encode({letter.character});
     }
-    classifier.train(inputs, targets, builtin::perceptron::Rule{1.0});
+    classifier.train(inputs, targets, builtin::rule::Perceptron{1.0});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));

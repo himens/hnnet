@@ -1,7 +1,8 @@
 #include <array>
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/nets.h"
-#include "hnnet/builtin/perceptron.h"
+#include "hnnet/builtin/activations/identity.h"
+#include "hnnet/builtin/activations/perceptron.h"
+#include "hnnet/builtin/nets/dag_net.h"
+#include "hnnet/builtin/rules/perceptron.h"
 
 // Simple AND gate implementation using a perceptron neural network
 int main() {
@@ -26,7 +27,7 @@ int main() {
         {-1}, 
         {-1}
     }};
-    gate.train(inputs, targets, builtin::perceptron::Rule{1.0});
+    gate.train(inputs, targets, builtin::rule::Perceptron{1.0});
 
     return 0;
 }

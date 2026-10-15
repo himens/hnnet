@@ -3,22 +3,22 @@
 #include <ranges>
 #include <stdexcept>
 #include <utility>
-#include "hnnet/builtin/backprop/backend_type.h"
+#include "hnnet/builtin/rules/backprop_backend_type.h"
 #include "utils/math.h"
 
-namespace hnnet::builtin::backprop {
-    ////////////////
-    // Rule class //
-    ////////////////
+namespace hnnet::builtin::rule {
+    ////////////////////
+    // Backprop class //
+    ////////////////////
     template <typename Backend, LossType Loss>
-        class Rule {
+        class Backprop {
             public:
                 // Constructor
-                explicit Rule(Backend backend,
-                              Loss loss,
-                              const int_t batch_size) : _backend(std::move(backend)), _loss(std::move(loss)), _batch_size(batch_size) {
+                explicit Backprop(Backend backend,
+                                  Loss loss,
+                                  const int_t batch_size) : _backend(std::move(backend)), _loss(std::move(loss)), _batch_size(batch_size) {
                     if (batch_size == 0) {
-                        throw std::invalid_argument("backprop::Rule::Rule: batch_size must not be zero");
+                        throw std::invalid_argument("Backprop::Backprop: batch_size must not be zero");
                     }
                 }
                 // Initialize the rule
@@ -27,11 +27,11 @@ namespace hnnet::builtin::backprop {
                 }
                 // Learn from a whole epoch of training samples
                 template <typename Net, DatasetType Inputs, DatasetType Targets>
-                    requires BackendType<Backend, Net, Inputs, Targets, Loss>
+                    requires BackpropBackendType<Backend, Net, Inputs, Targets, Loss>
                     bool learn(Net &net, const Inputs &inputs, const Targets &targets) {
                         const auto sample_count = static_cast<index_t>(std::ranges::size(inputs));
                         if (sample_count == 0) {
-                            throw std::invalid_argument("backprop::Rule::learn: inputs must not be empty");
+                            throw std::invalid_argument("Backprop::learn: inputs must not be empty");
                         }
                         constexpr real_t loss_threshold{5e-3_real};
                         const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);

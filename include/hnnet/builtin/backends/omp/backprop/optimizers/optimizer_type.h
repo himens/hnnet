@@ -3,7 +3,7 @@
 #include <span>
 #include "hnnet/types.h"
 
-namespace hnnet::builtin::omp::backprop {
+namespace hnnet::builtin::backend::omp::backprop::optimizer {
     template <typename T>
         concept OptimizerType = requires(T &optimizer,
                                          int_t weight_count,

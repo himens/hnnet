@@ -1,9 +1,10 @@
 #include <array>
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/backprop.h"
-#include "hnnet/builtin/losses.h"
-#include "hnnet/builtin/nets.h"
-#include "hnnet/builtin/omp.h"
+#include "hnnet/builtin/activations/identity.h"
+#include "hnnet/builtin/activations/sigmoid.h"
+#include "hnnet/builtin/losses/mse.h"
+#include "hnnet/builtin/nets/dense_forward_net.h"
+#include "hnnet/builtin/backends/omp/backprop/momentum.h"
+#include "hnnet/builtin/rules/backprop.h"
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
@@ -33,12 +34,13 @@ int main() {
         {1}, 
         {0}
     }};
-    gate.train(inputs, targets, builtin::backprop::Rule{
-        builtin::omp::backprop::Backend{
-            builtin::omp::backprop::optimizer::Momentum{0.2_real}
-        },
-        builtin::loss::MSE{},
-        1
+    gate.train(
+        inputs,
+        targets,
+        builtin::rule::Backprop{
+            builtin::backend::omp::backprop::Momentum{0.2},
+            builtin::loss::MSE{},
+            1
     });
 
     return 0;

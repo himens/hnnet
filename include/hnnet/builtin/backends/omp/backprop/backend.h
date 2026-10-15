@@ -3,24 +3,22 @@
 #include <iterator>
 #include <ranges>
 #include <span>
-#include <utility>
 #include <vector>
 #include <omp.h>
 #include "hnnet/loss_type.h"
-#include "hnnet/builtin/omp/backprop/optimizer_type.h"
 #include "hnnet/builtin/nets/dag_net.h"
 
-namespace hnnet::builtin::omp::backprop {
+namespace hnnet::builtin::backend::omp::backprop {
     using delta_vector_t = std::vector<real_t>;
     using grad_vector_t = std::vector<real_t>;
     ///////////////////
     // Backend class //
     ///////////////////
-    template <OptimizerType Optimizer>
+    // NOTE: this is the common machinery shared by every OpenMP backprop backend. It deliberately
+    // does not provide update_weights(), so it does not model rule::BackpropBackendType on its own:
+    // derived backends supply the weight update with their own optimizer
     class Backend {
         public:
-            // Constructor
-            explicit Backend(Optimizer optimizer) : _optimizer(std::move(optimizer)) {}
             // Initialize the backend
             void init(net::DAGNet &net) {
                 auto view = net.view();
@@ -31,7 +29,6 @@ namespace hnnet::builtin::omp::backprop {
                 _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
                 _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
                 _batch_gradient.assign(connection_count, 0.0_real);
-                _optimizer.init(connection_count);
             }
             // Transfer the network and data to the device
             void to_device(net::DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
@@ -78,13 +75,11 @@ namespace hnnet::builtin::omp::backprop {
                 }
                 return loss;
             }
-            // Update the weights
-            void update_weights() {
-                _optimizer.update(_weights, _batch_gradient);
-            }
             // Transfer the net to host memory (if needed)
             void to_host(net::DAGNet &) {}
-        private:
+        protected:
+            // Constructor (only derived backends are meant to be instantiated)
+            Backend() = default;
             // Compute the error and delta weights contribution of a single sample
             real_t backward(net::DAGNet::View &view,
                             const index_t tid,
@@ -162,7 +157,7 @@ namespace hnnet::builtin::omp::backprop {
                 }
                 return loss;
             }
-        private:
+        protected:
             // Data members
             std::vector<std::span<const real_t>> _inputs{};
             std::vector<std::span<const real_t>> _targets{};
@@ -171,6 +166,5 @@ namespace hnnet::builtin::omp::backprop {
             std::vector<delta_vector_t> _deltas{};
             std::vector<grad_vector_t> _gradients{};
             grad_vector_t _batch_gradient{};
-            Optimizer _optimizer;
     };
 }

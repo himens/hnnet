@@ -6,18 +6,18 @@
 #include "hnnet/nnet.h"
 #include "hnnet/builtin/losses/mse.h"
 
-namespace hnnet::builtin::perceptron {
+namespace hnnet::builtin::rule {
     ////////////////
     // Rule class //
     ////////////////
-    class Rule {
+    class Perceptron {
         public:
             // Constructor
-            explicit Rule(const real_t learning_rate) : _learning_rate(learning_rate) {
+            explicit Perceptron(const real_t learning_rate) : _learning_rate(learning_rate) {
                 if (_learning_rate < 0.0_real) {
-                    throw std::invalid_argument("perceptron::Rule: learning_rate must be >= 0");
+                    throw std::invalid_argument("Perceptron: learning_rate must be >= 0");
                 }
-                std::println("perceptron::Rule: learning rate: {}", learning_rate);
+                std::println("Perceptron: learning rate: {}", learning_rate);
             }
             // Initialize the perceptron rule (if needed)
             void init(NNet &) {}
@@ -37,7 +37,7 @@ namespace hnnet::builtin::perceptron {
             // Update weights from targets using the perceptron learning rule
             real_t update_weights(NNet::View &view, NNet::State &state, const DataType auto &targets) {
                 if (view.partitions().size() != std::ranges::size(targets)) {
-                    throw std::runtime_error("perceptron::Rule::learn: invalid net!");
+                    throw std::runtime_error("Perceptron::learn: invalid net!");
                 }
                 real_t squared_error{0.0_real};
                 const auto connections = view.connections();

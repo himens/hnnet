@@ -9,11 +9,13 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "hnnet/builtin/activations.h"
-#include "hnnet/builtin/backprop.h"
-#include "hnnet/builtin/losses.h"
-#include "hnnet/builtin/nets.h"
-#include "hnnet/builtin/omp.h"
+#include "hnnet/builtin/activations/identity.h"
+#include "hnnet/builtin/activations/sigmoid.h"
+#include "hnnet/builtin/losses/mse.h"
+#include "hnnet/builtin/nets/dense_forward_net.h"
+#include "hnnet/builtin/backends/omp/backprop/momentum.h"
+#include "hnnet/builtin/backends/omp/backprop/rprop.h"
+#include "hnnet/builtin/rules/backprop.h"
 
 // Constants
 constexpr size_t nb_pixels{784};
@@ -99,9 +101,30 @@ int main() {
         targets[i] = encode(digit.label);
     }
     // train net
-    //classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Momentum{0.25_real, 0.5_real}}, builtin::loss::MSE{}, 64});
-    //classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Momentum{0.05_real, 0.9_real}}, builtin::loss::MSE{}, 1});
-    classifier.train(inputs, targets, builtin::backprop::Rule{builtin::omp::backprop::Backend{builtin::omp::backprop::optimizer::Rprop{1.2_real, 0.5_real}}, builtin::loss::MSE{}, 1});
+    //classifier.train(
+    //    inputs,
+    //    targets,
+    //    builtin::rule::Backprop{
+    //        builtin::backend::omp::backprop::Momentum{0.25, 0.5},
+    //        builtin::loss::MSE{},
+    //        64
+    //});
+    //classifier.train(
+    //    inputs,
+    //    targets,
+    //    builtin::rule::Backprop{
+    //        builtin::backend::omp::backprop::Momentum{0.05, 0.9},
+    //        builtin::loss::MSE{},
+    //        1
+    //});
+    classifier.train(
+        inputs,
+        targets,
+        builtin::rule::Backprop{
+            builtin::backend::omp::backprop::Rprop{1.2, 0.5},
+            builtin::loss::MSE{},
+            1
+    });
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
