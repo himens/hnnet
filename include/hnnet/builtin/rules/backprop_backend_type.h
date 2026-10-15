@@ -12,7 +12,6 @@ namespace hnnet::builtin::rule {
                                                index_t begin,
                                                index_t end,
                                                const Loss &loss) {
-                                          { backend.forward_backward(net, begin, end, loss) } -> std::same_as<real_t>;
-                                          { backend.update_weights() } -> std::same_as<void>;
+                                          { backend.backprop(net, begin, end, loss) } -> std::same_as<real_t>;
                                       };
 }

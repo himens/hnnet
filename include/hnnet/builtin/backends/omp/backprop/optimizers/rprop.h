@@ -30,7 +30,7 @@ namespace hnnet::builtin::backend::omp::backprop::optimizer {
             }
             // Update the weights
             void update(std::span<real_t> weights, std::span<const real_t> gradient) {
-                #pragma omp parallel for
+                //#pragma omp parallel for
                 for (index_t iconn = 0; iconn < std::ssize(gradient); ++iconn) {
                     constexpr real_t delta_min{1e-6_real};
                     constexpr real_t delta_max{50.0_real};

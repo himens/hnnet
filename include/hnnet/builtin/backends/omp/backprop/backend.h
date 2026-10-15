@@ -45,11 +45,11 @@ namespace hnnet::builtin::backend::omp::backprop {
                         _targets.emplace_back(sample);
                     }
                 }
-                // Perform forward and backward passes for a batch of data
-                real_t forward_backward(net::DAGNet &net,
-                                        const index_t batch_begin,
-                                        const index_t batch_end,
-                                        const LossType auto &loss_function) {
+                // Perform backprop (forward-backward plus weights update)
+                real_t backprop(net::DAGNet &net,
+                                const index_t batch_begin,
+                                const index_t batch_end,
+                                const LossType auto &loss_function) {
                     auto view = net.view();
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
@@ -73,14 +73,8 @@ namespace hnnet::builtin::backend::omp::backprop {
                             }
                         }
                     }
-                    else {
-                        std::ranges::copy(_gradients.front(), _batch_gradient.begin());
-                    }
+                    _optimizer.update(_weights, parallel ? _batch_gradient : _gradients.front());
                     return loss;
-                }
-                // Update the weights
-                void update_weights() {
-                    _optimizer.update(_weights, _batch_gradient);
                 }
                 // Transfer the net to host memory (if needed)
                 void to_host(net::DAGNet &) {}

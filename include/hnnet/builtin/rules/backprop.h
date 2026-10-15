@@ -41,8 +41,7 @@ namespace hnnet::builtin::rule {
                         for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
                             const auto batch_begin = ibatch * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
-                            loss += _backend.forward_backward(net, batch_begin, batch_end, _loss);
-                            _backend.update_weights();
+                            loss += _backend.backprop(net, batch_begin, batch_end, _loss);
                         }
                         _backend.to_host(net);
                         return loss / sample_count < loss_threshold;
