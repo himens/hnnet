@@ -20,6 +20,7 @@ namespace hnnet::backprop::omp {
             public:
                 // Constructor
                 template <typename ...Args>
+                    requires std::constructible_from<Optimizer, Args...>
                     explicit Backend(Args&&... args) : _optimizer(std::forward<Args>(args)...) {}
                 // Initialize the backend
                 void init(net::DAGNet &net) {
