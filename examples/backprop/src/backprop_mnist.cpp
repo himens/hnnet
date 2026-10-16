@@ -33,19 +33,19 @@ struct DigitData {
 };
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
 input_vector_t encode(const Pixels &pixels) {
-    input_vector_t data(nb_pixels, 0.0);
+    input_vector_t data(nb_pixels, 0.0_real);
     for (const auto &[ipx, pixel] : pixels | std::views::enumerate) {
-        data[ipx] = static_cast<real_t>(pixel) / 255.0;
+        data[ipx] = static_cast<real_t>(pixel) / 255.0_real;
     }
     return data;
 }
 // Encode digit label (one-hot)
 output_vector_t encode(const int_t label) {
-    output_vector_t data(nb_digits, 0.0);
+    output_vector_t data(nb_digits, 0.0_real);
     if (label < 0 or label >= static_cast<int_t>(nb_digits)) {
         throw std::invalid_argument("encode: invalid label: " + std::to_string(label));
     }
-    data[label] = 1.0;
+    data[label] = 1.0_real;
     return data;
 }
 // Decode digit label (index of the highest activation)
@@ -113,7 +113,7 @@ int main() {
         inputs,
         targets,
         rule::Backprop{
-            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05, 0.9},
+            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05_real, 0.9_real},
             loss::MSE{},
             1
     });

@@ -112,7 +112,7 @@ int main() {
         inputs[i] = encode(letter.pixels);
         targets[i] = encode({letter.character});
     }
-    classifier.train(inputs, targets, rule::Perceptron{1.0});
+    classifier.train(inputs, targets, rule::Perceptron{1.0_real});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
         const auto outputs = classifier.infer(encode(pixels));

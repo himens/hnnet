@@ -39,7 +39,7 @@ int main() {
         inputs,
         targets,
         rule::Backprop{
-            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.2},
+            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.2_real},
             loss::MSE{},
             1
     });
