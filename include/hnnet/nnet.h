@@ -152,11 +152,11 @@ namespace hnnet {
                     while (not _trained and (epoch <= max_epochs)) {
                         _trained = rule.learn(self, inputs, targets);
                         epoch++;
-                        std::println("NNet::train: epoch: {}, elapsed time: {}s", epoch, timer.get_elapsed_time_s());
+                        std::println("NNet::train: epoch: {}, elapsed time: {:.5f}s", epoch, timer.get_elapsed_time_s());
                     }
                     if (_trained) {
                         std::println("NNet::train: Training summary:");
-                        std::println("NNet::train: elapsed time: {}s", timer.get_elapsed_time_s());
+                        std::println("NNet::train: elapsed time: {:.5f}s", timer.get_elapsed_time_s());
                         std::println("NNet::train: epochs: {}", epoch);
                     }
                     else {
