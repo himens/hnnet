@@ -10,11 +10,11 @@
 namespace hnnet {
     // Aliases for commonly used types
 #if HAS_STDFLOAT
-    using real_t  = std::float32_t;
+    using real_t = std::float32_t;
 #else
-    using real_t  = float;
+    using real_t = float;
 #endif
-    using int_t   = std::int64_t;
+    using int_t = std::int64_t;
     using index_t = int_t; // indices are just a semantic alias for int_t
     constexpr real_t operator""_real(long double value) {
         return static_cast<real_t>(value);
