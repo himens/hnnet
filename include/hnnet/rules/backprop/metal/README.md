@@ -22,24 +22,25 @@ changes to the project CMake files are not required by this implementation.
 
 ## Compile a Metal Example
 
-Run this from the repository root, replacing `path/to/backprop_metal.mm` with
-the `.mm` file containing the Metal example:
+Run this from the repository root, set `CLANGXX` to the Objective-C++ capable
+LLVM `clang++` you are using, then compile the Metal MNIST example:
 
 ```bash
-mkdir -p build/bin
-xcrun --sdk macosx clang++ \
-    -std=c++2c -stdlib=libc++ -O3 -fobjc-arc -x objective-c++ \
+SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+mkdir -p build-release/bin
+"$CLANGXX" -std=c++26 -O3 -stdlib=libc++ -fobjc-arc -x objective-c++ \
+  -isysroot "$SDKROOT" \
+  -F"$SDKROOT/System/Library/Frameworks" \
     -Iinclude -Iutils/include \
-    path/to/backprop_metal.mm \
+  examples/backprop/src/backprop_mnist.mm \
     -framework Foundation -framework Metal -framework MetalPerformanceShaders \
-    -o build/bin/backprop-metal
+  -o build-release/bin/hnnet-backprop-mnist-metal
 ```
 
-For example, if the source is `examples/backprop/src/backprop_metal.mm`, use
-that path in the command. The existing `backprop_mnist.cpp` is the OpenMP example,
-not a Metal translation unit. Run the resulting executable from the repository
-root so the default kernel directory recorded from `__FILE__` resolves correctly.
-No `-fopenmp` flag is needed for this Metal backend.
+The `.mm` source is Objective-C++; the `.cpp` MNIST example remains the OpenMP
+version. Run the executable from the repository root so the dataset paths and
+default kernel directory recorded from `__FILE__` resolve correctly. No
+`-fopenmp` flag is needed for this Metal backend.
 
 ## Composition
 
