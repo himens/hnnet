@@ -15,6 +15,7 @@ namespace hnnet::backprop::metal::optimizer {
                 if (not std::isfinite(_momentum) or _momentum < 0.0f) {
                     throw std::invalid_argument("Metal Momentum: momentum must be finite and >= 0");
                 }
+                std::println("Momentum::Momentum: learning_rate: {}, momentum: {}", _learning_rate, _momentum);
             }
 
             void init(const detail::Context &context, const std::uint32_t weight_count) {

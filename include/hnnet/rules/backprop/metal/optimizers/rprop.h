@@ -16,6 +16,7 @@ namespace hnnet::backprop::metal::optimizer {
                 if (not std::isfinite(_eta_minus) or _eta_minus <= 0.0f or _eta_minus >= 1.0f) {
                     throw std::invalid_argument("Metal Rprop: eta_minus must be finite and between 0 and 1");
                 }
+                std::println("Rprop::Rprop: eta_plus: {}, eta_minus: {}", _eta_plus, _eta_minus);
             }
 
             void init(const detail::Context &context, const std::uint32_t weight_count) {

@@ -20,6 +20,7 @@ namespace hnnet::rule {
                     if (batch_size == 0) {
                         throw std::invalid_argument("Backprop::Backprop: batch_size must not be zero");
                     }
+                    std::println("Backprop::Backprop:: batch size: {}", batch_size);
                 }
                 // Initialize the rule
                 void init(auto &net) {

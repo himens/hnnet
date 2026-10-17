@@ -19,12 +19,11 @@
 #include "hnnet/rules/backprop/metal/optimizers/momentum.h"
 
 // Constants
-constexpr size_t nb_pixels{784};
-constexpr size_t nb_digits{10};
-//constexpr size_t nb_hidden{512};
-constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60'000};
 constexpr size_t nb_test_samples{10'000};
+constexpr size_t nb_pixels{784};
+constexpr size_t nb_digits{10};
+constexpr size_t nb_hidden{512};
 // Aliases and data types
 using namespace hnnet;
 using Pixels = std::array<int_t, nb_pixels>;
@@ -86,10 +85,10 @@ int main() {
     // create net
     net::DenseForwardNet classifier{
         net::DenseLayer{nb_pixels, NeuronType::input,  activation::Identity{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
-        //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
         net::DenseLayer{nb_digits, NeuronType::output, activation::Sigmoid{}}
     };
     // read train and test samples
@@ -106,9 +105,9 @@ int main() {
         inputs,
         targets,
         rule::Backprop{
-            backprop::metal::Backend<backprop::metal::optimizer::Momentum>{0.25_real, 0.5_real},
+            backprop::metal::Backend<backprop::metal::optimizer::Momentum>{0.1_real, 0.6_real},
             loss::MSE{},
-            128
+            512
     });
     // eval efficiency
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {

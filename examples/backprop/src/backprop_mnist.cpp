@@ -11,6 +11,7 @@
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
+#include "hnnet/activations/relu.h"
 #include "hnnet/losses/mse.h"
 #include "hnnet/nets/dense_forward_net.h"
 #include "hnnet/rules/backprop/backprop.h"
@@ -18,12 +19,11 @@
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
 
 // Constants
-constexpr size_t nb_pixels{784};
-constexpr size_t nb_digits{10};
-//constexpr size_t nb_hidden{512};
-constexpr size_t nb_hidden{128};
 constexpr size_t nb_training_samples{60'000};
 constexpr size_t nb_test_samples{10'000};
+constexpr size_t nb_pixels{784};
+constexpr size_t nb_digits{10};
+constexpr size_t nb_hidden{512};
 // Aliases and data types
 using namespace hnnet;
 using Pixels = std::array<int_t, nb_pixels>;
@@ -85,7 +85,10 @@ int main() {
     // create net
     net::DenseForwardNet classifier{
         net::DenseLayer{nb_pixels, NeuronType::input,  activation::Identity{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
+        //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
         //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
         //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
         //net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
@@ -101,22 +104,22 @@ int main() {
         targets[i] = encode(digit.label);
     }
     // train net
-    //classifier.train(
-    //    inputs,
-    //    targets,
-    //    rule::Backprop{
-    //        backend::omp::backprop::Momentum{0.25, 0.5},
-    //        loss::MSE{},
-    //        64
-    //});
     classifier.train(
         inputs,
         targets,
         rule::Backprop{
-            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05_real, 0.9_real},
+            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.1_real, 0.6_real},
             loss::MSE{},
-            1
+            512
     });
+    //classifier.train(
+    //    inputs,
+    //    targets,
+    //    rule::Backprop{
+    //        backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05_real, 0.9_real},
+    //        loss::MSE{},
+    //        1
+    //});
     //classifier.train(
     //    inputs,
     //    targets,
