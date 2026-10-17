@@ -1,9 +1,13 @@
 #pragma once
 #include <concepts>
 #include <cstddef>
+#include <iterator>
+#include <span>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 #include "hnnet/activations/identity.h"
+#include "hnnet/learning_rule_type.h"
 #include "hnnet/nets/dag_net.h"
 
 namespace hnnet::net {
@@ -25,6 +29,15 @@ namespace hnnet::net {
     ///////////////////////////
     class DenseForwardNet : public DAGNet {
         public:
+            struct Layer {
+                index_t tx_begin;
+                int_t tx_count;
+                index_t rx_begin;
+                int_t rx_count;
+                index_t weight_offset;
+                int_t weight_stride;
+                index_t bias_neuron;
+            };
             // Constructor
             template <DenseLayerType... Layers>
                 requires (sizeof...(Layers) > 0)
@@ -35,19 +48,45 @@ namespace hnnet::net {
                     if (layers...[sizeof...(Layers) - 1].type != NeuronType::output) {
                         throw std::invalid_argument("DenseForwardNet::DenseForwardNet: last layer must be of output type!");
                     }
+                    auto view = this->view();
+                    auto tx_begin = view.neuron_count();
                     auto tx_neurons = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
                     auto connect_layer = [&] (const auto &layer) {
+                        const auto rx_begin = view.neuron_count();
+                        const auto weight_offset = view.connection_count();
                         const auto rx_neurons = this->new_neurons(layer.size, layer.type, layer.activation);
                         this->connect(tx_neurons, rx_neurons);
+                        index_t bias_neuron{-1};
                         if (layer.biased) {
                             const auto bias = this->new_neurons(1, NeuronType::bias, activation::Identity{});
                             this->connect(bias, rx_neurons);
+                            bias_neuron = bias.front();
                         }
+                        _layers.push_back({.tx_begin = tx_begin, 
+                                           .tx_count = std::ssize(tx_neurons), 
+                                           .rx_begin = rx_begin, 
+                                           .rx_count = std::ssize(rx_neurons),
+                                           .weight_offset = weight_offset, 
+                                           .weight_stride = std::ssize(tx_neurons) + layer.biased, 
+                                           .bias_neuron = bias_neuron});
+                        tx_begin = rx_begin;
                         tx_neurons = rx_neurons;
                     };
                     [&]<size_t... I>(std::index_sequence<I...>) {
                         (connect_layer(layers...[I + 1]), ...);
                     }(std::make_index_sequence<sizeof...(Layers) - 1>{});
                 }
+            // Train net using a set of training samples
+            template <DatasetType Inputs, DatasetType Targets, LearningRuleType<DenseForwardNet, Inputs, Targets> LearningRule>
+                void train(const Inputs &inputs, const Targets &targets, LearningRule rule) {
+                    NNet::train(*this, inputs, targets, std::move(rule));
+                }
+            // Get layers
+            std::span<const Layer> layers() const {
+                return _layers;
+            }
+        private:
+            // Data members
+            std::vector<Layer> _layers;
     };
 }

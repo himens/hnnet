@@ -11,11 +11,9 @@ namespace metal {
         uint connection_count;
         uint input_count;
         uint output_count;
-        uint bias_count;
+        uint output_begin;
         uint batch_begin;
         uint batch_size;
-        uint level_begin;
-        uint level_count;
     };
 
     struct ActivationDescriptor {
@@ -27,6 +25,16 @@ namespace metal {
         uint weight_count;
         float first;
         float second;
+    };
+
+    struct DenseLayer {
+        uint tx_begin;
+        uint tx_count;
+        uint rx_begin;
+        uint rx_count;
+        uint weight_offset;
+        uint weight_stride;
+        uint bias_neuron;
     };
 
     inline float activate(const ActivationDescriptor descriptor, const float value) {
@@ -55,124 +63,102 @@ using namespace hnnet::backprop::metal;
 kernel void hnnet_seed(
     constant Parameters &parameters [[buffer(0)]],
     device const ActivationDescriptor *activations [[buffer(1)]],
-    device const uint *input_neurons [[buffer(2)]],
-    device const uint *bias_neurons [[buffer(3)]],
-    device const float *inputs [[buffer(4)]],
-    device float *signals [[buffer(5)]],
-    device float *weighted_sums [[buffer(6)]],
-    device float *deltas [[buffer(7)]],
-    uint sample [[thread_position_in_grid]]) {
-    if (sample >= parameters.batch_size) return;
-    const uint offset = sample * parameters.neuron_count;
-    for (uint neuron = 0; neuron < parameters.neuron_count; ++neuron) {
-        signals[offset + neuron] = 0.0f;
-        weighted_sums[offset + neuron] = 0.0f;
-        deltas[offset + neuron] = 0.0f;
-    }
-    for (uint input = 0; input < parameters.input_count; ++input) {
-        const uint neuron = input_neurons[input];
-        const float value = inputs[(parameters.batch_begin + sample) * parameters.input_count + input];
-        weighted_sums[offset + neuron] = value;
-        signals[offset + neuron] = activate(activations[neuron], value);
-    }
-    for (uint bias = 0; bias < parameters.bias_count; ++bias) {
-        const uint neuron = bias_neurons[bias];
-        weighted_sums[offset + neuron] = 1.0f;
-        signals[offset + neuron] = activate(activations[neuron], 1.0f);
-    }
-}
-
-kernel void hnnet_forward(
-    constant Parameters &parameters [[buffer(0)]],
-    device const ActivationDescriptor *activations [[buffer(1)]],
-    device const uint *level_neurons [[buffer(2)]],
-    device const uint *incoming_offsets [[buffer(3)]],
-    device const uint *incoming_edges [[buffer(4)]],
-    device const uint *sources [[buffer(5)]],
-    device const float *weights [[buffer(6)]],
-    device float *signals [[buffer(7)]],
-    device float *weighted_sums [[buffer(8)]],
+    device const uint *input_positions [[buffer(2)]],
+    device const float *inputs [[buffer(3)]],
+    device float *signals [[buffer(4)]],
     uint item [[thread_position_in_grid]]) {
-    if (item >= parameters.batch_size * parameters.level_count) return;
-    const uint offset = (item / parameters.level_count) * parameters.neuron_count;
-    const uint neuron = level_neurons[parameters.level_begin + item % parameters.level_count];
-    float sum = 0.0f;
-    for (uint entry = incoming_offsets[neuron]; entry < incoming_offsets[neuron + 1]; ++entry) {
-        const uint edge = incoming_edges[entry];
-        sum += weights[edge] * signals[offset + sources[edge]];
+    if (item >= parameters.batch_size * parameters.neuron_count) return;
+    const uint neuron = item % parameters.neuron_count;
+    const uint input = input_positions[neuron];
+    float signal = 0.0f;
+    if (input < parameters.input_count) {
+        const uint sample = parameters.batch_begin + item / parameters.neuron_count;
+        signal = activate(activations[neuron], inputs[sample * parameters.input_count + input]);
     }
-    weighted_sums[offset + neuron] = sum;
-    signals[offset + neuron] = activate(activations[neuron], sum);
-}
-
-kernel void hnnet_backward(
-    constant Parameters &parameters [[buffer(0)]],
-    device const ActivationDescriptor *activations [[buffer(1)]],
-    device const uint *level_neurons [[buffer(2)]],
-    device const uint *outgoing_offsets [[buffer(3)]],
-    device const uint *outgoing_edges [[buffer(4)]],
-    device const uint *receivers [[buffer(5)]],
-    device const float *weights [[buffer(6)]],
-    device const uint *output_positions [[buffer(7)]],
-    device const float *targets [[buffer(8)]],
-    device const float *signals [[buffer(9)]],
-    device const float *weighted_sums [[buffer(10)]],
-    device float *deltas [[buffer(11)]],
-    uint item [[thread_position_in_grid]]) {
-    if (item >= parameters.batch_size * parameters.level_count) return;
-    const uint sample = item / parameters.level_count;
-    const uint offset = sample * parameters.neuron_count;
-    const uint neuron = level_neurons[parameters.level_begin + item % parameters.level_count];
-    float delta = 0.0f;
-    for (uint entry = outgoing_offsets[neuron]; entry < outgoing_offsets[neuron + 1]; ++entry) {
-        const uint edge = outgoing_edges[entry];
-        delta += weights[edge] * deltas[offset + receivers[edge]];
+    else if (input == 0xfffffffeu) {
+        signal = activate(activations[neuron], 1.0f);
     }
-    const float slope = derivative(activations[neuron], weighted_sums[offset + neuron]);
-    const uint output = output_positions[neuron];
-    if (output != 0xffffffffu) {
-        const float target = targets[(parameters.batch_begin + sample) * parameters.output_count + output];
-        delta += (signals[offset + neuron] - target) * slope;
-    }
-    else {
-        delta *= slope;
-    }
-    deltas[offset + neuron] = delta;
+    signals[item] = signal;
 }
 
 kernel void hnnet_loss(
     constant Parameters &parameters [[buffer(0)]],
-    device const uint *output_neurons [[buffer(1)]],
-    device const float *targets [[buffer(2)]],
-    device const float *signals [[buffer(3)]],
-    device float *losses [[buffer(4)]],
+    device const float *targets [[buffer(1)]],
+    device const float *signals [[buffer(2)]],
+    device float *losses [[buffer(3)]],
     uint sample [[thread_position_in_grid]]) {
     if (sample >= parameters.batch_size) return;
     float loss = 0.0f;
     for (uint output = 0; output < parameters.output_count; ++output) {
         const float target = targets[(parameters.batch_begin + sample) * parameters.output_count + output];
-        const float signal = signals[sample * parameters.neuron_count + output_neurons[output]];
+        const float signal = signals[sample * parameters.neuron_count + parameters.output_begin + output];
         const float error = target - signal;
         loss += 0.5f * error * error;
     }
     losses[sample] = loss;
 }
 
-kernel void hnnet_gradient(
+kernel void hnnet_dense_activation(
     constant Parameters &parameters [[buffer(0)]],
-    device const uint *sources [[buffer(1)]],
-    device const uint *receivers [[buffer(2)]],
-    device const float *signals [[buffer(3)]],
-    device const float *deltas [[buffer(4)]],
-    device float *gradient [[buffer(5)]],
-    uint edge [[thread_position_in_grid]]) {
-    if (edge >= parameters.connection_count) return;
+    constant DenseLayer &layer [[buffer(1)]],
+    device const ActivationDescriptor *activations [[buffer(2)]],
+    device const float *weights [[buffer(3)]],
+    device float *weighted_sums [[buffer(4)]],
+    device float *signals [[buffer(5)]],
+    uint item [[thread_position_in_grid]]) {
+    if (item >= parameters.batch_size * layer.rx_count) return;
+    const uint row = item % layer.rx_count;
+    const uint neuron = layer.rx_begin + row;
+    const uint sample_offset = (item / layer.rx_count) * parameters.neuron_count;
+    const uint offset = sample_offset + neuron;
+    float sum = weighted_sums[offset];
+    if (layer.bias_neuron != 0xffffffffu) {
+        sum += weights[layer.weight_offset + row * layer.weight_stride + layer.tx_count]
+            * signals[sample_offset + layer.bias_neuron];
+    }
+    weighted_sums[offset] = sum;
+    signals[offset] = activate(activations[neuron], sum);
+}
+
+kernel void hnnet_dense_delta(
+    constant Parameters &parameters [[buffer(0)]],
+    constant DenseLayer &layer [[buffer(1)]],
+    device const ActivationDescriptor *activations [[buffer(2)]],
+    device const float *targets [[buffer(3)]],
+    device const float *signals [[buffer(4)]],
+    device const float *weighted_sums [[buffer(5)]],
+    device float *deltas [[buffer(6)]],
+    device const float *propagated_deltas [[buffer(7)]],
+    uint item [[thread_position_in_grid]]) {
+    if (item >= parameters.batch_size * layer.rx_count) return;
+    const uint sample = item / layer.rx_count;
+    const uint row = item % layer.rx_count;
+    const uint neuron = layer.rx_begin + row;
+    const uint offset = sample * parameters.neuron_count + neuron;
+    const float slope = derivative(activations[neuron], weighted_sums[offset]);
+    if (layer.rx_begin == parameters.output_begin) {
+        const float target = targets[(parameters.batch_begin + sample) * parameters.output_count + row];
+        deltas[offset] = (signals[offset] - target) * slope;
+    }
+    else {
+        deltas[offset] = propagated_deltas[offset] * slope;
+    }
+}
+
+kernel void hnnet_bias_gradient(
+    constant Parameters &parameters [[buffer(0)]],
+    constant DenseLayer &layer [[buffer(1)]],
+    device const float *signals [[buffer(2)]],
+    device const float *deltas [[buffer(3)]],
+    device float *gradient [[buffer(4)]],
+    uint row [[thread_position_in_grid]]) {
+    if (row >= layer.rx_count) return;
     float sum = 0.0f;
     for (uint sample = 0; sample < parameters.batch_size; ++sample) {
         const uint offset = sample * parameters.neuron_count;
-        sum += deltas[offset + receivers[edge]] * signals[offset + sources[edge]];
+        sum += deltas[offset + layer.rx_begin + row] * signals[offset + layer.bias_neuron];
     }
-    gradient[edge] = sum / float(parameters.batch_size);
+    gradient[layer.weight_offset + row * layer.weight_stride + layer.tx_count] = sum / float(parameters.batch_size);
 }
 
 kernel void hnnet_momentum(

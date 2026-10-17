@@ -26,11 +26,9 @@ namespace hnnet::backprop::metal::detail {
         std::uint32_t connection_count;
         std::uint32_t input_count;
         std::uint32_t output_count;
-        std::uint32_t bias_count;
+        std::uint32_t output_begin;
         std::uint32_t batch_begin;
         std::uint32_t batch_size;
-        std::uint32_t level_begin;
-        std::uint32_t level_count;
     };
 
     struct ActivationDescriptor {
@@ -44,7 +42,7 @@ namespace hnnet::backprop::metal::detail {
         float second;
     };
 
-    static_assert(sizeof(Parameters) == 36);
+    static_assert(sizeof(Parameters) == 28);
     static_assert(sizeof(ActivationDescriptor) == 8);
     static_assert(sizeof(UpdateParameters) == 12);
 
@@ -97,25 +95,29 @@ namespace hnnet::backprop::metal::detail {
                 }
             }
 
-            id<MTLBuffer> buffer(const std::size_t bytes) const {
+            id<MTLBuffer> buffer(const std::size_t bytes, const bool clear = true) const {
                 const auto length = std::max(bytes, sizeof(float));
                 if (length > [_device maxBufferLength]) {
                     throw std::length_error("Metal: buffer exceeds device maxBufferLength");
                 }
                 id<MTLBuffer> result = [_device newBufferWithLength:length options:MTLResourceStorageModeShared];
                 if (result == nil) throw std::runtime_error("Metal: buffer allocation failed");
-                std::memset([result contents], 0, length);
+                if (clear) std::memset([result contents], 0, length);
                 return result;
             }
 
             template <typename T>
                 id<MTLBuffer> upload(const std::vector<T> &values) const {
-                    id<MTLBuffer> result = buffer(values.size() * sizeof(T));
+                    id<MTLBuffer> result = buffer(values.size() * sizeof(T), false);
                     if (not values.empty()) {
                         std::memcpy([result contents], values.data(), values.size() * sizeof(T));
                     }
                     return result;
                 }
+
+            id<MTLDevice> device() const {
+                return _device;
+            }
 
             id<MTLComputePipelineState> pipeline(const char *name) const {
                 id<MTLFunction> function = [_library newFunctionWithName:[NSString stringWithUTF8String:name]];

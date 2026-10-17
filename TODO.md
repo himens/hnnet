@@ -69,6 +69,14 @@
 - [ ] **Use literals**
   - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
 
+## Discussioni aperte
+
+- [ ] **Costruzione e mutabilita della topologia di NNet**
+  - Chiarire se `NNet` debba esporre direttamente `new_neurons()`, `connect()` e `zip_connect()`: l'ereditarieta pubblica permette di alterare anche reti costruite come fully dense, compromettendone l'invariante.
+  - Valutare un builder o funzioni esterne che costruiscano la topologia e la passino al costruttore di `NNet`, separando la costruzione dall'esecuzione della rete.
+  - Discutere il rischio di vincolare la rete a una topologia predefinita e immutabile, perdendo la generalita e la possibilita di modificarla incrementalmente.
+  - Confrontare questa alternativa con validazione in `prepare()` o congelamento esplicito; definire dove garantire gli invarianti e come esporre i metadati dei layer ai backend. Nessuna soluzione ancora scelta.
+
 ## Priorita bassa
 
 - [ ] **Migliorare la configurazione dell'addestramento**

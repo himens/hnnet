@@ -9,7 +9,8 @@ Language kernels. No OpenMP code is used by the Metal backend.
 - Compile the translation unit that constructs the Metal Backprop rule as
   Objective-C++ (`.mm`, or `-x objective-c++`) with ARC (`-fobjc-arc`). The
   current hnnet headers require C++26; `-std=c++2c` is Clang's draft spelling.
-- Link the Metal and Foundation frameworks (`-framework Metal -framework Foundation`).
+- Link Metal, MetalPerformanceShaders and Foundation (`-framework Metal
+  -framework MetalPerformanceShaders -framework Foundation`).
 - Keep `activations.h` and `kernels.metal` available at runtime. The default path
   is the directory containing `backend.h`, as recorded by `__FILE__`. If that
   path is relative, it is resolved against the process working directory. For
@@ -27,10 +28,10 @@ the `.mm` file containing the Metal example:
 ```bash
 mkdir -p build/bin
 xcrun --sdk macosx clang++ \
-    -std=c++2c -stdlib=libc++ -fobjc-arc -x objective-c++ \
+    -std=c++2c -stdlib=libc++ -O3 -fobjc-arc -x objective-c++ \
     -Iinclude -Iutils/include \
     path/to/backprop_metal.mm \
-    -framework Foundation -framework Metal \
+    -framework Foundation -framework Metal -framework MetalPerformanceShaders \
     -o build/bin/backprop-metal
 ```
 
@@ -68,10 +69,23 @@ by value. Its buffers are initialized and reset together with the network in
 - Identity, Sigmoid (including its `sigma` parameter), and ReLU, with derivatives.
 - MSE loss (`0.5 * error * error`). Other loss types are not accepted by `backprop`.
 - Momentum and iRprop-, with persistent per-weight state on the device.
-- Acyclic networks described by `net::DAGNet::View`, including bias neurons,
-  skip connections and sparse connections. Input and bias neurons must not have
-  incoming connections. Unknown activations and unsupported topologies are
-  rejected explicitly rather than evaluated on the CPU.
+- `net::DenseForwardNet` only, with contiguous neuron ranges and row-major
+  weights. An optional shared bias neuron per layer is supported. Every network
+  argument in the Metal backend is a `DenseForwardNet&`, so an arbitrary
+  `DAGNet` is rejected by the existing backend concept. There is no runtime cast,
+  generic DAG or CPU fallback.
+
+The network exposes read-only `LayerInfo` descriptors through `layers()`. Each
+descriptor describes a connection layer: transmitter/receiver ranges, weight
+offset, row stride and an optional bias index (`-1` means no bias). Metal uses
+these descriptors directly, converting indices to its 32-bit kernel format.
+`DenseForwardNet::train()` preserves the concrete network type when forwarding
+to the common training loop; OpenMP can still accept it through `DAGNet&`.
+
+Dense topology is currently an assumed invariant: do not call `new_neurons`,
+`connect` or `zip_connect` to change a `DenseForwardNet` after construction.
+These inherited mutators are not blocked or revalidated by this change; the
+structural enforcement of that invariant remains an open design topic.
 
 All GPU tensors and arithmetic use FP32. Host `real_t` is unchanged: data and
 weights are converted on upload and weights are converted back on download.
@@ -82,24 +96,37 @@ gradients because it depends on their signs.
 
 ## Execution
 
-`init` builds incoming/outgoing adjacency lists and topological levels, compiles
-the kernels and initializes optimizer buffers. The dense-block optimization of
-OpenMP is not required: the GPU executes the equivalent connection graph.
+`init` reads the network's layer descriptors, checks GPU dimension limits,
+compiles the kernels and initializes optimizer buffers. It does not reconstruct
+or revalidate the dense topology. There is no adjacency list, topological
+scheduler or dense/fallback plan.
+MPS operations and matrix views are owned directly by `Backend`; there is no
+separate dense backend or wrapper.
 
-`to_device` uploads the dataset and current host weights. It is intended to be
-called once per epoch, as in the existing Backprop rule. Intermediate weights
-remain on the GPU between batches. Each `backprop` call encodes seeding,
-forward levels, MSE, backward levels, the batch-mean gradient and one optimizer
-update. Separate encoders order dependent levels without floating-point atomics.
-The call waits for completion and returns the sum of pre-update sample losses;
-only this final scalar accumulation runs on the host. `to_host` copies updated
-weights into the network.
+`to_device` uploads the dataset and current host weights once per epoch, as in
+the existing rule. Input and target buffers are reused and filled directly,
+without temporary flattened vectors or a second copy. Data is read again each
+epoch so changes to the caller's samples are not silently ignored.
 
-Scratch storage grows with the largest batch seen: three FP32 arrays of
-`batch_size * neuron_count`, plus losses and the connection gradient. Full-batch
-training can therefore require substantial memory. The initial implementation
-uses shared Metal buffers and synchronous batch completion, prioritizing a
-verifiable contract over transfer/dispatch optimizations. Tensor indexing is
+Forward, hidden-delta propagation and the batch-mean weight gradient use
+`MPSMatrixMultiplication`: `X * W^T`, `delta * W`, and `delta^T * X / batch_size`.
+Elementwise kernels apply activations and derivatives; a small reduction handles
+bias gradients. Weights remain in their original order, including bias columns,
+for optimizer updates and `to_host`. Matrix views and multiplication objects are
+reused for equal batch sizes and rebuilt for a different batch size or new scratch
+storage, including a partial final batch.
+
+Each batch still waits for GPU completion before returning its pre-update loss,
+because the existing rule requests that scalar synchronously. Removing this wait
+would require a separate API decision; it has not been hidden behind stale losses.
+`to_host` copies the updated weights back to the network.
+
+Scratch storage grows with the largest batch seen: four FP32 arrays of
+`(batch_size + 1) * neuron_count`, plus losses and the connection gradient. The
+extra row supplies padding for strided MPS views with a nonzero neuron offset.
+Propagated deltas use a separate buffer so matrix multiplication does not need
+an in-place operation on overlapping strided matrix views.
+Full-batch training can therefore require substantial memory. Tensor indexing is
 limited to 32 bits and allocations are checked against the device buffer limit.
 
 Metal resource handles are retained by ARC. As with other handle-based APIs,
@@ -116,9 +143,10 @@ Linux development container. Before running MNIST, verify on macOS:
 - A small Identity network with known weights, comparing loss, gradients and
   several Momentum/Rprop steps against the CPU backend within FP32 tolerance.
 - Sigmoid with default and non-default `sigma`, and ReLU on both sides of zero.
-- Bias, branching/skip connections, batch size one and a partial final batch.
+- Dense chains with and without bias, batch size one and a partial final batch.
+- Compile-time rejection of a generic `DAGNet` by the Metal backend contract.
 - Reset through `init`, upload/download round trips and independent backends.
 - Invalid sample shapes, unsupported activations and missing shader files.
 
-Enable Metal API validation and shader validation during these checks. No changes
-outside this directory were made to integrate or enable the backend.
+Enable Metal API validation and shader validation during these checks. Host-side
+descriptor, layout and forwarding checks are in `test/dense_forward_net.cpp`.
