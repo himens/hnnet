@@ -50,24 +50,24 @@
 - [x] **Rilevare connessioni duplicate prima di usare la rete**
   - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
   - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
-
+    
+- [x] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
+  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
+  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
+     
+- [x] **Use literals**
+  - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
+    
 ## Priorita alta
 
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam e valutare RMSProp; Rprop è già disponibile come optimizer OpenMP.
   - I nuovi optimizer devono mantenere stato per peso e funzionare con i mini-batch.
-    
-- [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
-  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
-  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
 
 - [ ] **Unificare le formule di attivazioni e loss tra CPU e backend GPU**
   - Metal implementa separatamente Identity, Sigmoid, ReLU e MSE: formule, derivate e gestione dei parametri sono duplicate rispetto al codice CPU.
   - Valutare una sorgente comune delle formule, con adattamenti per le funzioni matematiche e i vincoli di Metal ed eventuali altri backend, evitando implementazioni indipendenti che possano divergere.
   - Definire come estendere il supporto ad attivazioni e loss personalizzate; verificare la coerenza di valori e derivate tra backend con tolleranze adeguate alla precisione numerica.
-   
-- [ ] **Use literals**
-  - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
 
 ## Discussioni aperte
 
