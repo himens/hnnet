@@ -6,9 +6,9 @@ Language kernels. No OpenMP code is used by the Metal backend.
 ## Build Requirements
 
 - macOS with the Metal SDK and a compatible GPU.
-- Compile the translation unit including `backend.h` as Objective-C++ (`.mm`, or
-  `-x objective-c++`) with ARC (`-fobjc-arc`). Use the C++ language version already
-  required by hnnet.
+- Compile the translation unit that constructs the Metal Backprop rule as
+  Objective-C++ (`.mm`, or `-x objective-c++`) with ARC (`-fobjc-arc`). The
+  current hnnet headers require C++26; `-std=c++2c` is Clang's draft spelling.
 - Link the Metal and Foundation frameworks (`-framework Metal -framework Foundation`).
 - Keep `activations.h` and `kernels.metal` available at runtime. The default path
   is the directory containing `backend.h`, as recorded by `__FILE__`. If that
@@ -18,6 +18,27 @@ Language kernels. No OpenMP code is used by the Metal backend.
 
 The library compiles its shader source during `init`; a precompiled metallib and
 changes to the project CMake files are not required by this implementation.
+
+## Compile a Metal Example
+
+Run this from the repository root, replacing `path/to/backprop_metal.mm` with
+the `.mm` file containing the Metal example:
+
+```bash
+mkdir -p build/bin
+xcrun --sdk macosx clang++ \
+    -std=c++2c -stdlib=libc++ -fobjc-arc -x objective-c++ \
+    -Iinclude -Iutils/include \
+    path/to/backprop_metal.mm \
+    -framework Foundation -framework Metal \
+    -o build/bin/backprop-metal
+```
+
+For example, if the source is `examples/backprop/src/backprop_metal.mm`, use
+that path in the command. The existing `backprop_mnist.cpp` is the OpenMP example,
+not a Metal translation unit. Run the resulting executable from the repository
+root so the default kernel directory recorded from `__FILE__` resolves correctly.
+No `-fopenmp` flag is needed for this Metal backend.
 
 ## Composition
 
