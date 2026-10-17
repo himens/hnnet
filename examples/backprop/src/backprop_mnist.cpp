@@ -17,6 +17,8 @@
 #include "hnnet/rules/backprop/backprop.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
+#include "hnnet/rules/backprop/metal/backend.h"
+#include "hnnet/rules/backprop/metal/optimizers/momentum.h"
 
 // Constants
 constexpr size_t nb_training_samples{60'000};
@@ -108,7 +110,8 @@ int main() {
         inputs,
         targets,
         rule::Backprop{
-            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.1_real, 0.6_real},
+            backprop::metal::Backend<backprop::metal::optimizer::Momentum>{0.1_real, 0.6_real},
+            //backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.1_real, 0.6_real},
             loss::MSE{},
             512
     });
