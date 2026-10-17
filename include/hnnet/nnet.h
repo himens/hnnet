@@ -105,12 +105,15 @@ namespace hnnet {
             // Connect neurons (cartesian product)
             void connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
                 _trained = false;
-                for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs)) {
-                    if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
-                        throw std::out_of_range("NNet::connect: index out-of-range!");
+                //for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs))
+                for (const auto &itx : itxs) {
+                    for (const auto &irx : irxs) {
+                        if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
+                            throw std::out_of_range("NNet::connect: index out-of-range!");
+                        }
+                        _connections.push_back({.itx = itx, .irx = irx});
+                        _weights.push_back(0.0_real);
                     }
-                    _connections.push_back({.itx = itx, .irx = irx});
-                    _weights.push_back(0.0_real);
                 }
             }
             // Connect neurons (zip)

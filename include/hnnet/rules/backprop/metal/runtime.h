@@ -89,7 +89,7 @@ namespace hnnet::backprop::metal::detail {
                                                      encoding:NSUTF8StringEncoding];
                 if (text == nil) throw std::runtime_error("Metal: kernel source is not UTF-8");
                 MTLCompileOptions *options = [MTLCompileOptions new];
-                options.fastMathEnabled = NO;
+                options.mathMode = MTLMathModeFast;
                 NSError *error = nil;
                 _library = [_device newLibraryWithSource:text options:options error:&error];
                 if (_library == nil) {

@@ -205,7 +205,7 @@ namespace hnnet::net {
                 const auto connections = this->connections();
                 const auto neurons = this->neurons();
                 auto iconn = partition.conn_begin;
-                for (; iconn <= (partition.conn_end - register_size); iconn += register_size) {
+                for (; iconn <= (partition.conn_end - simd_register_size); iconn += simd_register_size) {
                     weighted_sum += 
                         + weights[iconn]     * state.signals[connections[iconn].itx]
                         + weights[iconn + 1] * state.signals[connections[iconn + 1].itx]
@@ -227,7 +227,7 @@ namespace hnnet::net {
                     const auto neurons = this->neurons();
                     const auto row_offset = block.weight_offset + irow * block.tx_count;
                     index_t icol{0};
-                    for (; icol <= (block.tx_count - register_size); icol += register_size) {
+                    for (; icol <= (block.tx_count - simd_register_size); icol += simd_register_size) {
                         weighted_sum +=   
                             + weights[row_offset + icol]     * state.signals[block.tx_begin + icol]
                             + weights[row_offset + icol + 1] * state.signals[block.tx_begin + icol + 1]
