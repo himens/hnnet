@@ -29,10 +29,10 @@ namespace hnnet::net {
             class View : public NNet::View {
                 public:
                     bool is_dense(index_t partition_index) const {
-                        return _net._partition_dense_block_indices[partition_index] != DenseBlock::no_block;
+                        return _net._dense_block_indices[partition_index] != DenseBlock::no_block;
                     }
                     const DenseBlock& dense_block(const index_t partition_index) const {
-                        return _net._dense_blocks[_net._partition_dense_block_indices[partition_index]];
+                        return _net._dense_blocks[_net._dense_block_indices[partition_index]];
                     }
                 private:
                     friend class DAGNet;
@@ -95,7 +95,7 @@ namespace hnnet::net {
                 // sort partitions per topological rank
                 std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_neuron_index] < topo_ranks[rhs.rx_neuron_index]; });
                 // group partitions sharing the exact same (contiguous) tx range
-                _partition_dense_block_indices.assign(std::ssize(partitions), DenseBlock::no_block);
+                _dense_block_indices.assign(std::ssize(partitions), DenseBlock::no_block);
                 UnionFind union_find(partitions.size());
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
@@ -145,7 +145,7 @@ namespace hnnet::net {
                                             .rx_count      = std::ssize(partition_indices),
                                             .weight_offset = first.conn_begin});
                     for (const auto partition_index : partition_indices) {
-                        _partition_dense_block_indices[partition_index] = _dense_blocks.size() - 1;
+                        _dense_block_indices[partition_index] = _dense_blocks.size() - 1;
                     }
                 }
                 std::println("DAGNet::prepare: found {} partitions(s)", partitions.size());
@@ -190,8 +190,8 @@ namespace hnnet::net {
                 const auto partitions = this->partitions();
                 for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
                     const auto &partition = partitions[partition_index];
-                    if (_partition_dense_block_indices[partition_index] != DenseBlock::no_block) {
-                        const auto &block = _dense_blocks[_partition_dense_block_indices[partition_index]];
+                    if (_dense_block_indices[partition_index] != DenseBlock::no_block) {
+                        const auto &block = _dense_blocks[_dense_block_indices[partition_index]];
                         propagate_dense_block(state, block);
                         partition_index += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                     }
@@ -247,6 +247,6 @@ namespace hnnet::net {
         private:
             // Data members
             std::vector<DenseBlock> _dense_blocks{};
-            index_vector_t _partition_dense_block_indices{};
+            index_vector_t _dense_block_indices{};
     };
 }
