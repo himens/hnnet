@@ -148,8 +148,8 @@ namespace hnnet::net {
                         _dense_block_indices[partition_index] = _dense_blocks.size() - 1;
                     }
                 }
-                std::println("DAGNet::prepare: found {} partitions(s)", partitions.size());
-                std::println("DAGNet::prepare: found {} dense block(s)", _dense_blocks.size());
+                std::println("DAGNet::init: found {} partitions(s)", partitions.size());
+                std::println("DAGNet::init: found {} dense block(s)", _dense_blocks.size());
             }
         private:
             // Data types
