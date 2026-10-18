@@ -126,8 +126,8 @@ namespace hnnet {
                 static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_iout_neurons.size());
-                for (const auto &[i, iout] : _iout_neurons | std::views::enumerate) {
-                    outputs[i] = state.signals[iout];
+                for (const auto &[iout, inr] : _iout_neurons | std::views::enumerate) {
+                    outputs[iout] = state.signals[inr];
                 }
                 return outputs;
             }
@@ -264,9 +264,9 @@ namespace hnnet {
         private:
             // Seed a net state from input data
             void seed_state(State &state, const DataType auto &inputs) const {
-                for (const auto &[iin, input] : std::views::zip(_iin_neurons, inputs)) {
-                    state.weighted_sums[iin] = input;
-                    state.signals[iin] = _neurons[iin].activate(input);
+                for (const auto &[inr, input] : std::views::zip(_iin_neurons, inputs)) {
+                    state.weighted_sums[inr] = input;
+                    state.signals[inr] = _neurons[inr].activate(input);
                 }
                 for (const auto &ibias : _ibias_neurons) {
                     state.weighted_sums[ibias] = 1.0_real;

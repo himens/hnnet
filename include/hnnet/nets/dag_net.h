@@ -126,9 +126,9 @@ namespace hnnet::net {
                     // sort members per increasing irx and check their irxs and itxs are contiguous
                     std::ranges::sort(members, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].irx < partitions[rhs].irx; });
                     auto contiguous = true;
-                    for (auto i{1}; i < std::ssize(members); ++i) {
-                        const auto &prev = partitions[members[i - 1]];
-                        const auto &curr = partitions[members[i]];
+                    for (auto imember{1}; imember < std::ssize(members); ++imember) {
+                        const auto &prev = partitions[members[imember - 1]];
+                        const auto &curr = partitions[members[imember]];
                         if ((curr.irx != prev.irx + 1) or (curr.conn_begin != prev.conn_end)) {
                             contiguous = false;
                             break;
