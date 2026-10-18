@@ -10,7 +10,7 @@
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/perceptron.h"
-#include "hnnet/nets/dag_net.h"
+#include "hnnet/nets/dense_forward_net.h"
 #include "hnnet/rules/perceptron.h"
 
 // Constants
@@ -97,10 +97,10 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 // Classify letters using the trained perceptron neural network
 int main() {
     // create net
-    net::DAGNet classifier;
-    auto input_layer  = classifier.new_neurons(nb_rows * nb_columns, NeuronType::input,  activation::Identity{});
-    auto output_layer = classifier.new_neurons(nb_letters,           NeuronType::output, activation::Perceptron{});
-    classifier.connect(input_layer, output_layer);
+    net::DenseForwardNet classifier{
+        net::DenseLayer{nb_rows * nb_columns, NeuronType::input, activation::Identity{}},
+        net::DenseLayer{nb_letters, NeuronType::output, activation::Perceptron{}}
+    };
     // train net
     std::vector<LetterData> letters{};
     letters.append_range(read_letters("data/letters/train_1.txt"));

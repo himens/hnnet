@@ -76,59 +76,6 @@ namespace hnnet {
             View view() {
                 return View(*this);
             }
-            // Create new neurons
-            template <ActivationType Activation>
-                index_vector_t new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
-                    if (number < 0) {
-                        throw std::invalid_argument("NNet::new_neurons: invalid number!");
-                    }
-                    _trained = false;
-                    for (auto i{0}; i < number; ++i) {
-                        const auto inr = std::ssize(_neurons);
-                        _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
-                        switch (type) {
-                            case NeuronType::input:
-                                _iin_neurons.push_back(inr);
-                                break;
-                            case NeuronType::output:
-                                _iout_neurons.push_back(inr);
-                                break;
-                            case NeuronType::bias:
-                                _ibias_neurons.push_back(inr);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                    return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
-                }
-            // Connect neurons (cartesian product)
-            void connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
-                _trained = false;
-                //for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs))
-                for (const auto &itx : itxs) {
-                    for (const auto &irx : irxs) {
-                        if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
-                            throw std::out_of_range("NNet::connect: index out-of-range!");
-                        }
-                        _connections.push_back({.itx = itx, .irx = irx});
-                        _weights.push_back(0.0_real);
-                    }
-                }
-            }
-            // Connect neurons (zip)
-            void zip_connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
-                auto itx = std::ranges::begin(itxs);
-                auto irx = std::ranges::begin(irxs);
-                while (itx != std::ranges::end(itxs) && irx != std::ranges::end(irxs)) {
-                    connect(std::views::single(*itx), std::views::single(*irx));
-                    ++itx;
-                    ++irx;
-                }
-                if (itx != std::ranges::end(itxs) || irx != std::ranges::end(irxs)) {
-                    throw std::invalid_argument("NNet::zip_connect: size error!");
-                }
-            }
             // Train net using a set of training samples
             template <typename Self, DatasetType Inputs, DatasetType Targets, typename LearningRule>
                 void train(Self &self, 
@@ -145,7 +92,8 @@ namespace hnnet {
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
                     std::println("NNet::train: ==================================");
                     timer.start();
-                    prepare();
+                    _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
+                    _trained = false;
                     rule.init(self);
                     for (const auto &[input, target] : std::views::zip(inputs, targets)) {
                         if (std::ssize(input) != std::ssize(_iin_neurons) or (std::ssize(target) != std::ssize(_iout_neurons))) {
@@ -199,19 +147,19 @@ namespace hnnet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
-            // Prepare net (default: randomize weights, sort connections, group them into partitions)
-            virtual void prepare() {
+            // Initialize common topology data after the derived network has constructed it
+            virtual void init() {
                 if (find_duplicate_connection(_connections)) {
-                    throw std::invalid_argument("NNet::prepare: duplicate connection!");
+                    throw std::invalid_argument("NNet::init: duplicate connection!");
                 }
                 sort_connections(_connections);
                 _partitions = make_partitions(_connections);
-                _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
-                std::println("NNet::prepare: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
+                _trained = false;
+                std::println("NNet::init: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
             }
             // Update net state
             virtual void update_state(State &state) const = 0;
-            // Getters/setters
+            // Getters
             std::span<const Neuron> neurons() const {
                 return _neurons;
             }
@@ -229,6 +177,59 @@ namespace hnnet {
             }
             std::span<SynapticConn> connections() {
                 return _connections;
+            }
+             // Create new neurons
+            template <ActivationType Activation>
+                index_vector_t new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
+                    if (number < 0) {
+                        throw std::invalid_argument("NNet::new_neurons: invalid number!");
+                    }
+                    _trained = false;
+                    for (auto i{0}; i < number; ++i) {
+                        const auto inr = std::ssize(_neurons);
+                        _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
+                        switch (type) {
+                            case NeuronType::input:
+                                _iin_neurons.push_back(inr);
+                                break;
+                            case NeuronType::output:
+                                _iout_neurons.push_back(inr);
+                                break;
+                            case NeuronType::bias:
+                                _ibias_neurons.push_back(inr);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
+                }
+            // Connect neurons (cartesian product)
+            void connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
+                _trained = false;
+                //for (const auto &[itx, irx] : std::views::cartesian_product(itxs, irxs))
+                for (const auto &itx : itxs) {
+                    for (const auto &irx : irxs) {
+                        if ((itx < 0 or itx >= std::ssize(_neurons)) or (irx < 0 or irx >= std::ssize(_neurons))) {
+                            throw std::out_of_range("NNet::connect: index out-of-range!");
+                        }
+                        _connections.push_back({.itx = itx, .irx = irx});
+                        _weights.push_back(0.0_real);
+                    }
+                }
+            }
+            // Connect neurons (zip)
+            void zip_connect(IndexRange auto &&itxs, IndexRange auto &&irxs) {
+                auto itx = std::ranges::begin(itxs);
+                auto irx = std::ranges::begin(irxs);
+                while (itx != std::ranges::end(itxs) && irx != std::ranges::end(irxs)) {
+                    connect(std::views::single(*itx), std::views::single(*irx));
+                    ++itx;
+                    ++irx;
+                }
+                if (itx != std::ranges::end(itxs) || irx != std::ranges::end(irxs)) {
+                    throw std::invalid_argument("NNet::zip_connect: size error!");
+                }
             }
             // Sort connections per irx and itx
             static void sort_connections(const std::span<SynapticConn> connections) {

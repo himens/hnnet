@@ -34,7 +34,7 @@ namespace metal {
         uint rx_count;
         uint weight_offset;
         uint weight_stride;
-        uint bias_neuron;
+        uint ibias;
     };
 
     inline float activate(const ActivationDescriptor descriptor, const float value) {
@@ -112,9 +112,9 @@ kernel void hnnet_dense_activation(
     const uint sample_offset = (item / layer.rx_count) * parameters.neuron_count;
     const uint offset = sample_offset + neuron;
     float sum = weighted_sums[offset];
-    if (layer.bias_neuron != 0xffffffffu) {
+    if (layer.ibias != 0xffffffffu) {
         sum += weights[layer.weight_offset + row * layer.weight_stride + layer.tx_count]
-            * signals[sample_offset + layer.bias_neuron];
+            * signals[sample_offset + layer.ibias];
     }
     weighted_sums[offset] = sum;
     signals[offset] = activate(activations[neuron], sum);
@@ -156,7 +156,7 @@ kernel void hnnet_bias_gradient(
     float sum = 0.0f;
     for (uint sample = 0; sample < parameters.batch_size; ++sample) {
         const uint offset = sample * parameters.neuron_count;
-        sum += deltas[offset + layer.rx_begin + row] * signals[offset + layer.bias_neuron];
+        sum += deltas[offset + layer.rx_begin + row] * signals[offset + layer.ibias];
     }
     gradient[layer.weight_offset + row * layer.weight_stride + layer.tx_count] = sum / float(parameters.batch_size);
 }

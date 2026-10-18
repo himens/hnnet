@@ -50,13 +50,15 @@ namespace hnnet::net {
                     NNet::train(*this, inputs, targets, rule);
                 }
         protected:
+            // Constructor
+            DAGNet() = default;
             // Update net state
             void update_state(State &state) const override {
                 propagate_signals(state);
             }
-            // Prepare net (order partitions topologically, find dense blocks...)
-            void prepare() override {
-                NNet::prepare(); 
+            // Initialize net
+            void init() override final {
+                NNet::init();
                 auto connections = this->connections();
                 auto partitions = this->partitions();
                 auto neurons = this->neurons();
@@ -88,7 +90,7 @@ namespace hnnet::net {
                     }
                 }
                 if (visited_count != std::ssize(neurons)) {
-                    throw std::runtime_error("DAGNet::prepare: net contains a cycle, topological order does not exist!");
+                    throw std::runtime_error("DAGNet::init: net contains a cycle, topological order does not exist!");
                 }
                 // sort partitions per topological rank
                 std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.irx] < topo_ranks[rhs.irx]; });

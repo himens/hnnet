@@ -27,7 +27,7 @@ namespace hnnet::net {
     ///////////////////////////
     // DenseForwardNet class //
     ///////////////////////////
-    class DenseForwardNet : public DAGNet {
+    class DenseForwardNet final : public DAGNet {
         public:
             struct Layer {
                 index_t tx_begin;
@@ -36,7 +36,7 @@ namespace hnnet::net {
                 int_t rx_count;
                 index_t weight_offset;
                 int_t weight_stride;
-                index_t bias_neuron;
+                index_t ibias;
             };
             // Constructor
             template <DenseLayerType... Layers>
@@ -50,31 +50,32 @@ namespace hnnet::net {
                     }
                     auto view = this->view();
                     auto tx_begin = view.neuron_count();
-                    auto tx_neurons = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
+                    auto itxs = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
                     auto connect_layer = [&] (const auto &layer) {
                         const auto rx_begin = view.neuron_count();
                         const auto weight_offset = view.connection_count();
-                        const auto rx_neurons = this->new_neurons(layer.size, layer.type, layer.activation);
-                        this->connect(tx_neurons, rx_neurons);
-                        index_t bias_neuron{-1};
+                        const auto irxs = this->new_neurons(layer.size, layer.type, layer.activation);
+                        this->connect(itxs, irxs);
+                        index_t ibias{-1};
                         if (layer.biased) {
                             const auto bias = this->new_neurons(1, NeuronType::bias, activation::Identity{});
-                            this->connect(bias, rx_neurons);
-                            bias_neuron = bias.front();
+                            this->connect(bias, irxs);
+                            ibias = bias.front();
                         }
                         _layers.push_back({.tx_begin = tx_begin, 
-                                           .tx_count = std::ssize(tx_neurons), 
+                                           .tx_count = std::ssize(itxs), 
                                            .rx_begin = rx_begin, 
-                                           .rx_count = std::ssize(rx_neurons),
+                                           .rx_count = std::ssize(irxs),
                                            .weight_offset = weight_offset, 
-                                           .weight_stride = std::ssize(tx_neurons) + layer.biased, 
-                                           .bias_neuron = bias_neuron});
+                                           .weight_stride = std::ssize(itxs) + layer.biased, 
+                                           .ibias = ibias});
                         tx_begin = rx_begin;
-                        tx_neurons = rx_neurons;
+                        itxs = irxs;
                     };
                     [&]<size_t... I>(std::index_sequence<I...>) {
                         (connect_layer(layers...[I + 1]), ...);
                     }(std::make_index_sequence<sizeof...(Layers) - 1>{});
+                    init();
                 }
             // Train net using a set of training samples
             template <DatasetType Inputs, DatasetType Targets, LearningRuleType<DenseForwardNet, Inputs, Targets> LearningRule>

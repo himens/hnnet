@@ -58,8 +58,8 @@ namespace hnnet::backprop::metal {
                             _layers.push_back(Layer{{detail::checked_count(layer.tx_begin), detail::checked_count(layer.tx_count),
                                                     detail::checked_count(layer.rx_begin), detail::checked_count(layer.rx_count),
                                                     detail::checked_count(layer.weight_offset), detail::checked_count(layer.weight_stride),
-                                                    layer.bias_neuron < 0 ? std::numeric_limits<std::uint32_t>::max()
-                                                                          : detail::checked_count(layer.bias_neuron)}});
+                                                    layer.ibias < 0 ? std::numeric_limits<std::uint32_t>::max()
+                                                                          : detail::checked_count(layer.ibias)}});
                         }
                         std::vector<detail::ActivationDescriptor> activations;
                         std::vector<std::uint32_t> input_positions(neuron_count, std::numeric_limits<std::uint32_t>::max());
@@ -73,8 +73,8 @@ namespace hnnet::backprop::metal {
                             input_positions[input_layer.tx_begin + input] = input;
                         }
                         for (const auto &layer : _layers) {
-                            if (layer.shape.bias_neuron != std::numeric_limits<std::uint32_t>::max()) {
-                                input_positions[layer.shape.bias_neuron] = 0xfffffffeu;
+                            if (layer.shape.ibias != std::numeric_limits<std::uint32_t>::max()) {
+                                input_positions[layer.shape.ibias] = 0xfffffffeu;
                             }
                         }
                         _parameters = {neuron_count, connection_count,
@@ -188,7 +188,7 @@ namespace hnnet::backprop::metal {
                     std::uint32_t rx_count;
                     std::uint32_t weight_offset;
                     std::uint32_t weight_stride;
-                    std::uint32_t bias_neuron;
+                    std::uint32_t ibias;
                 };
                 struct Layer {
                     DenseLayer shape;
@@ -275,7 +275,7 @@ namespace hnnet::backprop::metal {
                         [encoder setBuffer:_propagated_deltas offset:0 atIndex:7];
                         detail::dispatch(encoder, _delta_pipeline, detail::checked_product(parameters.batch_size, layer.shape.rx_count));
                         [layer.gradient encodeToCommandBuffer:command leftMatrix:layer.delta rightMatrix:layer.input resultMatrix:layer.weight_gradient];
-                        if (layer.shape.bias_neuron != std::numeric_limits<std::uint32_t>::max()) {
+                        if (layer.shape.ibias != std::numeric_limits<std::uint32_t>::max()) {
                             auto bias_encoder = detail::encoder(command, _bias_pipeline);
                             [bias_encoder setBytes:&parameters length:sizeof(parameters) atIndex:0];
                             [bias_encoder setBytes:&layer.shape length:sizeof(layer.shape) atIndex:1];
