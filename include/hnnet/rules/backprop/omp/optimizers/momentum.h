@@ -28,10 +28,10 @@ namespace hnnet::backprop::omp::optimizer {
             // Update the weights
             void update(std::span<real_t> weights, std::span<const real_t> gradient) {
                 //#pragma omp parallel for
-                for (index_t iconn = 0; iconn < std::ssize(gradient); ++iconn) {
-                    const auto delta = - (_learning_rate * gradient[iconn]) + (_momentum * _previous_delta[iconn]);
-                    weights[iconn] += delta;
-                    _previous_delta[iconn] = delta;
+                for (index_t connection_index = 0; connection_index < std::ssize(gradient); ++connection_index) {
+                    const auto delta = - (_learning_rate * gradient[connection_index]) + (_momentum * _previous_delta[connection_index]);
+                    weights[connection_index] += delta;
+                    _previous_delta[connection_index] = delta;
                 }
             }
         private:

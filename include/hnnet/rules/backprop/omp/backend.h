@@ -55,22 +55,22 @@ namespace hnnet::backprop::omp {
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
                     const auto thread_count = parallel ? std::ssize(_states) : index_t{1};
-                    for (auto tid{0}; tid < thread_count; ++tid) {
-                        std::ranges::fill(_gradients[tid], 0.0_real);
+                    for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
+                        std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
                     real_t loss{0.0_real};
                     #pragma omp parallel for if(parallel) reduction(+:loss)
-                    for (auto isample = batch_begin; isample < batch_end; ++isample) {
-                        const auto tid = omp_get_thread_num();
-                        net.update(_states[tid], _inputs[isample]);
-                        loss += backward(view, tid, isample, loss_function);
+                    for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
+                        const auto thread_index = omp_get_thread_num();
+                        net.update(_states[thread_index], _inputs[sample_index]);
+                        loss += backward(view, thread_index, sample_index, loss_function);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
-                        for (auto tid{0}; tid < thread_count; ++tid) {
-                            const auto &gradient = _gradients[tid];
-                            for (auto iconn{0}; iconn < view.connection_count(); ++iconn) {
-                                _batch_gradient[iconn] += gradient[iconn] / batch_size;
+                        for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
+                            const auto &gradient = _gradients[thread_index];
+                            for (auto connection_index{0}; connection_index < view.connection_count(); ++connection_index) {
+                                _batch_gradient[connection_index] += gradient[connection_index] / batch_size;
                             }
                         }
                     }
@@ -82,76 +82,76 @@ namespace hnnet::backprop::omp {
             protected:
                 // Compute the error and delta weights contribution of a single sample
                 real_t backward(net::DAGNet::View &view,
-                                const index_t tid,
-                                const index_t isample,
+                                const index_t thread_index,
+                                const index_t sample_index,
                                 const LossType auto &loss_function) {
-                    auto &state = _states[tid];
-                    auto &deltas = _deltas[tid];
-                    auto &gradient = _gradients[tid];
-                    const auto targets = _targets[isample];
+                    auto &state = _states[thread_index];
+                    auto &deltas = _deltas[thread_index];
+                    auto &gradient = _gradients[thread_index];
+                    const auto targets = _targets[sample_index];
                     const auto neurons = view.neurons();
                     const auto connections = view.connections();
                     const auto weights = view.weights();
                     const auto partitions = view.partitions();
-                    const auto output_neurons = view.iout_neurons();
+                    const auto output_neurons_indices = view.output_neurons_indices();
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss{0.0_real};
-                    for (const auto &[target, iout] : std::views::zip(targets, output_neurons)) {
-                        const auto signal = state.signals[iout];
+                    for (const auto &[target, output_neuron_index] : std::views::zip(targets, output_neurons_indices)) {
+                        const auto signal = state.signals[output_neuron_index];
                         loss += loss_function(target, signal);
-                        deltas[iout] = loss_function.derivative(target, signal) * neurons[iout].activation()->derivative(state.weighted_sums[iout]);
+                        deltas[output_neuron_index] = loss_function.derivative(target, signal) * neurons[output_neuron_index].activation()->derivative(state.weighted_sums[output_neuron_index]);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
-                    for (auto ipart = std::ssize(partitions) - 1; ipart >= 0; --ipart) {
-                        if (view.is_dense(ipart)) {
-                            const auto &block = view.dense_block(ipart);
-                            for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                const auto irx = block.rx_begin + irow;
-                                const auto &neuron = neurons[irx];
-                                auto &delta = deltas[irx];
+                    for (auto partition_index = std::ssize(partitions) - 1; partition_index >= 0; --partition_index) {
+                        if (view.is_dense(partition_index)) {
+                            const auto &block = view.dense_block(partition_index);
+                            for (auto row_index{0}; row_index < block.rx_count; ++row_index) {
+                                const auto rx_neuron_index = block.rx_begin + row_index;
+                                const auto &neuron = neurons[rx_neuron_index];
+                                auto &delta = deltas[rx_neuron_index];
                                 if (neuron.type() != NeuronType::output) {
-                                    delta *= neuron.activation()->derivative(state.weighted_sums[irx]);
+                                    delta *= neuron.activation()->derivative(state.weighted_sums[rx_neuron_index]);
                                 }
-                                const auto row_offset = block.weight_offset + irow * block.tx_count;
-                                for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    deltas[block.tx_begin + icol] += delta * weights[row_offset + icol];
+                                const auto row_offset = block.weight_offset + row_index * block.tx_count;
+                                for (auto column_index{0}; column_index < block.tx_count; ++column_index) {
+                                    deltas[block.tx_begin + column_index] += delta * weights[row_offset + column_index];
                                 }
                             }
-                            ipart -= block.rx_count - 1;
+                            partition_index -= block.rx_count - 1;
                         }
                         else {
-                            const auto &partition = partitions[ipart];
-                            const auto &neuron = neurons[partition.irx];
-                            auto &delta = deltas[partition.irx];
+                            const auto &partition = partitions[partition_index];
+                            const auto &neuron = neurons[partition.rx_neuron_index];
+                            auto &delta = deltas[partition.rx_neuron_index];
                             if (neuron.type() != NeuronType::output) {
-                                delta *= neuron.activation()->derivative(state.weighted_sums[partition.irx]);
+                                delta *= neuron.activation()->derivative(state.weighted_sums[partition.rx_neuron_index]);
                             }
-                            for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                                const auto itx = connections[iconn].itx;
-                                deltas[itx] += delta * weights[iconn];
+                            for (const auto &connection_index : std::views::iota(partition.conn_begin, partition.conn_end)) {
+                                const auto tx_neuron_index = connections[connection_index].tx_neuron_index;
+                                deltas[tx_neuron_index] += delta * weights[connection_index];
                             }
                         }
                     }
                     // compute gradient (sum gradient since a thread could process multiple samples)
-                    for (auto ipart{0}; ipart < std::ssize(partitions); ++ipart) {
-                        if (view.is_dense(ipart)) {
-                            const auto &block = view.dense_block(ipart);
-                            for (auto irow{0}; irow < block.rx_count; ++irow) {
-                                const auto delta = deltas[block.rx_begin + irow];
-                                const auto row_offset = block.weight_offset + irow * block.tx_count;
-                                for (auto icol{0}; icol < block.tx_count; ++icol) {
-                                    gradient[row_offset + icol] += delta * state.signals[block.tx_begin + icol];
+                    for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
+                        if (view.is_dense(partition_index)) {
+                            const auto &block = view.dense_block(partition_index);
+                            for (auto row_index{0}; row_index < block.rx_count; ++row_index) {
+                                const auto delta = deltas[block.rx_begin + row_index];
+                                const auto row_offset = block.weight_offset + row_index * block.tx_count;
+                                for (auto column_index{0}; column_index < block.tx_count; ++column_index) {
+                                    gradient[row_offset + column_index] += delta * state.signals[block.tx_begin + column_index];
                                 }
                             }
-                            ipart += block.rx_count - 1;
+                            partition_index += block.rx_count - 1;
                         }
                         else {
-                            const auto &partition = partitions[ipart];
-                            for (const auto &iconn : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                                const auto irx = connections[iconn].irx;
-                                const auto itx = connections[iconn].itx;
-                                gradient[iconn] += deltas[irx] * state.signals[itx];
+                            const auto &partition = partitions[partition_index];
+                            for (const auto &connection_index : std::views::iota(partition.conn_begin, partition.conn_end)) {
+                                const auto rx_neuron_index = connections[connection_index].rx_neuron_index;
+                                const auto tx_neuron_index = connections[connection_index].tx_neuron_index;
+                                gradient[connection_index] += deltas[rx_neuron_index] * state.signals[tx_neuron_index];
                             }
                         }
                     }

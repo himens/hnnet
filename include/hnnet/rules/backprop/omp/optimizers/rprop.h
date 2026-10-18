@@ -31,16 +31,16 @@ namespace hnnet::backprop::omp::optimizer {
             // Update the weights
             void update(std::span<real_t> weights, std::span<const real_t> gradient) {
                 //#pragma omp parallel for
-                for (index_t iconn = 0; iconn < std::ssize(gradient); ++iconn) {
+                for (index_t connection_index = 0; connection_index < std::ssize(gradient); ++connection_index) {
                     constexpr real_t delta_min{1e-6_real};
                     constexpr real_t delta_max{50.0_real};
-                    auto &delta = _delta[iconn];
-                    auto &previous_gradient = _previous_gradient[iconn];
-                    const auto &grad = gradient[iconn];
+                    auto &delta = _delta[connection_index];
+                    auto &previous_gradient = _previous_gradient[connection_index];
+                    const auto &grad = gradient[connection_index];
                     const auto sign_product = previous_gradient * grad;
                     if (sign_product > 0_real) {
                         delta = utils::math::min(_eta_plus * delta, delta_max);
-                        weights[iconn] += -utils::math::sign(grad) * delta;
+                        weights[connection_index] += -utils::math::sign(grad) * delta;
                         previous_gradient = grad;
                     }
                     else if (sign_product < 0_real) {
@@ -48,7 +48,7 @@ namespace hnnet::backprop::omp::optimizer {
                         previous_gradient = 0.0_real;
                     }
                     else {
-                        weights[iconn] += -utils::math::sign(grad) * delta;
+                        weights[connection_index] += -utils::math::sign(grad) * delta;
                         previous_gradient = grad;
                     }
                 }
