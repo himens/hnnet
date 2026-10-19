@@ -126,8 +126,8 @@ namespace hnnet {
                 static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_output_neurons_indices.size());
-                for (const auto &[output_index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
-                    outputs[output_index] = state.signals[neuron_index];
+                for (const auto &index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
+                    outputs[index] = state.signals[neuron_index];
                 }
                 return outputs;
             }
@@ -149,7 +149,7 @@ namespace hnnet {
             };
             // Initialize common topology data after the derived network has constructed it
             virtual void init() {
-                if (find_duplicate_connection(_connections)) {
+                if (has_duplicate_connection(_connections)) {
                     throw std::invalid_argument("NNet::init: duplicate connection!");
                 }
                 sort_connections(_connections);
@@ -180,12 +180,12 @@ namespace hnnet {
             }
              // Create new neurons
             template <ActivationType Activation>
-                index_vector_t new_neurons(const int_t number, const NeuronType &type, const Activation &activation) {
-                    if (number < 0) {
-                        throw std::invalid_argument("NNet::new_neurons: invalid number!");
+                index_vector_t new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
+                    if (count < 0) {
+                        throw std::invalid_argument("NNet::new_neurons: invalid count!");
                     }
                     _trained = false;
-                    for (auto neuron_creation_index{0}; neuron_creation_index < number; ++neuron_creation_index) {
+                    for (auto count_index{0}; count_index < count ; ++count_index) {
                         const auto new_neuron_index = std::ssize(_neurons);
                         _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
                         switch (type) {
@@ -222,12 +222,12 @@ namespace hnnet {
             void zip_connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
                 auto tx_iterator = std::ranges::begin(tx_indices);
                 auto rx_iterator = std::ranges::begin(rx_indices);
-                while (tx_iterator != std::ranges::end(tx_indices) && rx_iterator != std::ranges::end(rx_indices)) {
-                    connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator));
+                while ((tx_iterator != std::ranges::end(tx_indices)) and (rx_iterator != std::ranges::end(rx_indices)) {
+                    connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator)));
                     ++tx_iterator;
                     ++rx_iterator;
                 }
-                if (tx_iterator != std::ranges::end(tx_indices) || rx_iterator != std::ranges::end(rx_indices)) {
+                if ((tx_iterator != std::ranges::end(tx_indices)) or (rx_iterator != std::ranges::end(rx_indices))) {
                     throw std::invalid_argument("NNet::zip_connect: size error!");
                 }
             }
@@ -235,11 +235,11 @@ namespace hnnet {
             static void sort_connections(const std::span<SynapticConn> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_index, lhs.tx_index) < std::tie(rhs.rx_index, rhs.tx_index); });
             }
-            // Find for duplicate connections
-            static bool find_duplicate_connection(const std::span<SynapticConn> connections) {
+            // Check for duplicate connections
+            static bool has_duplicate_connection(const std::span<SynapticConn> connections) {
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
-                for (const auto &[connection_index, connection] : connections | std::views::enumerate) {
-                    const auto [it, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, connection_index);
+                for (const auto &[index, connection] : connections | std::views::enumerate) {
+                    const auto [_, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, index);
                     if (not inserted) {
                         return true;
                     }
@@ -256,7 +256,9 @@ namespace hnnet {
                     while ((connection_end < std::ssize(connections)) and (connections[connection_end].rx_index == rx_index)) {
                         ++connection_end;
                     }
-                    partitions.push_back({.rx_index = rx_index, .connection_begin = connection_begin, .connection_end = connection_end});
+                    partitions.push_back({.rx_index        = rx_index, 
+                                         .connection_begin = connection_begin, 
+                                         .connection_end   = connection_end});
                     connection_begin = connection_end;
                 }
                 return partitions;
@@ -264,13 +266,13 @@ namespace hnnet {
         private:
             // Seed a net state from input data
             void seed_state(State &state, const DataType auto &inputs) const {
-                for (const auto &[input_neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
-                    state.weighted_sums[input_neuron_index] = input;
-                    state.signals[input_neuron_index] = _neurons[input_neuron_index].activate(input);
+                for (const auto &[neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
+                    state.weighted_sums[neuron_index] = input;
+                    state.signals[neuron_index] = _neurons[neuron_index].activate(input);
                 }
-                for (const auto &bias_neuron_index : _bias_neurons_indices) {
-                    state.weighted_sums[bias_neuron_index] = 1.0_real;
-                    state.signals[bias_neuron_index] = _neurons[bias_neuron_index].activate(1.0_real);
+                for (const auto &neuron_index : _bias_neurons_indices) {
+                    state.weighted_sums[neuron_index] = 1.0_real;
+                    state.signals[neuron_index] = _neurons[neuron_index].activate(1.0_real);
                 }
             }
         private:
