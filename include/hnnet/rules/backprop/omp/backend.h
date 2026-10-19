@@ -85,15 +85,15 @@ namespace hnnet::backprop::omp {
                                 const index_t thread_index,
                                 const index_t sample_index,
                                 const LossType auto &loss) {
-                    auto &state = _states[thread_index];
-                    auto &deltas = _deltas[thread_index];
-                    auto &gradient = _gradients[thread_index];
                     const auto targets = _targets[sample_index];
                     const auto neurons = view.neurons();
                     const auto connections = view.connections();
                     const auto weights = view.weights();
                     const auto partitions = view.partitions();
                     const auto output_neurons_indices = view.output_neurons_indices();
+                    auto &state = _states[thread_index];
+                    auto &deltas = _deltas[thread_index];
+                    auto &gradient = _gradients[thread_index];
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss_value{0.0_real};
