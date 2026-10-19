@@ -26,13 +26,13 @@ namespace hnnet {
         public:
             // Data types
             struct SynapticConn {
-                index_t tx_neuron_index;
-                index_t rx_neuron_index;
+                index_t tx_index;
+                index_t rx_index;
             };
             struct Partition {
-                index_t rx_neuron_index;
-                index_t conn_begin;
-                index_t conn_end;
+                index_t rx_index;
+                index_t connection_begin;
+                index_t connection_end;
             };
             struct State {
                 State() = default;
@@ -205,41 +205,41 @@ namespace hnnet {
                     return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
                 }
             // Connect neurons (cartesian product)
-            void connect(IndexRange auto &&tx_neurons_indices, IndexRange auto &&rx_neurons_indices) {
+            void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
                 _trained = false;
-                //for (const auto &[tx_neuron_index, rx_neuron_index] : std::views::cartesian_product(tx_neurons_indices, rx_neurons_indices))
-                for (const auto &tx_neuron_index : tx_neurons_indices) {
-                    for (const auto &rx_neuron_index : rx_neurons_indices) {
-                        if ((tx_neuron_index < 0 or tx_neuron_index >= std::ssize(_neurons)) or (rx_neuron_index < 0 or rx_neuron_index >= std::ssize(_neurons))) {
+                //for (const auto &[tx_index, rx_index] : std::views::cartesian_product(tx_indices, rx_indices))
+                for (const auto &tx_index : tx_indices) {
+                    for (const auto &rx_index : rx_indices) {
+                        if ((tx_index < 0 or tx_index >= std::ssize(_neurons)) or (rx_index < 0 or rx_index >= std::ssize(_neurons))) {
                             throw std::out_of_range("NNet::connect: index out-of-range!");
                         }
-                        _connections.push_back({.tx_neuron_index = tx_neuron_index, .rx_neuron_index = rx_neuron_index});
+                        _connections.push_back({.tx_index = tx_index, .rx_index = rx_index});
                         _weights.push_back(0.0_real);
                     }
                 }
             }
             // Connect neurons (zip)
-            void zip_connect(IndexRange auto &&tx_neurons_indices, IndexRange auto &&rx_neurons_indices) {
-                auto tx_iterator = std::ranges::begin(tx_neurons_indices);
-                auto rx_iterator = std::ranges::begin(rx_neurons_indices);
-                while (tx_iterator != std::ranges::end(tx_neurons_indices) && rx_iterator != std::ranges::end(rx_neurons_indices)) {
+            void zip_connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
+                auto tx_iterator = std::ranges::begin(tx_indices);
+                auto rx_iterator = std::ranges::begin(rx_indices);
+                while (tx_iterator != std::ranges::end(tx_indices) && rx_iterator != std::ranges::end(rx_indices)) {
                     connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator));
                     ++tx_iterator;
                     ++rx_iterator;
                 }
-                if (tx_iterator != std::ranges::end(tx_neurons_indices) || rx_iterator != std::ranges::end(rx_neurons_indices)) {
+                if (tx_iterator != std::ranges::end(tx_indices) || rx_iterator != std::ranges::end(rx_indices)) {
                     throw std::invalid_argument("NNet::zip_connect: size error!");
                 }
             }
             // Sort connections per receiver and transmitter
             static void sort_connections(const std::span<SynapticConn> connections) {
-                std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_neuron_index, lhs.tx_neuron_index) < std::tie(rhs.rx_neuron_index, rhs.tx_neuron_index); });
+                std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_index, lhs.tx_index) < std::tie(rhs.rx_index, rhs.tx_index); });
             }
             // Find for duplicate connections
             static bool find_duplicate_connection(const std::span<SynapticConn> connections) {
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[connection_index, connection] : connections | std::views::enumerate) {
-                    const auto [it, inserted] = hash_map.try_emplace(std::pair{connection.rx_neuron_index, connection.tx_neuron_index}, connection_index);
+                    const auto [it, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, connection_index);
                     if (not inserted) {
                         return true;
                     }
@@ -249,15 +249,15 @@ namespace hnnet {
             // Group connections sharing the same rx into partitions
             static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
                 std::vector<Partition> partitions;
-                index_t conn_begin{0};
-                while (conn_begin < std::ssize(connections)) {
-                    const auto &rx_neuron_index = connections[conn_begin].rx_neuron_index;
-                    auto conn_end = conn_begin + 1;
-                    while ((conn_end < std::ssize(connections)) and (connections[conn_end].rx_neuron_index == rx_neuron_index)) {
-                        ++conn_end;
+                index_t connection_begin{0};
+                while (connection_begin < std::ssize(connections)) {
+                    const auto &rx_index = connections[connection_begin].rx_index;
+                    auto connection_end = connection_begin + 1;
+                    while ((connection_end < std::ssize(connections)) and (connections[connection_end].rx_index == rx_index)) {
+                        ++connection_end;
                     }
-                    partitions.push_back({.rx_neuron_index = rx_neuron_index, .conn_begin = conn_begin, .conn_end = conn_end});
-                    conn_begin = conn_end;
+                    partitions.push_back({.rx_index = rx_index, .connection_begin = connection_begin, .connection_end = connection_end});
+                    connection_begin = connection_end;
                 }
                 return partitions;
             }

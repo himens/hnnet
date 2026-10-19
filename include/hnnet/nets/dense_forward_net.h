@@ -50,27 +50,27 @@ namespace hnnet::net {
                     }
                     auto view = this->view();
                     auto tx_begin = view.neuron_count();
-                    auto tx_neurons_indices = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
+                    auto tx_indices = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
                     auto connect_layer = [&] (const auto &layer) {
                         const auto rx_begin = view.neuron_count();
                         const auto weight_offset = view.connection_count();
-                        const auto rx_neurons_indices = this->new_neurons(layer.size, layer.type, layer.activation);
-                        this->connect(tx_neurons_indices, rx_neurons_indices);
+                        const auto rx_indices = this->new_neurons(layer.size, layer.type, layer.activation);
+                        this->connect(tx_indices, rx_indices);
                         index_t bias_neuron_index{-1};
                         if (layer.biased) {
                             const auto bias_neuron_indices = this->new_neurons(1, NeuronType::bias, activation::Identity{});
-                            this->connect(bias_neuron_indices, rx_neurons_indices);
+                            this->connect(bias_neuron_indices, rx_indices);
                             bias_neuron_index = bias_neuron_indices.front();
                         }
                         _layers.push_back({.tx_begin = tx_begin, 
-                                           .tx_count = std::ssize(tx_neurons_indices),
+                                           .tx_count = std::ssize(tx_indices),
                                            .rx_begin = rx_begin, 
-                                           .rx_count = std::ssize(rx_neurons_indices),
+                                           .rx_count = std::ssize(rx_indices),
                                            .weight_offset = weight_offset, 
-                                           .weight_stride = std::ssize(tx_neurons_indices) + layer.biased,
+                                           .weight_stride = std::ssize(tx_indices) + layer.biased,
                                            .bias_neuron_index = bias_neuron_index});
                         tx_begin = rx_begin;
-                        tx_neurons_indices = rx_neurons_indices;
+                        tx_indices = rx_indices;
                     };
                     [&]<size_t... LayerIndex>(std::index_sequence<LayerIndex...>) {
                         (connect_layer(layers...[LayerIndex + 1]), ...);

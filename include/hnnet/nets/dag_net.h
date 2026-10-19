@@ -63,13 +63,13 @@ namespace hnnet::net {
                 auto partitions = this->partitions();
                 auto neurons = this->neurons();
                 // topologically order partitions (Kahn's algorithm)
-                std::vector<index_vector_t> rx_neurons_indices(neurons.size());
+                std::vector<index_vector_t> rx_indices(neurons.size());
                 for (const auto &connection : connections) {
-                    rx_neurons_indices[connection.tx_neuron_index].push_back(connection.rx_neuron_index);
+                    rx_indices[connection.tx_index].push_back(connection.rx_index);
                 }
                 std::vector<int_t> visits_left(neurons.size(), 0);
                 for (const auto &partition : partitions) {
-                    visits_left[partition.rx_neuron_index] = partition.conn_end - partition.conn_begin;
+                    visits_left[partition.rx_index] = partition.connection_end - partition.connection_begin;
                 }
                 index_vector_t visited_neuron_indices;
                 for (auto neuron_index{0}; neuron_index < std::ssize(neurons); ++neuron_index) {
@@ -83,9 +83,9 @@ namespace hnnet::net {
                     const auto neuron_index = visited_neuron_indices.back();
                     visited_neuron_indices.pop_back();
                     topo_ranks[neuron_index] = visited_count++;
-                    for (const auto &rx_neuron_index : rx_neurons_indices[neuron_index]) {
-                        if (--visits_left[rx_neuron_index] == 0) {
-                            visited_neuron_indices.push_back(rx_neuron_index);
+                    for (const auto &rx_index : rx_indices[neuron_index]) {
+                        if (--visits_left[rx_index] == 0) {
+                            visited_neuron_indices.push_back(rx_index);
                         }
                     }
                 }
@@ -93,15 +93,15 @@ namespace hnnet::net {
                     throw std::runtime_error("DAGNet::init: net contains a cycle, topological order does not exist!");
                 }
                 // sort partitions per topological rank
-                std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_neuron_index] < topo_ranks[rhs.rx_neuron_index]; });
+                std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_index] < topo_ranks[rhs.rx_index]; });
                 // group partitions sharing the exact same (contiguous) tx range
                 _dense_block_indices.assign(std::ssize(partitions), DenseBlock::no_block);
                 UnionFind union_find(partitions.size());
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
-                    const auto count = partition.conn_end - partition.conn_begin;
-                    const auto tx_begin = connections[partition.conn_begin].tx_neuron_index;
-                    if ((connections[partition.conn_end - 1].tx_neuron_index - tx_begin) != (count - 1)) {
+                    const auto count = partition.connection_end - partition.connection_begin;
+                    const auto tx_begin = connections[partition.connection_begin].tx_index;
+                    if ((connections[partition.connection_end - 1].tx_index - tx_begin) != (count - 1)) {
                         continue;  // transmitter range has gaps (e.g. a bias mixed in): not a pure dense candidate
                     }
                     const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, partition_index);
@@ -124,12 +124,12 @@ namespace hnnet::net {
                         continue; // must be contiguous partitions (in topo order)
                     }
                     // sort partition indices per increasing receiver and check their ranges are contiguous
-                    std::ranges::sort(partition_indices, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].rx_neuron_index < partitions[rhs].rx_neuron_index; });
+                    std::ranges::sort(partition_indices, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].rx_index < partitions[rhs].rx_index; });
                     auto contiguous = true;
                     for (auto member_index{1}; member_index < std::ssize(partition_indices); ++member_index) {
                         const auto &prev = partitions[partition_indices[member_index - 1]];
                         const auto &curr = partitions[partition_indices[member_index]];
-                        if ((curr.rx_neuron_index != prev.rx_neuron_index + 1) or (curr.conn_begin != prev.conn_end)) {
+                        if ((curr.rx_index != prev.rx_index + 1) or (curr.connection_begin != prev.connection_end)) {
                             contiguous = false;
                             break;
                         }
@@ -139,11 +139,11 @@ namespace hnnet::net {
                     }
                     // add dense block
                     const auto &first = partitions[partition_indices.front()];
-                    _dense_blocks.push_back({.tx_begin     = connections[first.conn_begin].tx_neuron_index,
-                                            .tx_count      = first.conn_end - first.conn_begin,
-                                            .rx_begin      = first.rx_neuron_index,
+                    _dense_blocks.push_back({.tx_begin     = connections[first.connection_begin].tx_index,
+                                            .tx_count      = first.connection_end - first.connection_begin,
+                                            .rx_begin      = first.rx_index,
                                             .rx_count      = std::ssize(partition_indices),
-                                            .weight_offset = first.conn_begin});
+                                            .weight_offset = first.connection_begin});
                     for (const auto partition_index : partition_indices) {
                         _dense_block_indices[partition_index] = _dense_blocks.size() - 1;
                     }
@@ -206,20 +206,20 @@ namespace hnnet::net {
                 const auto weights = this->weights();
                 const auto connections = this->connections();
                 const auto neurons = this->neurons();
-                auto connection_index = partition.conn_begin;
-                for (; connection_index <= (partition.conn_end - simd_register_size); connection_index += simd_register_size) {
+                auto connection_index = partition.connection_begin;
+                for (; connection_index <= (partition.connection_end - simd_register_size); connection_index += simd_register_size) {
                     weighted_sum += 
-                        + weights[connection_index]     * state.signals[connections[connection_index].tx_neuron_index]
-                        + weights[connection_index + 1] * state.signals[connections[connection_index + 1].tx_neuron_index]
-                        + weights[connection_index + 2] * state.signals[connections[connection_index + 2].tx_neuron_index]
-                        + weights[connection_index + 3] * state.signals[connections[connection_index + 3].tx_neuron_index];
+                        + weights[connection_index]     * state.signals[connections[connection_index].tx_index]
+                        + weights[connection_index + 1] * state.signals[connections[connection_index + 1].tx_index]
+                        + weights[connection_index + 2] * state.signals[connections[connection_index + 2].tx_index]
+                        + weights[connection_index + 3] * state.signals[connections[connection_index + 3].tx_index];
                 }
                 //#pragma omp simd reduction(+:weighted_sum)
-                for (; connection_index < partition.conn_end; connection_index++) {
-                    weighted_sum += weights[connection_index] * state.signals[connections[connection_index].tx_neuron_index];
+                for (; connection_index < partition.connection_end; connection_index++) {
+                    weighted_sum += weights[connection_index] * state.signals[connections[connection_index].tx_index];
                 }
-                state.weighted_sums[partition.rx_neuron_index] = weighted_sum;
-                state.signals[partition.rx_neuron_index] = neurons[partition.rx_neuron_index].activate(weighted_sum);
+                state.weighted_sums[partition.rx_index] = weighted_sum;
+                state.signals[partition.rx_index] = neurons[partition.rx_index].activate(weighted_sum);
             }
             // Propagate signals of a dense block
             void propagate_dense_block(State &state, const DenseBlock &block) const {

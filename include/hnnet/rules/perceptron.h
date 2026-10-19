@@ -50,12 +50,12 @@ namespace hnnet::rule {
                     }
                     // find the partition corresponding to this output neuron
                     for (const auto &partition : view.partitions()) {
-                        if (partition.rx_neuron_index != output_neuron_index) {
+                        if (partition.rx_index != output_neuron_index) {
                             continue;
                         }
-                        for (const auto &connection_index : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                            const auto tx_neuron_index = connections[connection_index].tx_neuron_index;
-                            weights[connection_index] += _learning_rate * target * state.signals[tx_neuron_index];
+                        for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
+                            const auto tx_index = connections[connection_index].tx_index;
+                            weights[connection_index] += _learning_rate * target * state.signals[tx_index];
                         }
                     }
                 }

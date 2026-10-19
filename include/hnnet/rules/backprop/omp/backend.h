@@ -107,11 +107,11 @@ namespace hnnet::backprop::omp {
                         if (view.is_dense(partition_index)) {
                             const auto &block = view.dense_block(partition_index);
                             for (auto row_index{0}; row_index < block.rx_count; ++row_index) {
-                                const auto rx_neuron_index = block.rx_begin + row_index;
-                                const auto &neuron = neurons[rx_neuron_index];
-                                auto &delta = deltas[rx_neuron_index];
+                                const auto rx_index = block.rx_begin + row_index;
+                                const auto &neuron = neurons[rx_index];
+                                auto &delta = deltas[rx_index];
                                 if (neuron.type() != NeuronType::output) {
-                                    delta *= neuron.activation()->derivative(state.weighted_sums[rx_neuron_index]);
+                                    delta *= neuron.activation()->derivative(state.weighted_sums[rx_index]);
                                 }
                                 const auto row_offset = block.weight_offset + row_index * block.tx_count;
                                 for (auto column_index{0}; column_index < block.tx_count; ++column_index) {
@@ -122,14 +122,14 @@ namespace hnnet::backprop::omp {
                         }
                         else {
                             const auto &partition = partitions[partition_index];
-                            const auto &neuron = neurons[partition.rx_neuron_index];
-                            auto &delta = deltas[partition.rx_neuron_index];
+                            const auto &neuron = neurons[partition.rx_index];
+                            auto &delta = deltas[partition.rx_index];
                             if (neuron.type() != NeuronType::output) {
-                                delta *= neuron.activation()->derivative(state.weighted_sums[partition.rx_neuron_index]);
+                                delta *= neuron.activation()->derivative(state.weighted_sums[partition.rx_index]);
                             }
-                            for (const auto &connection_index : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                                const auto tx_neuron_index = connections[connection_index].tx_neuron_index;
-                                deltas[tx_neuron_index] += delta * weights[connection_index];
+                            for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
+                                const auto tx_index = connections[connection_index].tx_index;
+                                deltas[tx_index] += delta * weights[connection_index];
                             }
                         }
                     }
@@ -148,10 +148,10 @@ namespace hnnet::backprop::omp {
                         }
                         else {
                             const auto &partition = partitions[partition_index];
-                            for (const auto &connection_index : std::views::iota(partition.conn_begin, partition.conn_end)) {
-                                const auto rx_neuron_index = connections[connection_index].rx_neuron_index;
-                                const auto tx_neuron_index = connections[connection_index].tx_neuron_index;
-                                gradient[connection_index] += deltas[rx_neuron_index] * state.signals[tx_neuron_index];
+                            for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
+                                const auto rx_index = connections[connection_index].rx_index;
+                                const auto tx_index = connections[connection_index].tx_index;
+                                gradient[connection_index] += deltas[rx_index] * state.signals[tx_index];
                             }
                         }
                     }
