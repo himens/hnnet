@@ -98,9 +98,10 @@ namespace hnnet::backprop::omp {
                     // compute loss and output deltas
                     real_t loss_value{0.0_real};
                     for (const auto &[target, neuron_index] : std::views::zip(targets, output_neurons_indices)) {
-                        const auto signal = state.signals[neuron_index];
+                        const auto &signal = state.signals[neuron_index];
                         const auto &weighted_sum = state.weighted_sums[neuron_index];
-                        deltas[neuron_index] = loss.derivative(target, signal) * neurons[neuron_index].activation()->derivative(weighted_sum);
+                        const auto &neuron = neurons[neuron_index];
+                        deltas[neuron_index] = loss.derivative(target, signal) * neuron.activation()->derivative(weighted_sum);
                         loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
