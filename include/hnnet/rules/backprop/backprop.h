@@ -14,9 +14,7 @@ namespace hnnet::rule {
         class Backprop {
             public:
                 // Constructor
-                explicit Backprop(Backend backend,
-                                  Loss loss,
-                                  const int_t batch_size) : _backend(std::move(backend)), _loss(std::move(loss)), _batch_size(batch_size) {
+                explicit Backprop(Backend backend, Loss loss, const int_t batch_size) : _backend(std::move(backend)), _loss(std::move(loss)), _batch_size(batch_size) {
                     if (batch_size == 0) {
                         throw std::invalid_argument("Backprop::Backprop: batch_size must not be zero");
                     }
@@ -38,15 +36,15 @@ namespace hnnet::rule {
                         const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
                         const auto batch_count = utils::math::ceil_div(sample_count, batch_size);
                         _backend.to_device(net, inputs, targets);
-                        real_t loss{0.0_real};
-                        for (auto ibatch{0}; ibatch < batch_count; ++ibatch) {
-                            const auto batch_begin = ibatch * batch_size;
+                        real_t loss_value{0.0_real};
+                        for (auto batch_index{0}; batch_index < batch_count; ++batch_index) {
+                            const auto batch_begin = batch_index * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
-                            loss += _backend.backprop(net, batch_begin, batch_end, _loss);
+                            loss_value += _backend.backprop(net, batch_begin, batch_end, _loss);
                         }
                         _backend.to_host(net);
                         std::println("Backprop::learn: average loss: {:.5f}", loss / sample_count);
-                        return loss / sample_count < loss_threshold;
+                        return loss_value / sample_count < loss_threshold;
                     }
             private:
                 // Data members
