@@ -43,7 +43,7 @@ namespace hnnet::rule {
                             loss_value += _backend.backprop(net, batch_begin, batch_end, _loss);
                         }
                         _backend.to_host(net);
-                        std::println("Backprop::learn: average loss: {:.5f}", loss / sample_count);
+                        std::println("Backprop::learn: average loss: {:.5f}", loss_value / sample_count);
                         return loss_value / sample_count < loss_threshold;
                     }
             private:

@@ -58,8 +58,7 @@ namespace hnnet::backprop::metal {
                             _layers.push_back(Layer{{detail::checked_count(layer.tx_begin), detail::checked_count(layer.tx_count),
                                                     detail::checked_count(layer.rx_begin), detail::checked_count(layer.rx_count),
                                                     detail::checked_count(layer.weight_offset), detail::checked_count(layer.weight_stride),
-                                                    layer.bias_neuron_index < 0 ? std::numeric_limits<std::uint32_t>::max()
-                                                                                : detail::checked_count(layer.bias_neuron_index)}});
+                                                    layer.bias_index < 0 ? std::numeric_limits<std::uint32_t>::max() : detail::checked_count(layer.bias_index)}});
                         }
                         std::vector<detail::ActivationDescriptor> activations;
                         std::vector<std::uint32_t> input_positions(neuron_count, std::numeric_limits<std::uint32_t>::max());

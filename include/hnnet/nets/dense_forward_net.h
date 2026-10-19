@@ -49,12 +49,11 @@ namespace hnnet::net {
                     if (layers...[sizeof...(Layers) - 1].type != NeuronType::output) {
                         throw std::invalid_argument("DenseForwardNet::DenseForwardNet: last layer must be of output type!");
                     }
-                    auto view = this->view();
-                    auto tx_begin = view.neuron_count();
+                    auto tx_begin = std::ssize(this->neurons());
                     auto tx_indices = this->new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
                     auto connect_layer = [&] (const auto &layer) {
-                        const auto rx_begin = view.neuron_count();
-                        const auto weight_offset = view.connection_count();
+                        const auto rx_begin = std::ssize(this->neurons());
+                        const auto weight_offset = std::ssize(this->connections());
                         const auto rx_indices = this->new_neurons(layer.size, layer.type, layer.activation);
                         this->connect(tx_indices, rx_indices);
                         index_t bias_index{-1};
@@ -62,13 +61,13 @@ namespace hnnet::net {
                             bias_index = this->new_neurons(1, NeuronType::bias, activation::Identity{}).front();
                             this->connect(std::views::single(bias_index), rx_indices);
                         }
-                        _layers.push_back({.tx_begin = tx_begin, 
-                                           .tx_count = std::ssize(tx_indices),
-                                           .rx_begin = rx_begin, 
-                                           .rx_count = std::ssize(rx_indices),
-                                           .weight_offset = weight_offset, 
-                                           .weight_stride = std::ssize(tx_indices) + layer.biased,
-                                           .bias_index = bias_index});
+                        _layers.push_back({.tx_begin     = tx_begin, 
+                                          .tx_count      = std::ssize(tx_indices),
+                                          .rx_begin      = rx_begin, 
+                                          .rx_count      = std::ssize(rx_indices),
+                                          .weight_offset = weight_offset, 
+                                          .weight_stride = std::ssize(tx_indices) + layer.biased,
+                                          .bias_index    = bias_index});
                         tx_begin = rx_begin;
                         tx_indices = rx_indices;
                     };

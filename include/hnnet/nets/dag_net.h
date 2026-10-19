@@ -64,12 +64,12 @@ namespace hnnet::net {
                 auto neurons = this->neurons();
                 // topologically order partitions (Kahn's algorithm)
                 std::vector<index_vector_t> rx_indices(neurons.size());
-                for (const auto &connection : connections) {
-                    rx_indices[connection.tx_index].push_back(connection.rx_index);
+                for (const auto &[tx_index, rx_index] : connections) {
+                    rx_indices[tx_index].push_back(rx_index);
                 }
                 std::vector<int_t> visits_left(neurons.size(), 0);
-                for (const auto &partition : partitions) {
-                    visits_left[partition.rx_index] = partition.connection_end - partition.connection_begin;
+                for (const auto &[rx_index, connection_begin, connection_end] : partitions) {
+                    visits_left[rx_index] = connection_end - connection_begin;
                 }
                 index_vector_t visited_indices;
                 for (auto neuron_index{0}; neuron_index < std::ssize(neurons); ++neuron_index) {
@@ -92,7 +92,6 @@ namespace hnnet::net {
                 if (visited_count != std::ssize(neurons)) {
                     throw std::runtime_error("DAGNet::init: net contains a cycle, topological order does not exist!");
                 }
-                // sort partitions per topological rank
                 std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_index] < topo_ranks[rhs.rx_index]; });
                 // group partitions sharing the exact same (contiguous) tx range
                 _dense_block_indices.assign(std::ssize(partitions), DenseBlock::no_block);
@@ -101,8 +100,8 @@ namespace hnnet::net {
                 for (const auto &[index, partition] : partitions | std::views::enumerate) {
                     const auto count = (partition.connection_end - partition.connection_begin);
                     const auto tx_begin = connections[partition.connection_begin].tx_index;
-                    if ((connections[partition.connection_end - 1].tx_index - tx_begin) != (count - 1)) {
-                        continue;  // transmitter range has gaps (e.g. a bias mixed in): not a pure dense candidate
+                    if ((connections[partition.connection_end - 1].tx_index - tx_begin) != count - 1) {
+                        continue;  // tx range has gaps: not a pure dense candidate
                     }
                     const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, index);
                     if (not inserted) {
@@ -115,7 +114,7 @@ namespace hnnet::net {
                 }
                 // find dense blocks
                 _dense_blocks.clear();
-                for (auto &[root_index, partition_indices] : groups) {
+                for (auto &[_, partition_indices] : groups) {
                     if (partition_indices.size() < 2) {
                         continue;  // no gain grouping a single receiver
                     }

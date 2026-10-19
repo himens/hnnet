@@ -125,7 +125,7 @@ namespace hnnet {
                 static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_output_neurons_indices.size());
-                for (const auto &index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
+                for (const auto &[index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
                     outputs[index] = state.signals[neuron_index];
                 }
                 return outputs;
@@ -151,7 +151,6 @@ namespace hnnet {
                 if (has_duplicate_connection(_connections)) {
                     throw std::invalid_argument("NNet::init: duplicate connection!");
                 }
-                sort_connections(_connections);
                 _partitions = make_partitions(_connections);
                 std::println("NNet::init: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
             }
@@ -176,14 +175,14 @@ namespace hnnet {
             std::span<SynapticConn> connections() {
                 return _connections;
             }
-             // Create new neurons
+            // Create new neurons
             template <ActivationType Activation>
                 index_vector_t new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
                     if (count < 0) {
                         throw std::invalid_argument("NNet::new_neurons: invalid count!");
                     }
                     _trained = false;
-                    for (auto count_index{0}; count_index < count ; ++count_index) {
+                    for (auto count_index{0}; count_index < count; ++count_index) {
                         const auto new_neuron_index = std::ssize(_neurons);
                         _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
                         switch (type) {
@@ -200,7 +199,7 @@ namespace hnnet {
                                 break;
                         }
                     }
-                    return std::views::iota(_neurons.size() - number, _neurons.size()) | std::ranges::to<index_vector_t>();
+                    return std::views::iota(_neurons.size() - count, _neurons.size()) | std::ranges::to<index_vector_t>();
                 }
             // Connect neurons (cartesian product)
             void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
@@ -219,18 +218,14 @@ namespace hnnet {
             void zip_connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
                 auto tx_iterator = std::ranges::begin(tx_indices);
                 auto rx_iterator = std::ranges::begin(rx_indices);
-                while ((tx_iterator != std::ranges::end(tx_indices)) and (rx_iterator != std::ranges::end(rx_indices)) {
-                    connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator)));
+                while ((tx_iterator != std::ranges::end(tx_indices)) and (rx_iterator != std::ranges::end(rx_indices))) {
+                    connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator));
                     ++tx_iterator;
                     ++rx_iterator;
                 }
                 if ((tx_iterator != std::ranges::end(tx_indices)) or (rx_iterator != std::ranges::end(rx_indices))) {
                     throw std::invalid_argument("NNet::zip_connect: size error!");
                 }
-            }
-            // Sort connections per receiver and transmitter
-            static void sort_connections(const std::span<SynapticConn> connections) {
-                std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_index, lhs.tx_index) < std::tie(rhs.rx_index, rhs.tx_index); });
             }
             // Check for duplicate connections
             static bool has_duplicate_connection(const std::span<SynapticConn> connections) {
@@ -245,6 +240,7 @@ namespace hnnet {
             }
             // Group connections sharing the same rx into partitions
             static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
+                std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_index, lhs.tx_index) < std::tie(rhs.rx_index, rhs.tx_index); });
                 std::vector<Partition> partitions;
                 index_t connection_begin{0};
                 while (connection_begin < std::ssize(connections)) {
@@ -253,9 +249,7 @@ namespace hnnet {
                     while ((connection_end < std::ssize(connections)) and (connections[connection_end].rx_index == rx_index)) {
                         ++connection_end;
                     }
-                    partitions.push_back({.rx_index        = rx_index, 
-                                         .connection_begin = connection_begin, 
-                                         .connection_end   = connection_end});
+                    partitions.push_back({.rx_index = rx_index, .connection_begin = connection_begin, .connection_end = connection_end});
                     connection_begin = connection_end;
                 }
                 return partitions;

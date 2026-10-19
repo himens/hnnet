@@ -153,8 +153,7 @@ namespace hnnet::backprop::omp {
                         else {
                             const auto &partition = partitions[partition_index];
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
-                                const auto rx_index = connections[connection_index].rx_index;
-                                const auto tx_index = connections[connection_index].tx_index;
+                                const auto &[tx_index, rx_index] = connections[connection_index];
                                 gradient[connection_index] += deltas[rx_index] * state.signals[tx_index];
                             }
                         }
