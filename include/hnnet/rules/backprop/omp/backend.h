@@ -50,7 +50,7 @@ namespace hnnet::backprop::omp {
                 real_t backprop(net::DAGNet &net,
                                 const index_t batch_begin,
                                 const index_t batch_end,
-                                const LossType auto &loss_function) {
+                                const LossType auto &loss) {
                     auto view = net.view();
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
@@ -58,12 +58,12 @@ namespace hnnet::backprop::omp {
                     for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
                         std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
-                    real_t loss{0.0_real};
-                    #pragma omp parallel for if(parallel) reduction(+:loss)
+                    real_t loss_value{0.0_real};
+                    #pragma omp parallel for if(parallel) reduction(+:loss_value)
                     for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
                         const auto thread_index = omp_get_thread_num();
                         net.update(_states[thread_index], _inputs[sample_index]);
-                        loss += backward(view, thread_index, sample_index, loss_function);
+                        loss_value += backward(view, thread_index, sample_index, loss);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
@@ -75,7 +75,7 @@ namespace hnnet::backprop::omp {
                         }
                     }
                     _optimizer.update(_weights, parallel ? _batch_gradient : _gradients.front());
-                    return loss;
+                    return loss_value;
                 }
                 // Transfer the net to host memory (if needed)
                 void to_host(net::DAGNet &) {}
@@ -84,7 +84,7 @@ namespace hnnet::backprop::omp {
                 real_t backward(net::DAGNet::View &view,
                                 const index_t thread_index,
                                 const index_t sample_index,
-                                const LossType auto &loss_function) {
+                                const LossType auto &loss) {
                     auto &state = _states[thread_index];
                     auto &deltas = _deltas[thread_index];
                     auto &gradient = _gradients[thread_index];
@@ -96,11 +96,12 @@ namespace hnnet::backprop::omp {
                     const auto output_neurons_indices = view.output_neurons_indices();
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
-                    real_t loss{0.0_real};
-                    for (const auto &[target, output_neuron_index] : std::views::zip(targets, output_neurons_indices)) {
-                        const auto signal = state.signals[output_neuron_index];
-                        loss += loss_function(target, signal);
-                        deltas[output_neuron_index] = loss_function.derivative(target, signal) * neurons[output_neuron_index].activation()->derivative(state.weighted_sums[output_neuron_index]);
+                    real_t loss_value{0.0_real};
+                    for (const auto &[target, neuron_index] : std::views::zip(targets, output_neurons_indices)) {
+                        const auto signal = state.signals[neuron_index];
+                        const auto &weighted_sum = state.weighted_sums[neuron_index];
+                       deltas[neuron_index] = loss.derivative(target, signal) * neurons[neuron_index].activation()->derivative(weighted_sum);
+                        loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
                     for (auto partition_index = std::ssize(partitions) - 1; partition_index >= 0; --partition_index) {
@@ -108,10 +109,11 @@ namespace hnnet::backprop::omp {
                             const auto &block = view.dense_block(partition_index);
                             for (auto row_index{0}; row_index < block.rx_count; ++row_index) {
                                 const auto rx_index = block.rx_begin + row_index;
-                                const auto &neuron = neurons[rx_index];
+                                const auto &rx_neuron = neurons[rx_index];
                                 auto &delta = deltas[rx_index];
-                                if (neuron.type() != NeuronType::output) {
-                                    delta *= neuron.activation()->derivative(state.weighted_sums[rx_index]);
+                                if (rx_neuron.type() != NeuronType::output) {
+                                    const auto &weighted_sum = state.weighted_sums[rx_index];
+                                    delta *= rx_neuron.activation()->derivative(weighted_sum);
                                 }
                                 const auto row_offset = block.weight_offset + row_index * block.tx_count;
                                 for (auto column_index{0}; column_index < block.tx_count; ++column_index) {
@@ -122,10 +124,11 @@ namespace hnnet::backprop::omp {
                         }
                         else {
                             const auto &partition = partitions[partition_index];
-                            const auto &neuron = neurons[partition.rx_index];
+                            const auto &rx_neuron = neurons[partition.rx_index];
                             auto &delta = deltas[partition.rx_index];
-                            if (neuron.type() != NeuronType::output) {
-                                delta *= neuron.activation()->derivative(state.weighted_sums[partition.rx_index]);
+                            if (rx_neuron.type() != NeuronType::output) {
+                                const auto &weighted_sum = state.weighted_sums[partition.rx_index];
+                                delta *= rx_neuron.activation()->derivative(weighted_sum);
                             }
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                                 const auto tx_index = connections[connection_index].tx_index;
@@ -155,7 +158,7 @@ namespace hnnet::backprop::omp {
                             }
                         }
                     }
-                    return loss;
+                    return loss_value;
                 }
             protected:
                 // Data members
