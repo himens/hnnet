@@ -93,7 +93,6 @@ namespace hnnet {
                     std::println("NNet::train: ==================================");
                     timer.start();
                     _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
-                    _trained = false;
                     rule.init(self);
                     for (const auto &[input, target] : std::views::zip(inputs, targets)) {
                         if (std::ssize(input) != std::ssize(_input_neurons_indices) or (std::ssize(target) != std::ssize(_output_neurons_indices))) {
@@ -154,7 +153,6 @@ namespace hnnet {
                 }
                 sort_connections(_connections);
                 _partitions = make_partitions(_connections);
-                _trained = false;
                 std::println("NNet::init: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
             }
             // Update net state
@@ -206,7 +204,6 @@ namespace hnnet {
                 }
             // Connect neurons (cartesian product)
             void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
-                _trained = false;
                 //for (const auto &[tx_index, rx_index] : std::views::cartesian_product(tx_indices, rx_indices))
                 for (const auto &tx_index : tx_indices) {
                     for (const auto &rx_index : rx_indices) {
