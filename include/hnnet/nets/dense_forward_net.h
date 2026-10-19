@@ -36,7 +36,7 @@ namespace hnnet::net {
                 int_t rx_count;
                 index_t weight_offset;
                 int_t weight_stride;
-                index_t bias_neuron_index;
+                index_t bias_index;
             };
             // Constructor
             template <DenseLayerType... Layers>
@@ -56,11 +56,10 @@ namespace hnnet::net {
                         const auto weight_offset = view.connection_count();
                         const auto rx_indices = this->new_neurons(layer.size, layer.type, layer.activation);
                         this->connect(tx_indices, rx_indices);
-                        index_t bias_neuron_index{-1};
+                        index_t bias_index{-1};
                         if (layer.biased) {
-                            const auto bias_neuron_indices = this->new_neurons(1, NeuronType::bias, activation::Identity{});
-                            this->connect(bias_neuron_indices, rx_indices);
-                            bias_neuron_index = bias_neuron_indices.front();
+                            bias_index = this->new_neurons(1, NeuronType::bias, activation::Identity{}).front();
+                            this->connect(bias_index, rx_indices);
                         }
                         _layers.push_back({.tx_begin = tx_begin, 
                                            .tx_count = std::ssize(tx_indices),
@@ -68,7 +67,7 @@ namespace hnnet::net {
                                            .rx_count = std::ssize(rx_indices),
                                            .weight_offset = weight_offset, 
                                            .weight_stride = std::ssize(tx_indices) + layer.biased,
-                                           .bias_neuron_index = bias_neuron_index});
+                                           .bias_index = bias_index});
                         tx_begin = rx_begin;
                         tx_indices = rx_indices;
                     };
