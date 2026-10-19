@@ -100,7 +100,7 @@ namespace hnnet::backprop::omp {
                     for (const auto &[target, neuron_index] : std::views::zip(targets, output_neurons_indices)) {
                         const auto signal = state.signals[neuron_index];
                         const auto &weighted_sum = state.weighted_sums[neuron_index];
-                       deltas[neuron_index] = loss.derivative(target, signal) * neurons[neuron_index].activation()->derivative(weighted_sum);
+                        deltas[neuron_index] = loss.derivative(target, signal) * neurons[neuron_index].activation()->derivative(weighted_sum);
                         loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
@@ -109,11 +109,11 @@ namespace hnnet::backprop::omp {
                             const auto &block = view.dense_block(partition_index);
                             for (auto row_index{0}; row_index < block.rx_count; ++row_index) {
                                 const auto rx_index = block.rx_begin + row_index;
-                                const auto &rx_neuron = neurons[rx_index];
+                                const auto &neuron = neurons[rx_index];
                                 auto &delta = deltas[rx_index];
-                                if (rx_neuron.type() != NeuronType::output) {
+                                if (neuron.type() != NeuronType::output) {
                                     const auto &weighted_sum = state.weighted_sums[rx_index];
-                                    delta *= rx_neuron.activation()->derivative(weighted_sum);
+                                    delta *= neuron.activation()->derivative(weighted_sum);
                                 }
                                 const auto row_offset = block.weight_offset + row_index * block.tx_count;
                                 for (auto column_index{0}; column_index < block.tx_count; ++column_index) {
@@ -124,11 +124,11 @@ namespace hnnet::backprop::omp {
                         }
                         else {
                             const auto &partition = partitions[partition_index];
-                            const auto &rx_neuron = neurons[partition.rx_index];
+                            const auto &neuron = neurons[partition.rx_index];
                             auto &delta = deltas[partition.rx_index];
-                            if (rx_neuron.type() != NeuronType::output) {
+                            if (neuron.type() != NeuronType::output) {
                                 const auto &weighted_sum = state.weighted_sums[partition.rx_index];
-                                delta *= rx_neuron.activation()->derivative(weighted_sum);
+                                delta *= neuron.activation()->derivative(weighted_sum);
                             }
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                                 const auto tx_index = connections[connection_index].tx_index;
