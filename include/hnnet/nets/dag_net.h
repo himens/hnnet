@@ -72,9 +72,9 @@ namespace hnnet::net {
                     visits_left[partition.rx_index] = partition.connection_end - partition.connection_begin;
                 }
                 index_vector_t visited_indices;
-                for (auto index{0}; index < std::ssize(neurons); ++index) {
-                    if (visits_left[index] == 0) {
-                        visited_indices.push_back(index);
+                for (auto neuron_index{0}; neuron_index < std::ssize(neurons); ++neuron_index) {
+                    if (visits_left[neuron_index] == 0) {
+                        visited_indices.push_back(neuron_index);
                     }
                 }
                 int_t visited_count{0};
@@ -99,7 +99,7 @@ namespace hnnet::net {
                 UnionFind union_find(partitions.size());
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[index, partition] : partitions | std::views::enumerate) {
-                    const auto count = partition.connection_end - partition.connection_begin;
+                    const auto count = (partition.connection_end - partition.connection_begin);
                     const auto tx_begin = connections[partition.connection_begin].tx_index;
                     if ((connections[partition.connection_end - 1].tx_index - tx_begin) != (count - 1)) {
                         continue;  // transmitter range has gaps (e.g. a bias mixed in): not a pure dense candidate
@@ -110,8 +110,8 @@ namespace hnnet::net {
                     }
                 }
                 std::unordered_map<index_t, index_vector_t> groups;
-                for (auto index{0}; index < std::ssize(partitions); ++index) {
-                    groups[union_find.find(index)].push_back(index);
+                for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
+                    groups[union_find.find(partition_index)].push_back(partition_index);
                 }
                 // find dense blocks
                 _dense_blocks.clear();
@@ -126,9 +126,9 @@ namespace hnnet::net {
                     // sort partition indices per increasing receiver and check their ranges are contiguous
                     std::ranges::sort(partition_indices, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].rx_index < partitions[rhs].rx_index; });
                     auto contiguous = true;
-                    for (auto index{1}; index < std::ssize(partition_indices); ++index) {
-                        const auto &prev = partitions[partition_indices[index - 1]];
-                        const auto &curr = partitions[partition_indices[index]];
+                    for (auto member_index{1}; member_index < std::ssize(partition_indices); ++member_index) {
+                        const auto &prev = partitions[partition_indices[member_index - 1]];
+                        const auto &curr = partitions[partition_indices[member_index]];
                         if ((curr.rx_index != prev.rx_index + 1) or (curr.connection_begin != prev.connection_end)) {
                             contiguous = false;
                             break;
@@ -144,8 +144,8 @@ namespace hnnet::net {
                                             .rx_begin      = first.rx_index,
                                             .rx_count      = std::ssize(partition_indices),
                                             .weight_offset = first.connection_begin});
-                    for (const auto index : partition_indices) {
-                        _dense_block_indices[index] = _dense_blocks.size() - 1;
+                    for (const auto partition_index : partition_indices) {
+                        _dense_block_indices[partition_index] = _dense_blocks.size() - 1;
                     }
                 }
                 std::println("DAGNet::init: found {} partitions(s)", partitions.size());
@@ -188,12 +188,12 @@ namespace hnnet::net {
             // Propagate signals through the net
             void propagate_signals(State &state) const {
                 const auto partitions = this->partitions();
-                for (auto index{0}; index < std::ssize(partitions); ++index) {
-                    const auto &partition = partitions[index];
-                    if (_dense_block_indices[index] != DenseBlock::no_block) {
-                        const auto &block = _dense_blocks[_dense_block_indices[index]];
+                for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
+                    const auto &partition = partitions[partition_index];
+                    if (_dense_block_indices[partition_index] != DenseBlock::no_block) {
+                        const auto &block = _dense_blocks[_dense_block_indices[partition_index]];
                         propagate_dense_block(state, block);
-                        index += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
+                        partition_index += block.rx_count - 1;  // dense block members are contiguous: skip them all at once
                     }
                     else {
                         propagate_partition(state, partition);
