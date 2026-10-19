@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <ranges>
 #include "hnnet/activations/identity.h"
 #include "hnnet/learning_rule_type.h"
 #include "hnnet/nets/dag_net.h"
@@ -59,7 +60,7 @@ namespace hnnet::net {
                         index_t bias_index{-1};
                         if (layer.biased) {
                             bias_index = this->new_neurons(1, NeuronType::bias, activation::Identity{}).front();
-                            this->connect(bias_index, rx_indices);
+                            this->connect(std::views::single(bias_index), rx_indices);
                         }
                         _layers.push_back({.tx_begin = tx_begin, 
                                            .tx_count = std::ssize(tx_indices),
