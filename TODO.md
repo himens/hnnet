@@ -2,15 +2,20 @@
 
 ## Fatto
 
+- [x] **Riorganizzare la struttura degli header e i namespace**
+  - Rimosso il namespace e la directory `builtin`; le implementazioni sono organizzate per area in `activation`, `loss`, `net`, `rule` e `backprop`.
+  - Tutto il backpropagation è sotto `rules/backprop/`; il backend OpenMP è un template sul tipo di optimizer, che possiede e inizializza direttamente.
+  - La rule delega il lavoro al backend tramite i concept `BackendType`; gradienti e aggiornamento dei pesi sono gestiti nell'operazione di backprop del backend.
+
 - [x] **Disaccoppiare il backpropagation dal tipo concreto del neurone**
   - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi e ogni neurone possiede un'istanza polimorfica di `Activation`.
-  - La logica di apprendimento è estratta nelle learning rule (`BackpropRule`, `PerceptronRule`), che operano su `NNet::View`/`Neuron`.
+  - La logica di apprendimento è estratta nelle learning rule (`rule::Backprop`, `rule::Perceptron`), che operano su `NNet::View`/`Neuron`.
   - Reti con attivazioni diverse per neurone sono già possibili.
 
 - [x] **Separare il calcolo dei gradienti dall'aggiornamento dei pesi**
-  - In `BackpropRule::learn()` i delta vengono calcolati e retro-propagati in un primo passaggio, l'aggiornamento dei pesi avviene in un secondo ciclo separato.
-  - Il learning rate è ora un parametro del costruttore di `BackpropRule`/`PerceptronRule`, non più hardcoded.
-  - `BackpropRule` mantiene anche lo stato del momentum. Restano da implementare batch/gradient accumulation e optimizer adattivi.
+  - Il backend calcola e retro-propaga i delta, accumula i gradienti e affida l'aggiornamento all'optimizer.
+  - Il learning rate è configurato dall'optimizer Momentum; la rule Perceptron riceve il proprio learning rate.
+  - Gli optimizer mantengono il proprio stato per peso; mini-batch e gradient accumulation sono stati implementati.
 
 - [x] **Rendere espliciti input, output e sorgenti della rete**
   - I neuroni sono ora etichettati con `NeuronType` (`input`, `hidden`, `output`, `bias`), assegnato esplicitamente alla creazione con `new_neurons(...)`.
@@ -31,13 +36,13 @@
   - Partition dense compatibili vengono riconosciute come `DenseBlock` e percorse come prodotti matrice-vettore con pesi e segnali contigui.
 
 - [x] **Separare i segnali dalla struttura del neurone**
-  - Segnali e weighted sum vivono in `NNetState` in vettori allineati agli indici dei neuroni; lo stato è separato dalla topologia e può essere istanziato per ogni thread di training.
+  - Segnali e weighted sum vivono in `NNet::State` in vettori allineati agli indici dei neuroni; lo stato è separato dalla topologia e può essere istanziato per ogni thread di training.
   - `Neuron` conserva tipo e attivazione, non i segnali o i weighted sum.
 
 - [x] **Introdurre mini-batch e gradient accumulation**
-  - `BackpropRule` divide i sample in mini-batch; i sample di ciascun batch vengono elaborati in parallelo, accumulando i gradienti in buffer per-thread.
-  - I gradienti dei thread vengono sommati e l'optimizer aggiorna i pesi alla fine di ogni mini-batch; lo stato per-thread (`NNetState`: segnali e weighted sum) è separato dalla topologia.
-  - `learning_rate` è un parametro di `BackpropRule`, non dell'optimizer, per restare generico rispetto a `Optimizer`.
+  - `rule::Backprop` divide i sample in mini-batch; il backend OpenMP elabora i sample in parallelo, accumulando i gradienti in buffer per-thread.
+  - I gradienti dei thread vengono sommati e l'optimizer aggiorna i pesi alla fine di ogni mini-batch; lo stato per-thread (`NNet::State`: segnali e weighted sum) è separato dalla topologia.
+  - L'optimizer possiede gli iperparametri dell'algoritmo, incluso il learning rate per Momentum.
   
 - [x] **Rendere operativo `zip_connect()`**
   - Collega gli elementi corrispondenti in lockstep; range di lunghezza diversa generano un'eccezione dopo aver processato il prefisso comune.
@@ -45,24 +50,37 @@
 - [x] **Rilevare connessioni duplicate prima di usare la rete**
   - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
   - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
-
+    
+- [x] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
+  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
+  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
+     
+- [x] **Use literals**
+  - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
+    
 ## Priorita alta
 
 - [ ] **Aggiungere optimizer adattivi**
-  - Implementare Adam come primo optimizer adattivo; valutare RMSProp e RPROP in seguito.
-  - Gli optimizer devono mantenere stato per peso e funzionare sia con SGD sia con mini-batch.
-    
-- [ ] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
-  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
-  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
-   
-- [ ] **Use literals**
-  - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
+  - Implementare Adam e valutare RMSProp; Rprop è già disponibile come optimizer OpenMP.
+  - I nuovi optimizer devono mantenere stato per peso e funzionare con i mini-batch.
+
+- [ ] **Unificare le formule di attivazioni e loss tra CPU e backend GPU**
+  - Metal implementa separatamente Identity, Sigmoid, ReLU e MSE: formule, derivate e gestione dei parametri sono duplicate rispetto al codice CPU.
+  - Valutare una sorgente comune delle formule, con adattamenti per le funzioni matematiche e i vincoli di Metal ed eventuali altri backend, evitando implementazioni indipendenti che possano divergere.
+  - Definire come estendere il supporto ad attivazioni e loss personalizzate; verificare la coerenza di valori e derivate tra backend con tolleranze adeguate alla precisione numerica.
+
+## Discussioni aperte
+
+- [ ] **Costruzione e mutabilita della topologia di NNet**
+  - Chiarire se `NNet` debba esporre direttamente `new_neurons()`, `connect()` e `zip_connect()`: l'ereditarieta pubblica permette di alterare anche reti costruite come fully dense, compromettendone l'invariante.
+  - Valutare un builder o funzioni esterne che costruiscano la topologia e la passino al costruttore di `NNet`, separando la costruzione dall'esecuzione della rete.
+  - Discutere il rischio di vincolare la rete a una topologia predefinita e immutabile, perdendo la generalita e la possibilita di modificarla incrementalmente.
+  - Confrontare questa alternativa con validazione in `prepare()` o congelamento esplicito; definire dove garantire gli invarianti e come esporre i metadati dei layer ai backend. Nessuna soluzione ancora scelta.
 
 ## Priorita bassa
 
 - [ ] **Migliorare la configurazione dell'addestramento**
-  - Rendere configurabili soglia di errore e numero massimo di epoche; learning rate, batch size, loss e optimizer sono già configurabili in `BackpropRule`.
+  - Rendere configurabili soglia di errore e numero massimo di epoche; batch size, loss e backend/optimizer sono configurabili in `rule::Backprop`.
   - Valutare metriche e callback separati dal logging diretto su stdout.
 
 ## Performance
@@ -89,7 +107,7 @@
 
 Questo report descrive l'implementazione precedente, basata su adjacency list e propagazione ricorsiva. I risultati non sono direttamente confrontabili con la versione corrente a partition/dense block né con l'esempio MNIST attuale; resta come traccia della procedura Callgrind.
 
-Contesto: si sospettava che `BackpropRule::learn()` (in `backprop_rule.h`) fosse il collo di
+Contesto: si sospettava che `BackpropRule::learn()` (nell'implementazione storica di `backprop_rule.h`) fosse il collo di
 bottiglia del training MNIST (~6 minuti per l'intero dataset, 60k campioni, rete 784→100→10).
 Prima ipotesi testata: la ricorsione in `learn()`/`broadcast()` come causa di overhead — **non
 confermata**: convertire `backprop_error` da ricorsivo a iterativo (worklist esplicito) non ha

@@ -1,14 +1,20 @@
-#include "hnnet/builtin/dense_forward_net.h"
-#include "hnnet/builtin/backprop_rule.h"
+#include <array>
+#include "hnnet/activations/identity.h"
+#include "hnnet/activations/sigmoid.h"
+#include "hnnet/losses/mse.h"
+#include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/rules/backprop/backprop.h"
+#include "hnnet/rules/backprop/omp/backend.h"
+#include "hnnet/rules/backprop/omp/optimizers/momentum.h"
 
 // Simple XOR gate implementation using a back-propagation neural network w/ one hidden layer
 int main() {
     using namespace hnnet;
     // create net
-    builtin::DenseForwardNet gate{
-        builtin::Layer{2, NeuronType::input,  builtin::IdentityActivation{}},
-        builtin::Layer{4, NeuronType::hidden, builtin::SigmoidActivation{}, true},
-        builtin::Layer{1, NeuronType::output, builtin::SigmoidActivation{}, true}
+    net::DenseForwardNet gate{
+        net::DenseLayer{2, NeuronType::input,  activation::Identity{}},
+        net::DenseLayer{4, NeuronType::hidden, activation::Sigmoid{}, true},
+        net::DenseLayer{1, NeuronType::output, activation::Sigmoid{}, true}
     };
     // train net
     const std::array<input_vector_t, 4> inputs{{
@@ -29,7 +35,14 @@ int main() {
         {1}, 
         {0}
     }};
-    gate.train(inputs, targets, builtin::BackpropRule{builtin::Momentum{0.2}});
+    gate.train(
+        inputs,
+        targets,
+        rule::Backprop{
+            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.2_real},
+            loss::MSE{},
+            1
+    });
 
     return 0;
 }

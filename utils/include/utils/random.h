@@ -1,6 +1,9 @@
 #pragma once
+#include <algorithm>
+#include <concepts>
+#include <cstddef>
 #include <random>
-#include <ranges>
+#include <vector>
 
 namespace utils::random {
     // Get random generator

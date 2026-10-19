@@ -1,4 +1,7 @@
 #pragma once
+#include <memory>
+#include <stdexcept>
+#include <utility>
 #include "hnnet/activation.h"
 
 namespace hnnet {
