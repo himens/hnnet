@@ -110,7 +110,8 @@ namespace hnnet::net {
                 }
                 std::unordered_map<index_t, index_vector_t> groups;
                 for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
-                    groups[union_find.find(partition_index)].push_back(partition_index);
+                    const auto root_index = union_find.find(partition_index);
+                    groups[root_index].push_back(partition_index);
                 }
                 // find dense blocks
                 _dense_blocks.clear();

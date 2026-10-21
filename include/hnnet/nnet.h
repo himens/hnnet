@@ -172,9 +172,6 @@ namespace hnnet {
             std::span<Partition> partitions() {
                 return _partitions;
             }
-            std::span<SynapticConn> connections() {
-                return _connections;
-            }
             // Create new neurons
             template <ActivationType Activation>
                 index_vector_t new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
