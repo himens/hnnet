@@ -60,6 +60,13 @@
     
 ## Priorita alta
 
+- [ ] **Semplificare il rilevamento dei layer densi in DAGNet**
+  - Rivedere raggruppamento e controlli di contiguita, preservando l'ordine topologico dei layer e la mappatura dalle partizioni.
+
+- [ ] **Riconoscere i layer densi con un solo ricevente in DAGNet**
+  - Rimuovere il filtro sui gruppi con meno di due partizioni, continuando a escludere le partizioni isolate con sorgenti non contigue: anche queste sono presenti nei gruppi.
+  - Verificare il riconoscimento dei layer di output con un solo neurone e il loro utilizzo nel backend Metal.
+
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam e valutare RMSProp; Rprop è già disponibile come optimizer OpenMP.
   - I nuovi optimizer devono mantenere stato per peso e funzionare con i mini-batch.

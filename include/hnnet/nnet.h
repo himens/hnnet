@@ -1,8 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <functional>
-#include <iterator>
-#include <memory>
 #include <print>
 #include <ranges>
 #include <span>
@@ -11,30 +8,25 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "hnnet/neuron.h"
+#include "hnnet/topology.h"
 #include "utils/random.h"
 #include "utils/timer.h"
 
 namespace hnnet {
     using input_vector_t  = std::vector<real_t>;
     using output_vector_t = std::vector<real_t>;
-    using index_vector_t  = std::vector<index_t>; 
     ////////////////
     // NNet class //
     ////////////////
     class NNet {
         public:
             // Data types
-            struct SynapticConn {
-                index_t tx_index;
-                index_t rx_index;
-            };
             struct Partition {
                 index_t rx_index;
                 index_t connection_begin;
                 index_t connection_end;
             };
-            struct State {
+            struct State { // TODO: c'è bisogno del constructor State?
                 State() = default;
                 explicit State(const int_t neuron_count) : signals(neuron_count, 0.0_real), weighted_sums(neuron_count, 0.0_real) {}
                 std::vector<real_t> signals{};
@@ -51,7 +43,7 @@ namespace hnnet {
                     std::span<const Neuron> neurons() const {
                         return _net._neurons;
                     }
-                    std::span<const SynapticConn> connections() const {
+                    std::span<const Connection> connections() const {
                         return _net._connections;
                     }
                     std::span<real_t> weights() const {
@@ -63,6 +55,12 @@ namespace hnnet {
                     std::span<const index_t> output_neurons_indices() const {
                         return _net._output_neurons_indices;
                     }
+                    std::span<const index_t> input_neurons_indices() const {
+                        return _net._input_neurons_indices;
+                    }
+                    std::span<const index_t> bias_neurons_indices() const {
+                        return _net._bias_neurons_indices;
+                    }
                 protected:
                     explicit View(NNet& net) : _net(net) {}
                 private:
@@ -70,6 +68,10 @@ namespace hnnet {
                     NNet& _net;
             };
         public:
+            // Constructor
+            NNet(Topology topology) : _neurons(std::move(topology.neurons)), _connections(std::move(topology.connections)), _weights(_connections.size(), 0.0_real) {
+                init();
+            }
             // Destructor
             virtual ~NNet() = default;
             // Create a view of the net
@@ -146,14 +148,6 @@ namespace hnnet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
-            // Initialize common topology data after the derived network has constructed it
-            virtual void init() {
-                if (has_duplicate_connection(_connections)) {
-                    throw std::invalid_argument("NNet::init: duplicate connection!");
-                }
-                _partitions = make_partitions(_connections);
-                std::println("NNet::init: neuron(s): {}, connection(s): {}", _neurons.size(), _connections.size());
-            }
             // Update net state
             virtual void update_state(State &state) const = 0;
             // Getters
@@ -163,7 +157,7 @@ namespace hnnet {
             std::span<const Partition> partitions() const {
                 return _partitions;
             }
-            std::span<const SynapticConn> connections() const {
+            std::span<const Connection> connections() const {
                 return _connections;
             }
             std::span<const real_t> weights() const {
@@ -172,60 +166,38 @@ namespace hnnet {
             std::span<Partition> partitions() {
                 return _partitions;
             }
-            // Create new neurons
-            template <ActivationType Activation>
-                index_vector_t new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
-                    if (count < 0) {
-                        throw std::invalid_argument("NNet::new_neurons: invalid count!");
-                    }
-                    _trained = false;
-                    for (auto count_index{0}; count_index < count; ++count_index) {
-                        const auto new_neuron_index = std::ssize(_neurons);
-                        _neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
-                        switch (type) {
-                            case NeuronType::input:
-                                _input_neurons_indices.push_back(new_neuron_index);
-                                break;
-                            case NeuronType::output:
-                                _output_neurons_indices.push_back(new_neuron_index);
-                                break;
-                            case NeuronType::bias:
-                                _bias_neurons_indices.push_back(new_neuron_index);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                    return std::views::iota(_neurons.size() - count, _neurons.size()) | std::ranges::to<index_vector_t>();
-                }
-            // Connect neurons (cartesian product)
-            void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
-                //for (const auto &[tx_index, rx_index] : std::views::cartesian_product(tx_indices, rx_indices))
-                for (const auto &tx_index : tx_indices) {
-                    for (const auto &rx_index : rx_indices) {
-                        if ((tx_index < 0 or tx_index >= std::ssize(_neurons)) or (rx_index < 0 or rx_index >= std::ssize(_neurons))) {
-                            throw std::out_of_range("NNet::connect: index out-of-range!");
-                        }
-                        _connections.push_back({.tx_index = tx_index, .rx_index = rx_index});
-                        _weights.push_back(0.0_real);
+        private:
+            // Initialize net
+            void init() {
+                const auto neuron_count = std::ssize(_neurons);
+                for (const auto &[tx_index, rx_index] : _connections) {
+                    if (tx_index < 0 or tx_index >= neuron_count or rx_index < 0 or rx_index >= neuron_count) {
+                        throw std::out_of_range("NNet::init: connection index out-of-range!");
                     }
                 }
-            }
-            // Connect neurons (zip)
-            void zip_connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
-                auto tx_iterator = std::ranges::begin(tx_indices);
-                auto rx_iterator = std::ranges::begin(rx_indices);
-                while ((tx_iterator != std::ranges::end(tx_indices)) and (rx_iterator != std::ranges::end(rx_indices))) {
-                    connect(std::views::single(*tx_iterator), std::views::single(*rx_iterator));
-                    ++tx_iterator;
-                    ++rx_iterator;
+                if (has_duplicate_connection(_connections)) {
+                    throw std::invalid_argument("NNet::init: duplicate connection!");
                 }
-                if ((tx_iterator != std::ranges::end(tx_indices)) or (rx_iterator != std::ranges::end(rx_indices))) {
-                    throw std::invalid_argument("NNet::zip_connect: size error!");
+                for (const auto &[neuron_index, neuron] : _neurons | std::views::enumerate) {
+                    switch (neuron.type()) {
+                        case NeuronType::input:
+                            _input_neurons_indices.push_back(neuron_index);
+                            break;
+                        case NeuronType::output:
+                            _output_neurons_indices.push_back(neuron_index);
+                            break;
+                        case NeuronType::bias:
+                            _bias_neurons_indices.push_back(neuron_index);
+                            break;
+                        default:
+                            break;
+                    }
                 }
+                _partitions = make_partitions(_connections);
+                std::println("NNet::init: neuron(s): {}, connection(s): {}, partition(s): {}", _neurons.size(), _connections.size(), _partitions.size());
             }
             // Check for duplicate connections
-            static bool has_duplicate_connection(const std::span<SynapticConn> connections) {
+            static bool has_duplicate_connection(const std::span<Connection> connections) {
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
                 for (const auto &[index, connection] : connections | std::views::enumerate) {
                     const auto [_, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, index);
@@ -236,7 +208,7 @@ namespace hnnet {
                 return false;
             }
             // Group connections sharing the same rx into partitions
-            static std::vector<Partition> make_partitions(const std::span<SynapticConn> connections) {
+            static std::vector<Partition> make_partitions(const std::span<Connection> connections) {
                 std::ranges::sort(connections, [] (const auto &lhs, const auto &rhs) { return std::tie(lhs.rx_index, lhs.tx_index) < std::tie(rhs.rx_index, rhs.tx_index); });
                 std::vector<Partition> partitions;
                 index_t connection_begin{0};
@@ -251,7 +223,6 @@ namespace hnnet {
                 }
                 return partitions;
             }
-        private:
             // Seed a net state from input data
             void seed_state(State &state, const DataType auto &inputs) const {
                 for (const auto &[neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
@@ -267,7 +238,7 @@ namespace hnnet {
             // Data members
             bool _trained{false};
             std::vector<Neuron> _neurons{};
-            std::vector<SynapticConn> _connections{};
+            std::vector<Connection> _connections{};
             std::vector<real_t> _weights{};
             std::vector<Partition> _partitions{};
             index_vector_t _input_neurons_indices{};

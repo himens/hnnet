@@ -48,7 +48,7 @@ namespace hnnet::backprop::metal {
                         const auto neuron_count = detail::checked_count(view.neuron_count());
                         const auto connection_count = detail::checked_count(view.connection_count());
                         if (neuron_count == 0) throw std::invalid_argument("Metal: network must not be empty");
-                        const auto layers = net.layers();
+                        const auto layers = view.layers();
                         if (layers.empty()) throw std::invalid_argument("Metal: network must have a dense connection layer");
                         _layers.clear();
                         for (const auto &layer : layers) {
@@ -57,8 +57,7 @@ namespace hnnet::backprop::metal {
                             }
                             _layers.push_back(Layer{{detail::checked_count(layer.tx_begin), detail::checked_count(layer.tx_count),
                                                     detail::checked_count(layer.rx_begin), detail::checked_count(layer.rx_count),
-                                                    detail::checked_count(layer.weight_offset), detail::checked_count(layer.weight_stride),
-                                                    layer.bias_index < 0 ? std::numeric_limits<std::uint32_t>::max() : detail::checked_count(layer.bias_index)}});
+                                                    detail::checked_count(layer.weight_offset)}});
                         }
                         std::vector<detail::ActivationDescriptor> activations;
                         std::vector<std::uint32_t> input_positions(neuron_count, std::numeric_limits<std::uint32_t>::max());
@@ -66,18 +65,17 @@ namespace hnnet::backprop::metal {
                         for (std::uint32_t neuron = 0; neuron < neuron_count; ++neuron) {
                             activations.push_back(describe_activation(neurons[neuron].activation()));
                         }
-                        const auto &input_layer = _layers.front().shape;
                         const auto &output_layer = _layers.back().shape;
-                        for (std::uint32_t input = 0; input < input_layer.tx_count; ++input) {
-                            input_positions[input_layer.tx_begin + input] = input;
+                        const auto input_indices = view.input_neurons_indices();
+                        const auto input_count = detail::checked_count(input_indices.size());
+                        for (std::uint32_t input = 0; input < input_count; ++input) {
+                            input_positions[input_indices[input]] = input;
                         }
-                        for (const auto &layer : _layers) {
-                            if (layer.shape.ibias != std::numeric_limits<std::uint32_t>::max()) {
-                                input_positions[layer.shape.ibias] = 0xfffffffeu;
-                            }
+                        for (const auto bias_index : view.bias_neurons_indices()) {
+                            input_positions[bias_index] = 0xfffffffeu;
                         }
                         _parameters = {neuron_count, connection_count,
-                                       input_layer.tx_count, output_layer.rx_count,
+                                       input_count, output_layer.rx_count,
                                        output_layer.rx_begin, 0, 0};
                         _context.init(_kernel_directory);
                         _activations = _context.upload(activations);
@@ -88,7 +86,6 @@ namespace hnnet::backprop::metal {
                         _loss_pipeline = _context.pipeline("hnnet_loss");
                         _activation_pipeline = _context.pipeline("hnnet_dense_activation");
                         _delta_pipeline = _context.pipeline("hnnet_dense_delta");
-                        _bias_pipeline = _context.pipeline("hnnet_bias_gradient");
                         _optimizer.init(_context, connection_count);
                         _net = &net;
                         _ready = true;
@@ -186,8 +183,6 @@ namespace hnnet::backprop::metal {
                     std::uint32_t rx_begin;
                     std::uint32_t rx_count;
                     std::uint32_t weight_offset;
-                    std::uint32_t weight_stride;
-                    std::uint32_t ibias;
                 };
                 struct Layer {
                     DenseLayer shape;
@@ -201,7 +196,7 @@ namespace hnnet::backprop::metal {
                     MPSMatrix *previous_delta = nil;
                     MPSMatrix *weight_gradient = nil;
                 };
-                static_assert(sizeof(DenseLayer) == 28);
+                static_assert(sizeof(DenseLayer) == 20);
                 // Helper function to create an MPS matrix view from a buffer
                 static MPSMatrix *matrix(id<MTLBuffer> buffer, const std::uint32_t offset,
                                          const std::uint32_t rows, const std::uint32_t columns,
@@ -237,11 +232,11 @@ namespace hnnet::backprop::metal {
                         layer.gradient = product(true, false, shape.rx_count, shape.tx_count, parameters.batch_size,
                                                  1.0 / static_cast<double>(parameters.batch_size));
                         layer.input = matrix(_signals, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
-                        layer.weight = matrix(_weights, shape.weight_offset, shape.rx_count, shape.tx_count, shape.weight_stride);
+                        layer.weight = matrix(_weights, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
                         layer.sum = matrix(_weighted_sums, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
                         layer.delta = matrix(_deltas, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
                         layer.previous_delta = matrix(_propagated_deltas, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
-                        layer.weight_gradient = matrix(_gradient, shape.weight_offset, shape.rx_count, shape.tx_count, shape.weight_stride);
+                        layer.weight_gradient = matrix(_gradient, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
                     }
                     _prepared_batch_size = parameters.batch_size;
                 }
@@ -253,9 +248,8 @@ namespace hnnet::backprop::metal {
                         [encoder setBytes:&parameters length:sizeof(parameters) atIndex:0];
                         [encoder setBytes:&layer.shape length:sizeof(layer.shape) atIndex:1];
                         [encoder setBuffer:_activations offset:0 atIndex:2];
-                        [encoder setBuffer:_weights offset:0 atIndex:3];
-                        [encoder setBuffer:_weighted_sums offset:0 atIndex:4];
-                        [encoder setBuffer:_signals offset:0 atIndex:5];
+                        [encoder setBuffer:_weighted_sums offset:0 atIndex:3];
+                        [encoder setBuffer:_signals offset:0 atIndex:4];
                         detail::dispatch(encoder, _activation_pipeline, detail::checked_product(parameters.batch_size, layer.shape.rx_count));
                     }
                 }
@@ -274,15 +268,6 @@ namespace hnnet::backprop::metal {
                         [encoder setBuffer:_propagated_deltas offset:0 atIndex:7];
                         detail::dispatch(encoder, _delta_pipeline, detail::checked_product(parameters.batch_size, layer.shape.rx_count));
                         [layer.gradient encodeToCommandBuffer:command leftMatrix:layer.delta rightMatrix:layer.input resultMatrix:layer.weight_gradient];
-                        if (layer.shape.ibias != std::numeric_limits<std::uint32_t>::max()) {
-                            auto bias_encoder = detail::encoder(command, _bias_pipeline);
-                            [bias_encoder setBytes:&parameters length:sizeof(parameters) atIndex:0];
-                            [bias_encoder setBytes:&layer.shape length:sizeof(layer.shape) atIndex:1];
-                            [bias_encoder setBuffer:_signals offset:0 atIndex:2];
-                            [bias_encoder setBuffer:_deltas offset:0 atIndex:3];
-                            [bias_encoder setBuffer:_gradient offset:0 atIndex:4];
-                            detail::dispatch(bias_encoder, _bias_pipeline, layer.shape.rx_count);
-                        }
                         if (position > 1) {
                             [layer.backward encodeToCommandBuffer:command leftMatrix:layer.delta rightMatrix:layer.weight resultMatrix:layer.previous_delta];
                         }
@@ -369,6 +354,5 @@ namespace hnnet::backprop::metal {
                 id<MTLComputePipelineState> _loss_pipeline = nil;
                 id<MTLComputePipelineState> _activation_pipeline = nil;
                 id<MTLComputePipelineState> _delta_pipeline = nil;
-                id<MTLComputePipelineState> _bias_pipeline = nil;
         };
 }

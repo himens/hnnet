@@ -33,8 +33,6 @@ namespace metal {
         uint rx_begin;
         uint rx_count;
         uint weight_offset;
-        uint weight_stride;
-        uint ibias;
     };
 
     inline float activate(const ActivationDescriptor descriptor, const float value) {
@@ -102,22 +100,15 @@ kernel void hnnet_dense_activation(
     constant Parameters &parameters [[buffer(0)]],
     constant DenseLayer &layer [[buffer(1)]],
     device const ActivationDescriptor *activations [[buffer(2)]],
-    device const float *weights [[buffer(3)]],
-    device float *weighted_sums [[buffer(4)]],
-    device float *signals [[buffer(5)]],
+    device const float *weighted_sums [[buffer(3)]],
+    device float *signals [[buffer(4)]],
     uint item [[thread_position_in_grid]]) {
     if (item >= parameters.batch_size * layer.rx_count) return;
     const uint row = item % layer.rx_count;
     const uint neuron = layer.rx_begin + row;
     const uint sample_offset = (item / layer.rx_count) * parameters.neuron_count;
     const uint offset = sample_offset + neuron;
-    float sum = weighted_sums[offset];
-    if (layer.ibias != 0xffffffffu) {
-        sum += weights[layer.weight_offset + row * layer.weight_stride + layer.tx_count]
-            * signals[sample_offset + layer.ibias];
-    }
-    weighted_sums[offset] = sum;
-    signals[offset] = activate(activations[neuron], sum);
+    signals[offset] = activate(activations[neuron], weighted_sums[offset]);
 }
 
 kernel void hnnet_dense_delta(
@@ -143,22 +134,6 @@ kernel void hnnet_dense_delta(
     else {
         deltas[offset] = propagated_deltas[offset] * slope;
     }
-}
-
-kernel void hnnet_bias_gradient(
-    constant Parameters &parameters [[buffer(0)]],
-    constant DenseLayer &layer [[buffer(1)]],
-    device const float *signals [[buffer(2)]],
-    device const float *deltas [[buffer(3)]],
-    device float *gradient [[buffer(4)]],
-    uint row [[thread_position_in_grid]]) {
-    if (row >= layer.rx_count) return;
-    float sum = 0.0f;
-    for (uint sample = 0; sample < parameters.batch_size; ++sample) {
-        const uint offset = sample * parameters.neuron_count;
-        sum += deltas[offset + layer.rx_begin + row] * signals[offset + layer.ibias];
-    }
-    gradient[layer.weight_offset + row * layer.weight_stride + layer.tx_count] = sum / float(parameters.batch_size);
 }
 
 kernel void hnnet_momentum(

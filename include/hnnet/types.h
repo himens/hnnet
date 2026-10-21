@@ -1,6 +1,7 @@
 #pragma once
 #include <concepts>
 #include <cstdint>
+#include <vector>
 #include <ranges>
 #define HAS_STDFLOAT __has_include(<stdfloat>)
 #if HAS_STDFLOAT
@@ -16,6 +17,7 @@ namespace hnnet {
 #endif
     using int_t = std::int64_t;
     using index_t = int_t; // indices are just a semantic alias for int_t
+    using index_vector_t = std::vector<index_t>; 
     constexpr real_t operator""_real(long double value) {
         return static_cast<real_t>(value);
     }

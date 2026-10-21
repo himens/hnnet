@@ -142,7 +142,7 @@ Input and output samples are contiguous ranges of `real_t`; datasets are contigu
 
 2. `DAGNet` and `DenseForwardNet`
     - `DAGNet` rejects cyclic topologies and orders propagation topologically; compatible connections are grouped into dense blocks
-    - `DenseForwardNet` is a `DAGNet` convenience class that creates fully connected layers from `Layer` descriptions
+    - `DenseForwardNet` assembles a `Topology` from `DenseLayer` descriptions and passes it to the `DAGNet` constructor for validation and initialization; each bias is included in the contiguous range of source neurons
 
 3. `LearningRule`
     - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`

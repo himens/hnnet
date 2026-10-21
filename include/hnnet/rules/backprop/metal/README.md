@@ -76,17 +76,20 @@ by value. Its buffers are initialized and reset together with the network in
   `DAGNet` is rejected by the existing backend concept. There is no runtime cast,
   generic DAG or CPU fallback.
 
-The network exposes read-only `LayerInfo` descriptors through `layers()`. Each
-descriptor describes a connection layer: transmitter/receiver ranges, weight
-offset, row stride and an optional bias index (`-1` means no bias). Metal uses
-these descriptors directly, converting indices to its 32-bit kernel format.
+The network view exposes read-only `DAGNet::Layer` descriptors through
+`layers()`, in topological order. Each descriptor contains transmitter/receiver
+ranges and a weight offset. Connected bias neurons are included in the
+transmitter range, and the weight row stride equals the transmitter count.
+Metal converts these descriptors to its 32-bit kernel format. Input and bias
+positions are taken from the corresponding neuron-index spans in the network view.
 `DenseForwardNet::train()` preserves the concrete network type when forwarding
 to the common training loop; OpenMP can still accept it through `DAGNet&`.
 
-Dense topology is currently an assumed invariant: do not call `new_neurons`,
-`connect` or `zip_connect` to change a `DenseForwardNet` after construction.
-These inherited mutators are not blocked or revalidated by this change; the
-structural enforcement of that invariant remains an open design topic.
+`DenseForwardNet` assembles a `Topology` before constructing its `DAGNet` base.
+Neuron and connection construction helpers belong to `Topology`, not to the
+constructed network. The current layer detector still excludes single-receiver
+layers; completing that detection remains a TODO. Metal consumes the detected
+layers without reconstructing missing ones.
 
 All GPU tensors and arithmetic use FP32. Host `real_t` is unchanged: data and
 weights are converted on upload and weights are converted back on download.
@@ -111,8 +114,9 @@ epoch so changes to the caller's samples are not silently ignored.
 
 Forward, hidden-delta propagation and the batch-mean weight gradient use
 `MPSMatrixMultiplication`: `X * W^T`, `delta * W`, and `delta^T * X / batch_size`.
-Elementwise kernels apply activations and derivatives; a small reduction handles
-bias gradients. Weights remain in their original order, including bias columns,
+Elementwise kernels apply activations and derivatives. Bias contributions and
+gradients are included in the same matrix products as other transmitters.
+Weights remain in their original order, including bias columns,
 for optimizer updates and `to_host`. Matrix views and multiplication objects are
 reused for equal batch sizes and rebuilt for a different batch size or new scratch
 storage, including a partial final batch.
