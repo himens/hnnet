@@ -96,9 +96,9 @@ namespace hnnet::net {
             };
             // Initialize net
             void init() {
-                auto connections = this->connections();
+                const auto connections = this->connections();
+                const auto neurons = this->neurons();
                 auto partitions = this->partitions();
-                auto neurons = this->neurons();
                 // topologically order partitions (Kahn's algorithm)
                 std::vector<index_vector_t> rx_indices(neurons.size());
                 for (const auto &[tx_index, rx_index] : connections) {
