@@ -40,7 +40,7 @@ namespace hnnet::backprop::omp::optimizer {
                     const auto sign_product = previous_gradient * grad;
                     if (sign_product > 0_real) {
                         delta = utils::math::min(_eta_plus * delta, delta_max);
-                        weights[connection_index] += -utils::math::sign(grad) * delta;
+                        weights[connection_index] += - utils::math::sign(grad) * delta;
                         previous_gradient = grad;
                     }
                     else if (sign_product < 0_real) {
@@ -48,7 +48,7 @@ namespace hnnet::backprop::omp::optimizer {
                         previous_gradient = 0.0_real;
                     }
                     else {
-                        weights[connection_index] += -utils::math::sign(grad) * delta;
+                        weights[connection_index] += - utils::math::sign(grad) * delta;
                         previous_gradient = grad;
                     }
                 }
