@@ -144,7 +144,7 @@ namespace hnnet::net {
                         _partition_layer_indices[partition_index] = _layers.size() - 1;
                     }
                 }
-                std::println("DAGNet::init: found {} partitions(s), layer(s) {}", partitions.size(), _layers.size());
+                std::println("DAGNet::init: layer(s): {}", _layers.size());
             }
             // Propagate signals through the net
             void propagate_signals(State &state) const {
