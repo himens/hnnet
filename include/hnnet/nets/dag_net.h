@@ -1,7 +1,6 @@
 #pragma once
 #include <algorithm>
 #include <iterator>
-#include <numeric>
 #include <print>
 #include <ranges>
 #include <stdexcept>
@@ -28,8 +27,8 @@ namespace hnnet::net {
             };
             class View : public NNet::View {
                 public:
-                    bool is_dense(index_t partition_index) const { // TODO: cambiare nome?
-                        return _net._layer_indices[partition_index] != Layer::no_layer;
+                    std::span<const index_t> partition_layer_indices() const {
+                        return _net._partition_layer_indices;
                     }
                     std::span<const Layer> layers() const {
                         return _net._layers;
@@ -61,39 +60,6 @@ namespace hnnet::net {
                 propagate_signals(state);
             }
         private:
-            // Data types
-            class UnionFind {
-                public:
-                    explicit UnionFind(const int_t count) : _root_indices(count), _ranks(count, 0) {
-                        if (count < 0) {
-                            throw std::invalid_argument("UnionFind: invalid count!");
-                        }
-                        std::iota(std::begin(_root_indices), std::end(_root_indices), 0);
-                    }
-                    index_t find(const index_t index) {
-                        if (_root_indices[index] == index) {
-                            return index;
-                        }
-                        return _root_indices[index] = find(_root_indices[index]);
-                    }
-                    void unite(const index_t lhs_index, const index_t rhs_index) {
-                        auto lhs_root_index = find(lhs_index);
-                        auto rhs_root_index = find(rhs_index);
-                        if (lhs_root_index == rhs_root_index) {
-                            return;
-                        }
-                        if (_ranks[lhs_root_index] < _ranks[rhs_root_index]) {
-                            std::swap(lhs_root_index, rhs_root_index);
-                        }
-                        _root_indices[rhs_root_index] = lhs_root_index;
-                        if (_ranks[lhs_root_index] == _ranks[rhs_root_index]) {
-                            _ranks[lhs_root_index]++;
-                        }
-                    }
-                private:
-                    index_vector_t _root_indices;
-                    std::vector<int_t> _ranks;
-            };
             // Initialize net
             void init() {
                 const auto connections = this->connections();
@@ -131,42 +97,30 @@ namespace hnnet::net {
                 }
                 std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_index] < topo_ranks[rhs.rx_index]; });
                 // group partitions sharing the exact same (contiguous) tx range
-                _layer_indices.assign(std::ssize(partitions), Layer::no_layer);
-                UnionFind union_find(partitions.size());
-                std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
+                _partition_layer_indices.assign(std::ssize(partitions), Layer::no_layer);
+                std::vector<index_vector_t> groups;
+                std::unordered_map<IndexPair, index_t, IndexPairHash> group_indices;
                 for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
                     const auto count = (partition.connection_end - partition.connection_begin);
                     const auto tx_begin = connections[partition.connection_begin].tx_index;
                     if ((connections[partition.connection_end - 1].tx_index - tx_begin) != count - 1) {
                         continue;  // tx range has gaps: not a pure dense candidate
                     }
-                    const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, partition_index);
-                    if (not inserted) {
-                        union_find.unite(it->second, partition_index);
+                    const auto [it, inserted] = group_indices.try_emplace(std::pair{tx_begin, count}, std::ssize(groups));
+                    if (inserted) {
+                        groups.emplace_back();
                     }
-                }
-                std::vector<index_vector_t> groups(partitions.size());
-                for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
-                    const auto root_index = union_find.find(partition_index);
-                    groups[root_index].push_back(partition_index);
+                    groups[it->second].push_back(partition_index);
                 }
                 // find dense layers
-                _layers.clear();
-                for (index_t partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
-                    auto partition_indices = std::exchange(groups[union_find.find(partition_index)], index_vector_t{});
-                    if (partition_indices.empty()) {
-                        continue;
-                    }
-                    // TODO: Support single-receiver dense layers, excluding sparse singletons also present in groups.
-                    if (partition_indices.size() < 2) {
-                        continue;  // no gain grouping a single receiver
-                    }
+                for (auto &partition_indices : groups) {
                     const auto [min_partition_index, max_partition_index] = std::ranges::minmax(partition_indices);
                     if ((max_partition_index - min_partition_index + 1) != std::ssize(partition_indices)) {
                         continue; // must be contiguous partitions (in topo order)
                     }
-                    // sort partition indices per increasing receiver and check their ranges are contiguous
+                    // sort partition indices per increasing receiver
                     std::ranges::sort(partition_indices, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].rx_index < partitions[rhs].rx_index; });
+                    // check their ranges are contiguous
                     auto contiguous = true;
                     for (auto member_index{1}; member_index < std::ssize(partition_indices); ++member_index) {
                         const auto &prev = partitions[partition_indices[member_index - 1]];
@@ -187,19 +141,19 @@ namespace hnnet::net {
                                       .rx_count      = std::ssize(partition_indices),
                                       .weight_offset = first.connection_begin});
                     for (const auto partition_index : partition_indices) {
-                        _layer_indices[partition_index] = _layers.size() - 1;
+                        _partition_layer_indices[partition_index] = _layers.size() - 1;
                     }
                 }
-                std::println("DAGNet::init: found {} partitions(s)", partitions.size());
-                std::println("DAGNet::init: found {} layer(s)", _layers.size());
+                std::println("DAGNet::init: found {} partitions(s), layer(s) {}", partitions.size(), _layers.size());
             }
             // Propagate signals through the net
             void propagate_signals(State &state) const {
                 const auto partitions = this->partitions();
                 for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
                     const auto &partition = partitions[partition_index];
-                    if (_layer_indices[partition_index] != Layer::no_layer) {
-                        const auto &layer = _layers[_layer_indices[partition_index]];
+                    const auto layer_index = _partition_layer_indices[partition_index];
+                    if (layer_index != Layer::no_layer) {
+                        const auto &layer = _layers[layer_index];
                         propagate_layer(state, layer);
                         partition_index += layer.rx_count - 1;  // layer members are contiguous: skip them all at once
                     }
@@ -255,6 +209,6 @@ namespace hnnet::net {
         private:
             // Data members
             std::vector<Layer> _layers{};
-            index_vector_t _layer_indices{};
+            index_vector_t _partition_layer_indices{};
     };
 }

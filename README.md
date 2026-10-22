@@ -2,7 +2,8 @@
 
 hNNet is a small C++26 framework for building neural networks. Its core separates network structure, signal propagation, and learning strategies:
 
-- `NNet` owns neurons, connections, weights, and input/output metadata; `DAGNet` provides topologically ordered propagation over acyclic networks
+- `Topology` assembles neurons and connections before network construction
+- `NNet` acquires those data, validates connections, and prepares weights, partitions, and input/output/bias metadata; `DAGNet` adds cycle validation and topologically ordered propagation
 - `DenseForwardNet` builds fully connected feed-forward networks from a sequence of layer descriptions
 - learning rules such as `rule::Perceptron` and `rule::Backprop` plug into `DAGNet::train(...)`
 
@@ -40,7 +41,7 @@ Notes on current build configuration:
 ./build/bin/hnnet-perceptron-gate
 ```
 
-This example builds a small network with 3 inputs (2 + bias) and 1 output, trains it and checks that the result is the one of an AND gate.
+This example trains a network with 2 inputs, a separate bias neuron, and 1 output on the AND truth table. Bias values are not part of the input samples.
 
 ### Letter classifier
 
@@ -120,6 +121,7 @@ cmake --build build --target hnnet-backprop-gate
 - `include/`: library headers
     - `hnnet/types.h`: numeric aliases and range concepts for data and datasets
     - `hnnet/activation.h`, `hnnet/neuron.h`: activation interface and neuron definition
+    - `hnnet/topology.h`: `Connection`, the mutable `Topology` container, and neuron/connection construction helpers
     - `hnnet/loss_type.h`, `hnnet/learning_rule_type.h`: concepts used by losses and learning rules
     - `hnnet/nnet.h`: base network storage, `NNet::State`, training loop, and inference API
     - `hnnet/activations/`, `hnnet/losses/`: built-in activation and loss implementations
@@ -131,18 +133,48 @@ cmake --build build --target hnnet-backprop-gate
 
 ## Network API
 
-The library is organized around three pieces:
+### Topology and construction
+
+`Topology` owns public `neurons` and `connections` vectors and provides
+`new_neurons()`, `connect()` (Cartesian product), and `zip_connect()` (pairwise).
+It is a mutable description, not an executable or necessarily acyclic network.
+
+```cpp
+#include <utility>
+#include "hnnet/activations/identity.h"
+#include "hnnet/nets/dag_net.h"
+#include "hnnet/topology.h"
+
+hnnet::Topology topology;
+auto inputs = topology.new_neurons(
+    2, hnnet::NeuronType::input, hnnet::activation::Identity{});
+auto outputs = topology.new_neurons(
+    1, hnnet::NeuronType::output, hnnet::activation::Identity{});
+topology.connect(inputs, outputs);
+
+hnnet::net::DAGNet net{std::move(topology)};
+```
+
+The constructor takes ownership of the vectors. `NNet` validates connection
+endpoints and duplicates, sorts connections by receiver/transmitter, builds
+partitions, and identifies input, output, and bias neurons. `DAGNet` rejects
+cycles and orders the partitions topologically during its own construction.
+There is no user-facing finalization step, and constructed networks do not
+expose neuron or connection construction helpers.
+
+### Networks and learning rules
 
 1. `NNet`
-    - non-template base class that stores neurons and weighted connections
-    - provides neuron creation, `infer(...)`, and the common training loop
+    - abstract, non-template base class that stores neurons, connections, weights, and partitions
+    - provides `update(...)`, `infer(...)`, and the common training loop
     - subclasses implement signal propagation
 
 Input and output samples are contiguous ranges of `real_t`; datasets are contiguous ranges of those samples. The aliases `input_vector_t` and `output_vector_t` are both `std::vector<real_t>`.
 
 2. `DAGNet` and `DenseForwardNet`
-    - `DAGNet` rejects cyclic topologies and orders propagation topologically; compatible connections are grouped into dense blocks
-    - `DenseForwardNet` assembles a `Topology` from `DenseLayer` descriptions and passes it to the `DAGNet` constructor for validation and initialization; each bias is included in the contiguous range of source neurons
+    - `DAGNet` can be constructed directly from a `Topology`; it propagates dense layers and remaining sparse partitions in topological order
+    - dense candidates are grouped directly by their contiguous source range, then checked for contiguous partitions, receivers, and weights; descriptors are stored in topological order and include single-receiver layers
+    - `DenseForwardNet` assembles a `Topology` from `DenseLayer` descriptions and passes it to the `DAGNet` constructor; each requested bias is created before the receivers, keeping it contiguous with the source neurons, and connected with independent weights to every receiver
 
 3. `LearningRule`
     - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`
@@ -150,9 +182,34 @@ Input and output samples are contiguous ranges of `real_t`; datasets are contigu
 
 `rule::Backprop<Backend, Loss>` takes `(backend, loss, batch_size)`. The rule owns the backend by value and requires the generic `hnnet::BackendType` contract plus `backprop::BackendType`, which adds the backpropagation operation.
 
+### Views
+
+`NNet::View` exposes read-only spans of neurons, connections, partitions, and
+input/output/bias neuron indices, plus a mutable span of weights for learning.
+`DAGNet::View` additionally exposes:
+
+- `layers()`: read-only `DAGNet::Layer` descriptors in topological order;
+- `partition_layer_indices()`: one index into `layers()` per partition, or
+  `DAGNet::Layer::no_layer` when that partition uses the generic sparse path.
+
+Each layer describes contiguous source and receiver ranges and a weight offset.
+Its weight row stride equals `tx_count`, including a connected bias when present.
+
+### Backpropagation backends
+
 The OpenMP backpropagation implementation is in `hnnet/rules/backprop/omp/`. `backprop::omp::Backend<Optimizer>` is a backend templated on its optimizer; it owns the optimizer by value and shares the per-thread state, delta and gradient buffers, batch processing, and forward/backward work. The available optimizers are `backprop::omp::optimizer::Momentum` and `backprop::omp::optimizer::Rprop`, each defined in its own header. Both the rule and backend are statically typed, with no virtual dispatch or runtime optimizer selection.
 
 Optimizers own their hyperparameters and per-weight state and satisfy the `backprop::omp::OptimizerType` concept. The current backend processes samples within a mini-batch in parallel with OpenMP, accumulates gradients per thread, and updates weights at the end of each batch.
+
+The Metal backend in `hnnet/rules/backprop/metal/` accepts `DenseForwardNet`
+specifically and uses Metal Performance Shaders matrix multiplication for
+forward propagation, backward propagation, and gradients. Bias columns are part
+of those products, not separate bias kernels. It supports FP32 computation,
+Identity/Sigmoid/ReLU activations, MSE, and Momentum or Rprop optimizers.
+Metal requires macOS, the Metal SDK, and Objective-C++ compilation; it is not
+built by the current OpenMP example targets. See the
+[Metal backend documentation](include/hnnet/rules/backprop/metal/README.md)
+for backend composition and platform requirements.
 
 Training currently uses a fixed loss threshold and maximum epoch count and prints progress to standard output. Inference and training use `NNet::State` for signals and weighted sums, separately from the network topology.
 
@@ -161,8 +218,9 @@ Training currently uses a fixed loss threshold and maximum epoch count and print
 The main planned improvements are:
 
 - add adaptive optimizers such as Adam or RMSProp
-- add a layer/model abstraction beyond `DenseForwardNet` and configurable training parameters
-- evaluate a GPU backend (e.g. Metal) in addition to the current OpenMP-based CPU parallelism
+- make training thresholds, epoch limits, and reporting configurable
+- share activation and loss formulas between CPU and GPU backends
+- establish reproducible benchmarks before further dense-kernel optimizations
 
 See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.
 

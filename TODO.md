@@ -27,13 +27,13 @@
   - Il bias non è parte dei sample di training: la topologia della rete non influenza la forma dei dati.
 
 - [x] **Unificare gli overload di `connect`**
-  - `NNet::connect(tx, rx)` crea il prodotto cartesiano tra due range di indici; la rete espone un'unica implementazione basata sul concept `IndexRange`.
+  - `Topology::connect(tx, rx)` crea il prodotto cartesiano tra due range di indici, con un'unica implementazione basata sul concept `IndexRange`.
   - `connect()` e `zip_connect()` accettano range non const, incluse viste iterabili solo da non-const.
   - `zip_connect()` collega gli elementi a coppie in lockstep e rileva lunghezze diverse durante l'iterazione, senza richiedere `size()`.
 
 - [x] **Compilare la topologia per il forward/backward pass**
-  - Prima del training, `prepare()` ordina le connessioni per receiver, costruisce partition contigue e le ordina topologicamente; reti cicliche vengono rifiutate.
-  - Partition dense compatibili vengono riconosciute come `DenseBlock` e percorse come prodotti matrice-vettore con pesi e segnali contigui.
+  - Il costruttore di `NNet` ordina le connessioni per receiver/transmitter e costruisce partizioni contigue; quello di `DAGNet` rifiuta i cicli e ordina le partizioni topologicamente.
+  - Partizioni dense compatibili vengono riconosciute come `DAGNet::Layer` e percorse come prodotti matrice-vettore con pesi e segnali contigui.
 
 - [x] **Separare i segnali dalla struttura del neurone**
   - Segnali e weighted sum vivono in `NNet::State` in vettori allineati agli indici dei neuroni; lo stato è separato dalla topologia e può essere istanziato per ogni thread di training.
@@ -48,24 +48,35 @@
   - Collega gli elementi corrispondenti in lockstep; range di lunghezza diversa generano un'eccezione dopo aver processato il prefisso comune.
     
 - [x] **Rilevare connessioni duplicate prima di usare la rete**
-  - `prepare()` controlla tutte le connessioni, incluse quelle aggiunte da chiamate `connect()` distinte, usando una hash map temporanea.
-  - Il controllo avviene una volta per preparazione; non viene mantenuto un indice persistente nella rete, evitando memoria aggiuntiva per tutta la sua vita.
+  - `NNet::init()`, privata e chiamata dal costruttore, controlla tutte le connessioni, incluse quelle inserite direttamente in `Topology`, usando una hash map temporanea.
+  - Anche gli estremi delle connessioni vengono validati nel costruttore, non negli helper; non viene mantenuto un indice dei duplicati persistente nella rete.
     
-- [x] **Valutare un backend Metal (o altro backend GPU) oltre a OpenMP**
-  - Il parallelismo attuale è solo CPU (OpenMP); un backend Metal (o CUDA) permetterebbe di sfruttare la GPU per forward/backward pass.
-  - Richiede probabilmente un'astrazione per il backend di calcolo, non solo la scelta del dispositivo.
+- [x] **Implementare un backend Metal oltre a OpenMP**
+  - Backend Objective-C++ per `DenseForwardNet`, con prodotti matriciali MPS e kernel di attivazione, derivate e ottimizzazione.
+  - Supportati FP32, Identity/Sigmoid/ReLU, MSE e optimizer Momentum/Rprop; bias incluso nelle colonne delle matrici, senza kernel separati.
      
 - [x] **Use literals**
   - I literals consentono di poter cambiare in modo immediato i tipi di dati (e.g. real_t da 64bit a 32bit per es) utile per fare test e prove in modo veloce
     
+- [x] **Separare la costruzione della topologia dall'esecuzione della rete**
+  - `Topology` contiene neuroni e connessioni pubblici e gli helper `new_neurons()`, `connect()` e `zip_connect()`.
+  - `NNet` acquisisce i vettori e prepara i dati comuni nel costruttore; `DAGNet` completa validazione e preparazione DAG nel proprio costruttore, senza hook virtuale `init()`.
+  - `DenseForwardNet` mantiene il costruttore variadico pubblico e prepara la topologia con una funzione statica privata, creando solo i bias richiesti prima dei riceventi.
+  - La View espone dati strutturali in sola lettura e pesi modificabili. Resta protetto l'accesso mutabile alle partizioni per le implementazioni derivate.
+
+- [x] **Semplificare il rilevamento dei layer densi in DAGNet**
+  - Raggruppamento diretto per intervallo sorgente, senza UnionFind; i gruppi mantengono l'ordine di prima apparizione nelle partizioni topologiche.
+  - Conservati i controlli di contiguita e la mappatura dalle partizioni ai layer.
+
+- [x] **Riconoscere i layer densi con un solo ricevente in DAGNet**
+  - Rimosso il filtro sui gruppi con meno di due partizioni; le partizioni con sorgenti non contigue sono gia escluse durante il raggruppamento.
+  - I layer di output con un solo neurone sono inclusi nei descrittori esposti anche al backend Metal.
+
+- [x] **Esporre la mappatura tra partizioni e layer nella View**
+  - `layers()` restituisce uno span const ordinato topologicamente; `partition_layer_indices()` associa ogni partizione a un layer o a `Layer::no_layer`.
+  - Rimosso `is_dense()`; OpenMP usa la mappatura senza cursori sincronizzati, mentre Metal percorre direttamente i layer e usa gli indici di input e bias esposti da `NNet::View`.
+
 ## Priorita alta
-
-- [ ] **Semplificare il rilevamento dei layer densi in DAGNet**
-  - Rivedere raggruppamento e controlli di contiguita, preservando l'ordine topologico dei layer e la mappatura dalle partizioni.
-
-- [ ] **Riconoscere i layer densi con un solo ricevente in DAGNet**
-  - Rimuovere il filtro sui gruppi con meno di due partizioni, continuando a escludere le partizioni isolate con sorgenti non contigue: anche queste sono presenti nei gruppi.
-  - Verificare il riconoscimento dei layer di output con un solo neurone e il loro utilizzo nel backend Metal.
 
 - [ ] **Aggiungere optimizer adattivi**
   - Implementare Adam e valutare RMSProp; Rprop è già disponibile come optimizer OpenMP.
@@ -78,11 +89,17 @@
 
 ## Discussioni aperte
 
-- [ ] **Costruzione e mutabilita della topologia di NNet**
-  - Chiarire se `NNet` debba esporre direttamente `new_neurons()`, `connect()` e `zip_connect()`: l'ereditarieta pubblica permette di alterare anche reti costruite come fully dense, compromettendone l'invariante.
-  - Valutare un builder o funzioni esterne che costruiscano la topologia e la passino al costruttore di `NNet`, separando la costruzione dall'esecuzione della rete.
-  - Discutere il rischio di vincolare la rete a una topologia predefinita e immutabile, perdendo la generalita e la possibilita di modificarla incrementalmente.
-  - Confrontare questa alternativa con validazione in `prepare()` o congelamento esplicito; definire dove garantire gli invarianti e come esporre i metadati dei layer ai backend. Nessuna soluzione ancora scelta.
+- [ ] **Separare l'update della rete in backend di esecuzione riutilizzabili**
+  - La rete possiede modello, pesi e metadati; la View espone i dati ai backend, che eseguono le operazioni senza richiamare `net.update()`.
+  - La View serve a separare l'accesso ai dati dall'API operativa della rete: deve esporre solo dati e metadati, senza `infer()`, `train()` o `update()`.
+  - Solo l'utente utilizzatore della rete invoca le sue operazioni pubbliche, come `infer()` e `train()`. Le implementazioni interne di learning rule e backend devono accedere alla rete esclusivamente tramite View, non tramite un riferimento alla rete completa; adeguare anche `init()`, `to_device()` e `to_host()`.
+  - Estrarre l'update CPU attualmente in `DAGNet` e quello GPU attualmente nel backend Metal di backprop in implementazioni indipendenti dalle learning rule e dagli optimizer.
+  - Rendere `update()` e `infer()` templati sul backend, passato per riferimento per riutilizzarne le risorse; preservare la View specifica della rete e i vincoli sui modelli supportati.
+  - Il backend di backprop integra internamente il backend di update dello stesso dispositivo; conservare l'API pubblica `backprop::omp::Backend<Optimizer>` e l'equivalente Metal.
+  - Su Metal condividere buffer e command buffer tra update e backward, evitando trasferimenti CPU/GPU o allocazioni duplicate. Non imporre lo stato host `NNet::State` a ogni implementazione.
+  - Usare il nome generico `update`: per una DAG e una propagazione topologica, per altre reti puo essere un passo temporale, un aggiornamento sincrono/asincrono o un campionamento.
+  - Non obbligare ogni learning rule a possedere un backend di update: alcune regole possono determinare i pesi direttamente dai dati.
+  - Verificare il design prima su update DAG, backprop, Perceptron e inferenza; valutare in seguito reti ricorrenti, Hopfield e Boltzmann senza anticipare astrazioni non necessarie.
 
 ## Priorita bassa
 
@@ -188,4 +205,6 @@ raccolte solo dentro `train()`)
 
 ## Nota
 
-La classe `BiasNeuron` è stata rimossa (rispetto a main): il bias è ora gestito tramite `NNet::add_bias(...)`, indipendente dai dati di training.
+La classe `BiasNeuron` non esiste nella versione corrente: il bias e un `Neuron`
+di tipo `NeuronType::bias`, creato tramite `Topology::new_neurons()` e inizializzato
+con segnale 1 per l'attivazione Identity. Non fa parte dei dati di training.

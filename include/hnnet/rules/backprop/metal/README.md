@@ -80,6 +80,8 @@ The network view exposes read-only `DAGNet::Layer` descriptors through
 `layers()`, in topological order. Each descriptor contains transmitter/receiver
 ranges and a weight offset. Connected bias neurons are included in the
 transmitter range, and the weight row stride equals the transmitter count.
+The view also exposes `partition_layer_indices()`: one layer index per partition,
+or `DAGNet::Layer::no_layer` for partitions outside a dense layer.
 Metal converts these descriptors to its 32-bit kernel format. Input and bias
 positions are taken from the corresponding neuron-index spans in the network view.
 `DenseForwardNet::train()` preserves the concrete network type when forwarding
@@ -87,9 +89,8 @@ to the common training loop; OpenMP can still accept it through `DAGNet&`.
 
 `DenseForwardNet` assembles a `Topology` before constructing its `DAGNet` base.
 Neuron and connection construction helpers belong to `Topology`, not to the
-constructed network. The current layer detector still excludes single-receiver
-layers; completing that detection remains a TODO. Metal consumes the detected
-layers without reconstructing missing ones.
+constructed network. Dense layers with a single receiver are included in the
+descriptors, including single-neuron output layers.
 
 All GPU tensors and arithmetic use FP32. Host `real_t` is unchanged: data and
 weights are converted on upload and weights are converted back on download.
@@ -111,6 +112,13 @@ separate dense backend or wrapper.
 the existing rule. Input and target buffers are reused and filled directly,
 without temporary flattened vectors or a second copy. Data is read again each
 epoch so changes to the caller's samples are not silently ignored.
+
+The backend relies on the training protocol: `init(net)` precedes
+`to_device`, batch `backprop` calls, and `to_host` for the same network.
+Dataset dimensions are validated by `NNet::train`, and nonempty datasets and
+batch ranges are handled by `Backprop::learn`; the backend does not repeat
+these checks. Direct callers must satisfy the same preconditions. GPU limits,
+FP32 conversion checks, and Metal execution errors remain checked.
 
 Forward, hidden-delta propagation and the batch-mean weight gradient use
 `MPSMatrixMultiplication`: `X * W^T`, `delta * W`, and `delta^T * X / batch_size`.

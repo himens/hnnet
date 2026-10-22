@@ -91,6 +91,7 @@ namespace hnnet::backprop::omp {
                     const auto weights = view.weights();
                     const auto partitions = view.partitions();
                     const auto layers = view.layers();
+                    const auto partition_layer_indices = view.partition_layer_indices();
                     const auto output_neurons_indices = view.output_neurons_indices();
                     auto &state = _states[thread_index];
                     auto &deltas = _deltas[thread_index];
@@ -98,15 +99,16 @@ namespace hnnet::backprop::omp {
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss_value{0.0_real};
-                    for (const auto &[target, neuron_index] : std::views::zip(targets, output_neurons_indices)) {
-                        const auto &signal = state.signals[neuron_index];
-                        const auto &weighted_sum = state.weighted_sums[neuron_index];
-                        deltas[neuron_index] = loss.derivative(target, signal) * neurons[neuron_index].activation()->derivative(weighted_sum);
+                    for (const auto &[target, output_neuron_index] : std::views::zip(targets, output_neurons_indices)) {
+                        const auto &signal = state.signals[output_neuron_index];
+                        const auto &weighted_sum = state.weighted_sums[output_neuron_index];
+                        deltas[output_neuron_index] = loss.derivative(target, signal) * neurons[output_neuron_index].activation()->derivative(weighted_sum);
                         loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
-                    for (auto partition_index = std::ssize(partitions) - 1, layer_index = std::ssize(layers) - 1; partition_index >= 0; --partition_index) {
-                        if (view.is_dense(partition_index)) {
+                    for (auto partition_index = std::ssize(partitions) - 1; partition_index >= 0; --partition_index) {
+                        const auto layer_index = partition_layer_indices[partition_index];
+                        if (layer_index != net::DAGNet::Layer::no_layer) {
                             const auto &layer = layers[layer_index];
                             for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
                                 const auto rx_index = layer.rx_begin + row_index;
@@ -122,7 +124,6 @@ namespace hnnet::backprop::omp {
                                 }
                             }
                             partition_index -= layer.rx_count - 1;
-                            --layer_index;
                         }
                         else {
                             const auto &partition = partitions[partition_index];
@@ -138,9 +139,10 @@ namespace hnnet::backprop::omp {
                         }
                     }
                     // compute gradient (sum gradient since a thread could process multiple samples)
-                    for (index_t partition_index{0}, layer_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
-                        if (view.is_dense(partition_index)) {
-                            const auto &layer = layers[layer_index++];
+                    for (index_t partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
+                        const auto layer_index = partition_layer_indices[partition_index];
+                        if (layer_index != net::DAGNet::Layer::no_layer) {
+                            const auto &layer = layers[layer_index];
                             for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
                                 const auto rx_index = layer.rx_begin + row_index;
                                 const auto row_offset = layer.weight_offset + (row_index * layer.tx_count);

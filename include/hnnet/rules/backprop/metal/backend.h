@@ -31,19 +31,15 @@ namespace hnnet::backprop::metal {
                 template <typename ...Args>
                     requires std::constructible_from<Optimizer, Args...>
                     explicit Backend(Args&&... args) : _optimizer(std::forward<Args>(args)...) {}
-
+                // Set kernel directory
                 void set_kernel_directory(std::filesystem::path directory) {
-                    if (_ready) throw std::logic_error("Metal: set kernel directory before init");
                     _kernel_directory = std::move(directory);
                 }
                 // Initialize the backend
                 void init(net::DenseForwardNet &net) {
                     @autoreleasepool {
-                        _ready = false;
-                        _uploaded = false;
                         _scratch_capacity = 0;
                         _prepared_batch_size = 0;
-                        _net = nullptr;
                         auto view = net.view();
                         const auto neuron_count = detail::checked_count(view.neuron_count());
                         const auto connection_count = detail::checked_count(view.connection_count());
@@ -87,35 +83,22 @@ namespace hnnet::backprop::metal {
                         _activation_pipeline = _context.pipeline("hnnet_dense_activation");
                         _delta_pipeline = _context.pipeline("hnnet_dense_delta");
                         _optimizer.init(_context, connection_count);
-                        _net = &net;
-                        _ready = true;
                     }
                 }
                 // Transfer data to the device
                 void to_device(net::DenseForwardNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
                     @autoreleasepool {
-                        require_ready(net);
-                        _uploaded = false;
                         const auto sample_count = detail::checked_count(std::ranges::size(inputs));
-                        if (sample_count == 0 or std::ranges::size(targets) != sample_count) {
-                            throw std::invalid_argument("Metal: input and target sample counts must match and be nonzero");
-                        }
                         _inputs = reserve_buffer(_inputs, detail::checked_product(sample_count, _parameters.input_count) * sizeof(float));
                         _targets = reserve_buffer(_targets, detail::checked_product(sample_count, _parameters.output_count) * sizeof(float));
                         auto input_values = static_cast<float *>([_inputs contents]);
                         auto target_values = static_cast<float *>([_targets contents]);
                         std::size_t position = 0;
                         for (const auto &sample : inputs) {
-                            if (std::ranges::size(sample) != _parameters.input_count) {
-                                throw std::invalid_argument("Metal: input sample size mismatch");
-                            }
                             for (const auto value : sample) input_values[position++] = to_float(value);
                         }
                         position = 0;
                         for (const auto &sample : targets) {
-                            if (std::ranges::size(sample) != _parameters.output_count) {
-                                throw std::invalid_argument("Metal: target sample size mismatch");
-                            }
                             for (const auto value : sample) target_values[position++] = to_float(value);
                         }
                         const auto weights = net.view().weights();
@@ -123,18 +106,11 @@ namespace hnnet::backprop::metal {
                         for (std::size_t edge = 0; edge < weights.size(); ++edge) {
                             device_weights[edge] = to_float(weights[edge]);
                         }
-                        _sample_count = sample_count;
-                        _uploaded = true;
                     }
                 }
                 // Perform backprop (forward-backward plus weights update)
-                real_t backprop(net::DenseForwardNet &net, const index_t batch_begin, const index_t batch_end,
-                                const hnnet::loss::MSE &) {
+                real_t backprop(net::DenseForwardNet &, const index_t batch_begin, const index_t batch_end, const hnnet::loss::MSE &) {
                     @autoreleasepool {
-                        require_ready(net);
-                        if (not _uploaded or batch_begin < 0 or batch_end <= batch_begin or batch_end > _sample_count) {
-                            throw std::invalid_argument("Metal: invalid batch range or missing to_device");
-                        }
                         const auto batch_size = detail::checked_count(batch_end - batch_begin);
                         ensure_scratch(batch_size);
                         auto parameters = _parameters;
@@ -150,13 +126,7 @@ namespace hnnet::backprop::metal {
                                {_targets, _signals, _losses}, batch_size);
                                 backward(command, parameters);
                         _optimizer.update(command, _weights, _gradient, _parameters.connection_count);
-                        try {
-                            detail::complete(command);
-                        }
-                        catch (...) {
-                            _uploaded = false;
-                            throw;
-                        }
+                        detail::complete(command);
                         const auto losses = static_cast<const float *>([_losses contents]);
                         real_t loss{0.0_real};
                         for (std::uint32_t sample = 0; sample < batch_size; ++sample) {
@@ -167,8 +137,6 @@ namespace hnnet::backprop::metal {
                 }
                 // Transfer results back to the host
                 void to_host(net::DenseForwardNet &net) {
-                    require_ready(net);
-                    if (not _uploaded) throw std::logic_error("Metal: missing or failed device computation");
                     const auto device_weights = static_cast<const float *>([_weights contents]);
                     auto weights = net.view().weights();
                     for (std::size_t edge = 0; edge < weights.size(); ++edge) {
@@ -290,15 +258,6 @@ namespace hnnet::backprop::metal {
                     if (dynamic_cast<const hnnet::activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
                     throw std::invalid_argument("Metal: supported activations are Identity, Sigmoid and ReLU");
                 }
-                // Ensure the network is ready for backpropagation
-                void require_ready(net::DenseForwardNet &net) const {
-                    if (not _ready or _net != &net) throw std::logic_error("Metal: call init with this network first");
-                    const auto view = net.view();
-                    if (view.neuron_count() != _parameters.neuron_count or
-                        view.connection_count() != _parameters.connection_count) {
-                        throw std::logic_error("Metal: network topology changed; call init again");
-                    }
-                }
                 // Ensure the scratch buffers are large enough for the given batch size
                 void ensure_scratch(const std::uint32_t batch_size) {
                     if (batch_size <= _scratch_capacity) return;
@@ -333,12 +292,8 @@ namespace hnnet::backprop::metal {
                 std::filesystem::path _kernel_directory{std::filesystem::path{__FILE__}.parent_path()};
                 detail::Parameters _parameters{};
                 std::vector<Layer> _layers;
-                net::DenseForwardNet *_net = nullptr;
-                std::uint32_t _sample_count = 0;
                 std::uint32_t _scratch_capacity = 0;
                 std::uint32_t _prepared_batch_size = 0;
-                bool _ready = false;
-                bool _uploaded = false;
                 id<MTLBuffer> _activations = nil;
                 id<MTLBuffer> _input_positions = nil;
                 id<MTLBuffer> _inputs = nil;

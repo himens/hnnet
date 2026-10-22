@@ -127,8 +127,8 @@ namespace hnnet {
                 static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_output_neurons_indices.size());
-                for (const auto &[output_index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
-                    outputs[output_index] = state.signals[neuron_index];
+                for (const auto &[output_index, output_neuron_index] : _output_neurons_indices | std::views::enumerate) {
+                    outputs[output_index] = state.signals[output_neuron_index];
                 }
                 return outputs;
             }
@@ -225,13 +225,13 @@ namespace hnnet {
             }
             // Seed a net state from input data
             void seed_state(State &state, const DataType auto &inputs) const {
-                for (const auto &[neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
-                    state.weighted_sums[neuron_index] = input;
-                    state.signals[neuron_index] = _neurons[neuron_index].activate(input);
+                for (const auto &[input_neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
+                    state.weighted_sums[input_neuron_index] = input;
+                    state.signals[input_neuron_index] = _neurons[input_neuron_index].activate(input);
                 }
-                for (const auto &neuron_index : _bias_neurons_indices) {
-                    state.weighted_sums[neuron_index] = 1.0_real;
-                    state.signals[neuron_index] = _neurons[neuron_index].activate(1.0_real);
+                for (const auto &bias_neuron_index : _bias_neurons_indices) {
+                    state.weighted_sums[bias_neuron_index] = 1.0_real;
+                    state.signals[bias_neuron_index] = _neurons[bias_neuron_index].activate(1.0_real);
                 }
             }
         private:
