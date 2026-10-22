@@ -50,11 +50,11 @@ namespace hnnet::net {
                     Topology topology;
                     auto tx_indices = topology.new_neurons(layers...[0].size, layers...[0].type, layers...[0].activation);
                     auto connect_layer = [&] (const auto &layer) {
-                        const auto bias_index = topology.new_neurons(1, NeuronType::bias, activation::Identity{});
+                        const auto bias_indices = layer.biased ? topology.new_neurons(1, NeuronType::bias, activation::Identity{}) : index_vector_t{};
                         const auto rx_indices = topology.new_neurons(layer.size, layer.type, layer.activation);
                         topology.connect(tx_indices, rx_indices);
                         if (layer.biased) {
-                            topology.connect(bias_index, rx_indices);
+                            topology.connect(bias_indices, rx_indices);
                         }
                         tx_indices = rx_indices;
                     };

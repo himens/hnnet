@@ -134,15 +134,15 @@ namespace hnnet::net {
                 _layer_indices.assign(std::ssize(partitions), Layer::no_layer);
                 UnionFind union_find(partitions.size());
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
-                for (const auto &[index, partition] : partitions | std::views::enumerate) {
+                for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
                     const auto count = (partition.connection_end - partition.connection_begin);
                     const auto tx_begin = connections[partition.connection_begin].tx_index;
                     if ((connections[partition.connection_end - 1].tx_index - tx_begin) != count - 1) {
                         continue;  // tx range has gaps: not a pure dense candidate
                     }
-                    const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, index);
+                    const auto [it, inserted] = hash_map.try_emplace(std::pair{tx_begin, count}, partition_index);
                     if (not inserted) {
-                        union_find.unite(it->second, index);
+                        union_find.unite(it->second, partition_index);
                     }
                 }
                 std::vector<index_vector_t> groups(partitions.size());

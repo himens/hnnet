@@ -127,8 +127,8 @@ namespace hnnet {
                 static thread_local State state(_neurons.size());
                 update(state, inputs);
                 output_vector_t outputs(_output_neurons_indices.size());
-                for (const auto &[index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
-                    outputs[index] = state.signals[neuron_index];
+                for (const auto &[output_index, neuron_index] : _output_neurons_indices | std::views::enumerate) {
+                    outputs[output_index] = state.signals[neuron_index];
                 }
                 return outputs;
             }
@@ -199,8 +199,8 @@ namespace hnnet {
             // Check for duplicate connections
             static bool has_duplicate_connection(const std::span<Connection> connections) {
                 std::unordered_map<IndexPair, index_t, IndexPairHash> hash_map;
-                for (const auto &[index, connection] : connections | std::views::enumerate) {
-                    const auto [_, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, index);
+                for (const auto &[connection_index, connection] : connections | std::views::enumerate) {
+                    const auto [_, inserted] = hash_map.try_emplace(std::pair{connection.rx_index, connection.tx_index}, connection_index);
                     if (not inserted) {
                         return true;
                     }
