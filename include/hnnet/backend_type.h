@@ -3,15 +3,12 @@
 #include "hnnet/types.h"
 
 namespace hnnet {
-    template <typename Backend, typename Net, typename Inputs, typename Targets>
-        concept BackendType = DatasetType<Inputs> and
-                              DatasetType<Targets> and
-                              requires(Backend &backend,
-                                       Net &net,
-                                       const Inputs &inputs,
-                                       const Targets &targets) {
-                                  { backend.init(net) } -> std::same_as<void>;
-                                  { backend.to_device(net, inputs, targets) } -> std::same_as<void>;
-                                  { backend.to_host(net) } -> std::same_as<void>;
+    template <typename Backend, typename View, typename... Data>
+        concept BackendType = requires(Backend &backend,
+                                       View &view,
+                                       const Data &...data) {
+                                  { backend.init(view) } -> std::same_as<void>;
+                                  { backend.to_device(view, data...) } -> std::same_as<void>;
+                                  { backend.to_host(view) } -> std::same_as<void>;
                               };
 }

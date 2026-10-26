@@ -5,7 +5,9 @@
 
 namespace hnnet::backprop {
     template <typename Backend, typename Net, typename Inputs, typename Targets, typename Loss>
-        concept BackendType = hnnet::BackendType<Backend, Net, Inputs, Targets> and
+        concept BackendType = DatasetType<Inputs> and
+                              DatasetType<Targets> and
+                              hnnet::BackendType<Backend, Net, Inputs, Targets> and
                               LossType<Loss> and
                               requires(Backend &backend,
                                        Net &net,
