@@ -10,7 +10,7 @@
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/perceptron.h"
-#include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/nets/dense_forward/dense_forward_net.h"
 #include "hnnet/rules/perceptron.h"
 
 // Constants

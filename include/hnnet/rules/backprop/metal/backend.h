@@ -19,7 +19,8 @@
 #include "hnnet/activations/relu.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/nets/dense_forward/dense_forward_net.h"
+#include "hnnet/nets/dense_forward/update/metal/backend.h"
 #include "hnnet/rules/backprop/backend_type.h"
 
 namespace hnnet::backprop::metal {
@@ -36,6 +37,10 @@ namespace hnnet::backprop::metal {
                 // Set kernel directory
                 void set_kernel_directory(std::filesystem::path directory) {
                     _kernel_directory = std::move(directory);
+                }
+                // Set the shared forward shader directory
+                void set_update_kernel_directory(std::filesystem::path directory) {
+                    _update_kernel_directory = std::move(directory);
                 }
                 // Initialize the backend
                 void init(net::DenseForwardNet::View &view) {
@@ -60,7 +65,7 @@ namespace hnnet::backprop::metal {
                         std::vector<std::uint32_t> input_positions(neuron_count, std::numeric_limits<std::uint32_t>::max());
                         const auto neurons = view.neurons();
                         for (std::uint32_t neuron = 0; neuron < neuron_count; ++neuron) {
-                            activations.push_back(describe_activation(neurons[neuron].activation()));
+                            activations.push_back(detail::describe_activation(neurons[neuron].activation()));
                         }
                         const auto &output_layer = _layers.back().shape;
                         const auto input_indices = view.input_neurons_indices();
@@ -74,14 +79,14 @@ namespace hnnet::backprop::metal {
                         _parameters = {neuron_count, connection_count,
                                        input_count, output_layer.rx_count,
                                        output_layer.rx_begin, 0, 0};
-                        _context.init(_kernel_directory);
+                        _context.init(_kernel_directory, _update_kernel_directory);
+                        _update_backend.init(view, _context);
                         _activations = _context.upload(activations);
                         _input_positions = _context.upload(input_positions);
                         _weights = _context.buffer(std::size_t{connection_count} * sizeof(float));
                         _gradient = _context.buffer(std::size_t{connection_count} * sizeof(float));
                         _seed_pipeline = _context.pipeline("hnnet_seed");
                         _loss_pipeline = _context.pipeline("hnnet_loss");
-                        _activation_pipeline = _context.pipeline("hnnet_dense_activation");
                         _delta_pipeline = _context.pipeline("hnnet_dense_delta");
                         _optimizer.init(_context, connection_count);
                     }
@@ -97,21 +102,21 @@ namespace hnnet::backprop::metal {
                             auto target_values = static_cast<float *>([_targets contents]);
                             std::size_t position = 0;
                             for (const auto &sample : data.inputs) {
-                                for (const auto value : sample) input_values[position++] = to_float(value);
+                                for (const auto value : sample) input_values[position++] = detail::to_float(value);
                             }
                             position = 0;
                             for (const auto &sample : data.targets) {
-                                for (const auto value : sample) target_values[position++] = to_float(value);
+                                for (const auto value : sample) target_values[position++] = detail::to_float(value);
                             }
                             const auto weights = view.weights();
                             auto device_weights = static_cast<float *>([_weights contents]);
                             for (std::size_t edge = 0; edge < weights.size(); ++edge) {
-                                device_weights[edge] = to_float(weights[edge]);
+                                device_weights[edge] = detail::to_float(weights[edge]);
                             }
                         }
                     }
                 // Perform backprop (forward-backward plus weights update)
-                real_t backprop(net::DenseForwardNet::View &,
+                real_t backprop(net::DenseForwardNet::View &view,
                                 const index_t batch_begin,
                                 const index_t batch_end,
                                 const loss::MSE &) {
@@ -123,8 +128,10 @@ namespace hnnet::backprop::metal {
                         parameters.batch_size = batch_size;
                         prepare_matrices(parameters);
                         auto command = _context.command();
+                        _update_backend.to_device(view, dense_forward::update::metal::DeviceData{
+                            command, _weights, _signals, _weighted_sums, _activations, batch_size});
                         encode(command, _seed_pipeline, parameters, {_activations, _input_positions, _inputs, _signals}, detail::checked_product(batch_size, parameters.neuron_count));
-                        forward(command, parameters);
+                        _update_backend.update();
                         encode(command, _loss_pipeline, parameters, {_targets, _signals, _losses}, batch_size);
                         backward(command, parameters);
                         _optimizer.update(command, _weights, _gradient, _parameters.connection_count);
@@ -146,81 +153,33 @@ namespace hnnet::backprop::metal {
                 }
             private:
                 // Data types
-                struct DenseLayer {
-                    std::uint32_t tx_begin;
-                    std::uint32_t tx_count;
-                    std::uint32_t rx_begin;
-                    std::uint32_t rx_count;
-                    std::uint32_t weight_offset;
-                };
+                using DenseLayer = detail::DenseLayer;
                 struct Layer {
                     DenseLayer shape;
-                    MPSMatrixMultiplication *forward = nil;
                     MPSMatrixMultiplication *backward = nil;
                     MPSMatrixMultiplication *gradient = nil;
                     MPSMatrix *input = nil;
                     MPSMatrix *weight = nil;
-                    MPSMatrix *sum = nil;
                     MPSMatrix *delta = nil;
                     MPSMatrix *previous_delta = nil;
                     MPSMatrix *weight_gradient = nil;
                 };
                 static_assert(sizeof(DenseLayer) == 20);
-                // Helper function to create an MPS matrix view from a buffer
-                static MPSMatrix *matrix(id<MTLBuffer> buffer, const std::uint32_t offset,
-                                         const std::uint32_t rows, const std::uint32_t columns,
-                                         const std::uint32_t stride) {
-                    MPSMatrixDescriptor *descriptor = [MPSMatrixDescriptor matrixDescriptorWithRows:rows
-                                                                                          columns:columns
-                                                                                         rowBytes:std::size_t{stride} * sizeof(float)
-                                                                                         dataType:MPSDataTypeFloat32];
-                    MPSMatrix *result = [[MPSMatrix alloc] initWithBuffer:buffer
-                                                                 offset:std::size_t{offset} * sizeof(float)
-                                                             descriptor:descriptor];
-                    if (result == nil) throw std::runtime_error("Metal: cannot construct MPS matrix view");
-                    return result;
-                }
-
-                // Helper function to create an MPS matrix multiplication object
-                MPSMatrixMultiplication *product(const bool transpose_left, const bool transpose_right,
-                                                 const std::uint32_t rows, const std::uint32_t columns,
-                                                 const std::uint32_t interior, const double alpha) const {
-                    MPSMatrixMultiplication *result = [[MPSMatrixMultiplication alloc]
-                        initWithDevice:_context.device() transposeLeft:transpose_left transposeRight:transpose_right
-                        resultRows:rows resultColumns:columns interiorColumns:interior alpha:alpha beta:0.0];
-                    if (result == nil) throw std::runtime_error("Metal: cannot construct MPS matrix multiplication");
-                    return result;
-                }
-
+                // Prepare the matrices used by backward and gradient computation
                 void prepare_matrices(const detail::Parameters &parameters) {
                     if (_prepared_batch_size == parameters.batch_size) return;
                     for (auto &layer : _layers) {
                         const auto &shape = layer.shape;
-                        layer.forward = product(false, true, parameters.batch_size, shape.rx_count, shape.tx_count, 1.0);
-                        layer.backward = product(false, false, parameters.batch_size, shape.tx_count, shape.rx_count, 1.0);
-                        layer.gradient = product(true, false, shape.rx_count, shape.tx_count, parameters.batch_size,
+                        layer.backward = detail::product(_context.device(), false, false, parameters.batch_size, shape.tx_count, shape.rx_count, 1.0);
+                        layer.gradient = detail::product(_context.device(), true, false, shape.rx_count, shape.tx_count, parameters.batch_size,
                                                  1.0 / static_cast<double>(parameters.batch_size));
-                        layer.input = matrix(_signals, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
-                        layer.weight = matrix(_weights, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
-                        layer.sum = matrix(_weighted_sums, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
-                        layer.delta = matrix(_deltas, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
-                        layer.previous_delta = matrix(_propagated_deltas, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
-                        layer.weight_gradient = matrix(_gradient, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
+                        layer.input = detail::matrix(_signals, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
+                        layer.weight = detail::matrix(_weights, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
+                        layer.delta = detail::matrix(_deltas, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
+                        layer.previous_delta = detail::matrix(_propagated_deltas, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
+                        layer.weight_gradient = detail::matrix(_gradient, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
                     }
                     _prepared_batch_size = parameters.batch_size;
-                }
-                // Perform the forward pass for the network
-                void forward(id<MTLCommandBuffer> command, const detail::Parameters &parameters) const {
-                    for (const auto &layer : _layers) {
-                        [layer.forward encodeToCommandBuffer:command leftMatrix:layer.input rightMatrix:layer.weight resultMatrix:layer.sum];
-                        auto encoder = detail::encoder(command, _activation_pipeline);
-                        [encoder setBytes:&parameters length:sizeof(parameters) atIndex:0];
-                        [encoder setBytes:&layer.shape length:sizeof(layer.shape) atIndex:1];
-                        [encoder setBuffer:_activations offset:0 atIndex:2];
-                        [encoder setBuffer:_weighted_sums offset:0 atIndex:3];
-                        [encoder setBuffer:_signals offset:0 atIndex:4];
-                        detail::dispatch(encoder, _activation_pipeline, detail::checked_product(parameters.batch_size, layer.shape.rx_count));
-                    }
                 }
                 // Perform the backward pass for the network
                 void backward(id<MTLCommandBuffer> command, const detail::Parameters &parameters) const {
@@ -243,22 +202,6 @@ namespace hnnet::backprop::metal {
                     }
                 }
 
-                static float to_float(const real_t value) {
-                    const auto result = static_cast<float>(value);
-                    if (not std::isfinite(result)) {
-                        throw std::invalid_argument("Metal: values must be finite and representable in FP32");
-                    }
-                    return result;
-                }
-                // Describe the activation function for Metal kernels
-                static detail::ActivationDescriptor describe_activation(const Activation *activation) {
-                    if (dynamic_cast<const activation::Identity *>(activation) != nullptr) return {0, 1.0f};
-                    if (const auto sigmoid = dynamic_cast<const activation::Sigmoid *>(activation)) {
-                        return {1, to_float(sigmoid->sigma)};
-                    }
-                    if (dynamic_cast<const activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
-                    throw std::invalid_argument("Metal: supported activations are Identity, Sigmoid and ReLU");
-                }
                 // Ensure the scratch buffers are large enough for the given batch size
                 void ensure_scratch(const std::uint32_t batch_size) {
                     if (batch_size <= _scratch_capacity) return;
@@ -290,7 +233,9 @@ namespace hnnet::backprop::metal {
                 // Data members
                 Optimizer _optimizer;
                 detail::Context _context;
+                dense_forward::update::metal::Backend _update_backend;
                 std::filesystem::path _kernel_directory{std::filesystem::path{__FILE__}.parent_path()};
+                std::filesystem::path _update_kernel_directory{dense_forward::update::metal::detail::kernel_directory()};
                 detail::Parameters _parameters{};
                 std::vector<Layer> _layers;
                 std::uint32_t _scratch_capacity = 0;
@@ -308,7 +253,6 @@ namespace hnnet::backprop::metal {
                 id<MTLBuffer> _losses = nil;
                 id<MTLComputePipelineState> _seed_pipeline = nil;
                 id<MTLComputePipelineState> _loss_pipeline = nil;
-                id<MTLComputePipelineState> _activation_pipeline = nil;
                 id<MTLComputePipelineState> _delta_pipeline = nil;
         };
 }

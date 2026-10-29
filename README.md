@@ -71,7 +71,7 @@ Classifier data representation details:
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/nets/dense_forward/dense_forward_net.h"
 #include "hnnet/rules/backprop/backprop.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"

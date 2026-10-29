@@ -2,7 +2,8 @@
 #include <metal_stdlib>
 
 namespace hnnet {
-namespace backprop {
+namespace dense_forward {
+namespace update {
 namespace metal {
 namespace activation {
     inline float identity(const float x) {
@@ -29,6 +30,7 @@ namespace activation {
     inline float relu_derivative(const float x) {
         return x > 0.0f ? 1.0f : 0.0f;
     }
+}
 }
 }
 }
