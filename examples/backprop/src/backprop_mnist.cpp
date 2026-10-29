@@ -14,6 +14,7 @@
 #include "hnnet/activations/relu.h"
 #include "hnnet/losses/mse.h"
 #include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/nets/dag/update/omp/backend.h"
 #include "hnnet/rules/backprop/backprop.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
@@ -135,7 +136,7 @@ int main() {
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
         for (const auto &[label, pixels] : digits) {
-            const auto outputs = classifier.infer(encode(pixels));
+            const auto outputs = classifier.infer(encode(pixels), dag::update::omp::Backend{});
             const auto predicted_label = decode(outputs);
             error_count += (predicted_label != label);
         }

@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "hnnet/learning_rule_type.h"
 #include "hnnet/nnet.h"
 
 namespace hnnet::net {
@@ -27,16 +26,19 @@ namespace hnnet::net {
             };
             class View : public NNet::View {
                 public:
+                    // Construct an unbound view
+                    View() = default;
                     std::span<const index_t> partition_layer_indices() const {
-                        return _net._partition_layer_indices;
+                        return _net->_partition_layer_indices;
                     }
                     std::span<const Layer> layers() const {
-                        return _net._layers;
+                        return _net->_layers;
                     }
+                protected:
+                    explicit View(DAGNet &net) : NNet::View(net), _net(&net) {}
                 private:
                     friend class DAGNet;
-                    explicit View(DAGNet &net) : NNet::View(net), _net(net) {}
-                    DAGNet &_net;
+                    DAGNet *_net{nullptr};
             };
         public:
             // Constructor
@@ -48,16 +50,6 @@ namespace hnnet::net {
             // Create a view of the net
             View view() {
                 return View(*this);
-            }
-            // Train net using a set of training samples
-            template <DatasetType Inputs, DatasetType Targets, LearningRuleType<DAGNet, Inputs, Targets> LearningRule>
-                void train(const Inputs &inputs, const Targets &targets, LearningRule rule) {
-                    NNet::train(*this, inputs, targets, rule);
-                }
-        protected:
-            // Update net state
-            void update_state(State &state) const override {
-                propagate_signals(state);
             }
         private:
             // Initialize net
@@ -145,66 +137,6 @@ namespace hnnet::net {
                     }
                 }
                 std::println("DAGNet::init: layer(s): {}", _layers.size());
-            }
-            // Propagate signals through the net
-            void propagate_signals(State &state) const {
-                const auto partitions = this->partitions();
-                for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
-                    const auto &partition = partitions[partition_index];
-                    const auto layer_index = _partition_layer_indices[partition_index];
-                    if (layer_index != Layer::no_layer) {
-                        const auto &layer = _layers[layer_index];
-                        propagate_layer(state, layer);
-                        partition_index += layer.rx_count - 1;  // layer members are contiguous: skip them all at once
-                    }
-                    else {
-                        propagate_partition(state, partition);
-                    }
-                }
-            }
-            // Propagate signals of a single partition
-            void propagate_partition(State &state, const Partition &partition) const {
-                real_t weighted_sum{0.0_real};
-                const auto weights = this->weights();
-                const auto connections = this->connections();
-                const auto neurons = this->neurons();
-                auto connection_index = partition.connection_begin;
-                for (; connection_index <= (partition.connection_end - simd_register_size); connection_index += simd_register_size) {
-                    weighted_sum += 
-                        + weights[connection_index]     * state.signals[connections[connection_index].tx_index]
-                        + weights[connection_index + 1] * state.signals[connections[connection_index + 1].tx_index]
-                        + weights[connection_index + 2] * state.signals[connections[connection_index + 2].tx_index]
-                        + weights[connection_index + 3] * state.signals[connections[connection_index + 3].tx_index];
-                }
-                //#pragma omp simd reduction(+:weighted_sum)
-                for (; connection_index < partition.connection_end; connection_index++) {
-                    weighted_sum += weights[connection_index] * state.signals[connections[connection_index].tx_index];
-                }
-                state.weighted_sums[partition.rx_index] = weighted_sum;
-                state.signals[partition.rx_index] = neurons[partition.rx_index].activate(weighted_sum);
-            }
-            // Propagate signals of a layer
-            void propagate_layer(State &state, const Layer &layer) const {
-                for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
-                    real_t weighted_sum{0.0_real};
-                    const auto weights = this->weights();
-                    const auto neurons = this->neurons();
-                    const auto row_offset = layer.weight_offset + row_index * layer.tx_count;
-                    index_t column_index{0};
-                    for (; column_index <= (layer.tx_count - simd_register_size); column_index += simd_register_size) {
-                        weighted_sum +=   
-                            + weights[row_offset + column_index]     * state.signals[layer.tx_begin + column_index]
-                            + weights[row_offset + column_index + 1] * state.signals[layer.tx_begin + column_index + 1]
-                            + weights[row_offset + column_index + 2] * state.signals[layer.tx_begin + column_index + 2]
-                            + weights[row_offset + column_index + 3] * state.signals[layer.tx_begin + column_index + 3];
-                    }
-                    //#pragma omp simd reduction(+:weighted_sum)
-                    for (; column_index < layer.tx_count; ++column_index) {
-                        weighted_sum +=  weights[row_offset + column_index] * state.signals[layer.tx_begin + column_index];
-                    }
-                    state.weighted_sums[layer.rx_begin + row_index] = weighted_sum;
-                    state.signals[layer.rx_begin + row_index] = neurons[layer.rx_begin + row_index].activate(weighted_sum);
-                }
             }
         private:
             // Data members

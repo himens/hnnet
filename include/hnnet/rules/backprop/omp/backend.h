@@ -6,8 +6,10 @@
 #include <vector>
 #include <omp.h>
 #include "optimizer_type.h"
+#include "hnnet/rules/backprop/backend_type.h"
 #include "hnnet/loss_type.h"
-#include "hnnet/nets/dag_net.h"
+#include "hnnet/nets/dag/dag_net.h"
+#include "hnnet/nets/dag/update/omp/backend.h"
 
 namespace hnnet::backprop::omp {
     using delta_vector_t = std::vector<real_t>;
@@ -23,8 +25,7 @@ namespace hnnet::backprop::omp {
                     requires std::constructible_from<Optimizer, Args...>
                     explicit Backend(Args&&... args) : _optimizer(std::forward<Args>(args)...) {}
                 // Initialize the backend
-                void init(net::DAGNet &net) {
-                    auto view = net.view();
+                void init(net::DAGNet::View &view) {
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
                     const auto max_threads = omp_get_max_threads();
@@ -35,23 +36,23 @@ namespace hnnet::backprop::omp {
                     _optimizer.init(connection_count);
                 }
                 // Transfer the network and data to the device
-                void to_device(net::DAGNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
-                    _weights = net.view().weights();
-                    _inputs.clear();
-                    _targets.clear();
-                    for (const auto &sample : inputs) {
-                        _inputs.emplace_back(sample);
+                template <DatasetType Inputs, DatasetType Targets>
+                    void to_device(net::DAGNet::View &view, const TrainingData<Inputs, Targets> &data) {
+                        _weights = view.weights();
+                        _inputs.clear();
+                        _targets.clear();
+                        for (const auto &sample : data.inputs) {
+                            _inputs.emplace_back(sample);
+                        }
+                        for (const auto &sample : data.targets) {
+                            _targets.emplace_back(sample);
+                        }
                     }
-                    for (const auto &sample : targets) {
-                        _targets.emplace_back(sample);
-                    }
-                }
                 // Perform backprop (forward-backward plus weights update)
-                real_t backprop(net::DAGNet &net,
+                real_t backprop(net::DAGNet::View &view,
                                 const index_t batch_begin,
                                 const index_t batch_end,
                                 const LossType auto &loss) {
-                    auto view = net.view();
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
                     const auto thread_count = parallel ? std::ssize(_states) : index_t{1};
@@ -59,11 +60,31 @@ namespace hnnet::backprop::omp {
                         std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
                     real_t loss_value{0.0_real};
-                    #pragma omp parallel for if(parallel) reduction(+:loss_value)
-                    for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
+                    #pragma omp parallel if(parallel) reduction(+:loss_value)
+                    {
                         const auto thread_index = omp_get_thread_num();
-                        net.update(_states[thread_index], _inputs[sample_index]);
-                        loss_value += backward(view, thread_index, sample_index, loss);
+                        auto &state = _states[thread_index];
+                        const std::span<NNet::State> states{&state, 1};
+                        dag::update::omp::Backend update_backend;
+                        update_backend.init(view);
+                        update_backend.to_device(view, states);
+                        const auto neurons = view.neurons();
+                        const auto input_indices = view.input_neurons_indices();
+                        const auto bias_indices = view.bias_neurons_indices();
+                        #pragma omp for
+                        for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
+                            for (const auto &[input_index, input] : std::views::zip(input_indices, _inputs[sample_index])) {
+                                state.weighted_sums[input_index] = input;
+                                state.signals[input_index] = neurons[input_index].activate(input);
+                            }
+                            for (const auto bias_index : bias_indices) {
+                                state.weighted_sums[bias_index] = 1.0_real;
+                                state.signals[bias_index] = neurons[bias_index].activate(1.0_real);
+                            }
+                            update_backend.update();
+                            loss_value += backward(view, thread_index, sample_index, loss);
+                        }
+                        update_backend.to_host(view, states);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
@@ -78,7 +99,7 @@ namespace hnnet::backprop::omp {
                     return loss_value;
                 }
                 // Transfer the net to host memory (if needed)
-                void to_host(net::DAGNet &) {}
+                void to_host(net::DAGNet::View &, std::span<real_t>) {}
             protected:
                 // Compute the error and delta weights contribution of a single sample
                 real_t backward(net::DAGNet::View &view,

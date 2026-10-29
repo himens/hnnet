@@ -4,8 +4,7 @@
 #include <stdexcept>
 #include <utility>
 #include "hnnet/activations/identity.h"
-#include "hnnet/learning_rule_type.h"
-#include "hnnet/nets/dag_net.h"
+#include "hnnet/nets/dag/dag_net.h"
 #include "hnnet/topology.h"
 
 namespace hnnet::net {
@@ -27,15 +26,20 @@ namespace hnnet::net {
     ///////////////////////////
     class DenseForwardNet final : public DAGNet {
         public:
+            class View : public DAGNet::View {
+                private:
+                    friend class DenseForwardNet;
+                    // Construct a dense-forward view.
+                    explicit View(DenseForwardNet &net) : DAGNet::View(net) {}
+            };
             // Constructor
             template <DenseLayerType... Layers>
                 requires (sizeof...(Layers) > 0)
                 explicit DenseForwardNet(const Layers &...layers) : DAGNet(make_topology(layers...)) {}
-            // Train net using a set of training samples
-            template <DatasetType Inputs, DatasetType Targets, LearningRuleType<DenseForwardNet, Inputs, Targets> LearningRule>
-                void train(const Inputs &inputs, const Targets &targets, LearningRule rule) {
-                    NNet::train(*this, inputs, targets, std::move(rule));
-                }
+            // Create a dense-forward view of the network.
+            View view() {
+                return View(*this);
+            }
         private:
             // Make dense topology
             template <DenseLayerType... Layers>

@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 #include "hnnet/topology.h"
+#include "hnnet/learning_rule_type.h"
+#include "hnnet/update_backend_type.h"
 #include "utils/random.h"
 #include "utils/timer.h"
 
@@ -34,38 +36,40 @@ namespace hnnet {
             };
             class View {
                 public:
+                    // Construct an unbound view
+                    View() = default;
                     int_t neuron_count() const {
-                        return _net._neurons.size();
+                        return _net->_neurons.size();
                     }
                     int_t connection_count() const {
-                        return _net._connections.size();
+                        return _net->_connections.size();
                     }
                     std::span<const Neuron> neurons() const {
-                        return _net._neurons;
+                        return _net->_neurons;
                     }
                     std::span<const Connection> connections() const {
-                        return _net._connections;
+                        return _net->_connections;
                     }
                     std::span<real_t> weights() const {
-                        return _net._weights;
+                        return _net->_weights;
                     }
                     std::span<const Partition> partitions() const {
-                        return _net._partitions;
+                        return _net->_partitions;
                     }
                     std::span<const index_t> output_neurons_indices() const {
-                        return _net._output_neurons_indices;
+                        return _net->_output_neurons_indices;
                     }
                     std::span<const index_t> input_neurons_indices() const {
-                        return _net._input_neurons_indices;
+                        return _net->_input_neurons_indices;
                     }
                     std::span<const index_t> bias_neurons_indices() const {
-                        return _net._bias_neurons_indices;
+                        return _net->_bias_neurons_indices;
                     }
                 protected:
-                    explicit View(NNet& net) : _net(net) {}
+                    explicit View(NNet& net) : _net(&net) {}
                 private:
                     friend class NNet;
-                    NNet& _net;
+                    NNet* _net{nullptr};
             };
         public:
             // Constructor
@@ -79,8 +83,8 @@ namespace hnnet {
                 return View(*this);
             }
             // Train net using a set of training samples
-            template <typename Self, DatasetType Inputs, DatasetType Targets, typename LearningRule>
-                void train(Self &self, 
+            template <typename Self, DatasetType Inputs, DatasetType Targets, LearningRuleType<typename Self::View, Inputs, Targets> LearningRule>
+                void train(this Self &self, 
                            const Inputs &inputs, 
                            const Targets &targets, 
                            LearningRule rule) {
@@ -90,23 +94,24 @@ namespace hnnet {
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
                     utils::Timer timer{};
+                    auto view = self.view();
                     std::println("NNet::train: ==================================");
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
                     std::println("NNet::train: ==================================");
                     timer.start();
-                    _weights = utils::random::generate<real_t>(_weights.size(), -0.1_real, +0.1_real);
-                    rule.init(self);
+                    self._weights = utils::random::generate<real_t>(self._weights.size(), -0.1_real, +0.1_real);
+                    rule.init(view);
                     for (const auto &[input, target] : std::views::zip(inputs, targets)) {
-                        if (std::ssize(input) != std::ssize(_input_neurons_indices) or (std::ssize(target) != std::ssize(_output_neurons_indices))) {
+                        if (std::ssize(input) != std::ssize(self._input_neurons_indices) or (std::ssize(target) != std::ssize(self._output_neurons_indices))) {
                             throw std::invalid_argument("NNet::train: size error!");
                         }
                     }
-                    while (not _trained and (epoch <= max_epochs)) {
-                        _trained = rule.learn(self, inputs, targets);
+                    while (not self._trained and (epoch <= max_epochs)) {
+                        self._trained = rule.learn(view, inputs, targets);
                         epoch++;
                         std::println("NNet::train: epoch: {}, elapsed time: {:.5f}s", epoch, timer.get_elapsed_time_s());
                     }
-                    if (_trained) {
+                    if (self._trained) {
                         std::println("NNet::train: Training summary:");
                         std::println("NNet::train: elapsed time: {:.5f}s", timer.get_elapsed_time_s());
                         std::println("NNet::train: epochs: {}", epoch);
@@ -116,30 +121,49 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            output_vector_t infer(const DataType auto &inputs) {
-                if (not _trained) {
-                    std::println("NNet::infer: try to infer from an untrained net!");
-                    return {};
+            template <typename Self, net::update::BackendType<typename Self::View, std::span<State>, std::span<State>> Backend>
+                output_vector_t infer(this Self &self, const DataType auto &inputs, Backend backend) {
+                    if (not self._trained) {
+                        std::println("NNet::infer: try to infer from an untrained net!");
+                        return {};
+                    }
+                    static thread_local State state(self._neurons.size());
+                    state.signals.resize(self._neurons.size());
+                    state.weighted_sums.resize(self._neurons.size());
+                    const auto batch = std::views::single(std::span<const real_t>{inputs});
+                    self.update(std::span<State>{&state, 1}, batch, backend);
+                    output_vector_t outputs(self._output_neurons_indices.size());
+                    for (const auto &[output_index, output_neuron_index] : self._output_neurons_indices | std::views::enumerate) {
+                        outputs[output_index] = state.signals[output_neuron_index];
+                    }
+                    return outputs;
                 }
-                if (std::ranges::size(inputs) != std::ranges::size(_input_neurons_indices)) {
-                    throw std::invalid_argument("NNet::infer: size error!");
+            // Update net states from a batch of input data
+            template <typename Self, typename Backend, DatasetType Inputs>
+                requires net::update::BackendType<Backend, typename Self::View, std::span<State>, std::span<State>>
+                void update(this Self &self,
+                            std::span<State> states,
+                            const Inputs &inputs,
+                            Backend &backend) {
+                    if (std::ranges::size(inputs) != states.size()) {
+                        throw std::invalid_argument("NNet::update: size error!");
+                    }
+                    for (const auto &[state, input] : std::views::zip(states, inputs)) {
+                        if (std::ssize(input) != std::ssize(self._input_neurons_indices) or
+                            state.signals.size() != self._neurons.size() or
+                            state.weighted_sums.size() != self._neurons.size()) {
+                            throw std::invalid_argument("NNet::update: size error!");
+                        }
+                    }
+                    for (auto &&[state, input] : std::views::zip(states, inputs)) {
+                        self.seed_state(state, input);
+                    }
+                    auto view = self.view();
+                    backend.init(view);
+                    backend.to_device(view, states);
+                    backend.update();
+                    backend.to_host(view, states);
                 }
-                static thread_local State state(_neurons.size());
-                update(state, inputs);
-                output_vector_t outputs(_output_neurons_indices.size());
-                for (const auto &[output_index, output_neuron_index] : _output_neurons_indices | std::views::enumerate) {
-                    outputs[output_index] = state.signals[output_neuron_index];
-                }
-                return outputs;
-            }
-            // Update a net state from input data
-            void update(State &state, const DataType auto &inputs) const {
-                if (std::ssize(inputs) != std::ssize(_input_neurons_indices)) {
-                    throw std::invalid_argument("NNet::update: size error!");
-                }
-                seed_state(state, inputs);
-                update_state(state);
-            }
         protected: 
             // Data types
             using IndexPair = std::pair<index_t, index_t>;
@@ -148,8 +172,6 @@ namespace hnnet {
                     return std::hash<index_t>{}(pair.first) ^ (std::hash<index_t>{}(pair.second) << 1);
                 }
             };
-            // Update net state
-            virtual void update_state(State &state) const = 0;
             // Getters
             std::span<const Neuron> neurons() const {
                 return _neurons;

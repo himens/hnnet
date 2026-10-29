@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include <ranges>
+#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
 #include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/rules/backprop/backend_type.h"
 
 namespace hnnet::backprop::metal {
     template <OptimizerType Optimizer>
@@ -36,11 +38,10 @@ namespace hnnet::backprop::metal {
                     _kernel_directory = std::move(directory);
                 }
                 // Initialize the backend
-                void init(net::DenseForwardNet &net) {
+                void init(net::DenseForwardNet::View &view) {
                     @autoreleasepool {
                         _scratch_capacity = 0;
                         _prepared_batch_size = 0;
-                        auto view = net.view();
                         const auto neuron_count = detail::checked_count(view.neuron_count());
                         const auto connection_count = detail::checked_count(view.connection_count());
                         if (neuron_count == 0) throw std::invalid_argument("Metal: network must not be empty");
@@ -86,45 +87,46 @@ namespace hnnet::backprop::metal {
                     }
                 }
                 // Transfer data to the device
-                void to_device(net::DenseForwardNet &net, const DatasetType auto &inputs, const DatasetType auto &targets) {
-                    @autoreleasepool {
-                        const auto sample_count = detail::checked_count(std::ranges::size(inputs));
-                        _inputs = reserve_buffer(_inputs, detail::checked_product(sample_count, _parameters.input_count) * sizeof(float));
-                        _targets = reserve_buffer(_targets, detail::checked_product(sample_count, _parameters.output_count) * sizeof(float));
-                        auto input_values = static_cast<float *>([_inputs contents]);
-                        auto target_values = static_cast<float *>([_targets contents]);
-                        std::size_t position = 0;
-                        for (const auto &sample : inputs) {
-                            for (const auto value : sample) input_values[position++] = to_float(value);
-                        }
-                        position = 0;
-                        for (const auto &sample : targets) {
-                            for (const auto value : sample) target_values[position++] = to_float(value);
-                        }
-                        const auto weights = net.view().weights();
-                        auto device_weights = static_cast<float *>([_weights contents]);
-                        for (std::size_t edge = 0; edge < weights.size(); ++edge) {
-                            device_weights[edge] = to_float(weights[edge]);
+                template <DatasetType Inputs, DatasetType Targets>
+                    void to_device(net::DenseForwardNet::View &view, const backprop::TrainingData<Inputs, Targets> &data) {
+                        @autoreleasepool {
+                            const auto sample_count = detail::checked_count(std::ranges::size(data.inputs));
+                            _inputs = reserve_buffer(_inputs, detail::checked_product(sample_count, _parameters.input_count) * sizeof(float));
+                            _targets = reserve_buffer(_targets, detail::checked_product(sample_count, _parameters.output_count) * sizeof(float));
+                            auto input_values = static_cast<float *>([_inputs contents]);
+                            auto target_values = static_cast<float *>([_targets contents]);
+                            std::size_t position = 0;
+                            for (const auto &sample : data.inputs) {
+                                for (const auto value : sample) input_values[position++] = to_float(value);
+                            }
+                            position = 0;
+                            for (const auto &sample : data.targets) {
+                                for (const auto value : sample) target_values[position++] = to_float(value);
+                            }
+                            const auto weights = view.weights();
+                            auto device_weights = static_cast<float *>([_weights contents]);
+                            for (std::size_t edge = 0; edge < weights.size(); ++edge) {
+                                device_weights[edge] = to_float(weights[edge]);
+                            }
                         }
                     }
-                }
                 // Perform backprop (forward-backward plus weights update)
-                real_t backprop(net::DenseForwardNet &, const index_t batch_begin, const index_t batch_end, const hnnet::loss::MSE &) {
+                real_t backprop(net::DenseForwardNet::View &,
+                                const index_t batch_begin,
+                                const index_t batch_end,
+                                const loss::MSE &) {
                     @autoreleasepool {
                         const auto batch_size = detail::checked_count(batch_end - batch_begin);
                         ensure_scratch(batch_size);
                         auto parameters = _parameters;
                         parameters.batch_begin = static_cast<std::uint32_t>(batch_begin);
                         parameters.batch_size = batch_size;
-                                prepare_matrices(parameters);
+                        prepare_matrices(parameters);
                         auto command = _context.command();
-                        encode(command, _seed_pipeline, parameters,
-                               {_activations, _input_positions, _inputs, _signals},
-                               detail::checked_product(batch_size, parameters.neuron_count));
-                                forward(command, parameters);
-                        encode(command, _loss_pipeline, parameters,
-                               {_targets, _signals, _losses}, batch_size);
-                                backward(command, parameters);
+                        encode(command, _seed_pipeline, parameters, {_activations, _input_positions, _inputs, _signals}, detail::checked_product(batch_size, parameters.neuron_count));
+                        forward(command, parameters);
+                        encode(command, _loss_pipeline, parameters, {_targets, _signals, _losses}, batch_size);
+                        backward(command, parameters);
                         _optimizer.update(command, _weights, _gradient, _parameters.connection_count);
                         detail::complete(command);
                         const auto losses = static_cast<const float *>([_losses contents]);
@@ -136,9 +138,8 @@ namespace hnnet::backprop::metal {
                     }
                 }
                 // Transfer results back to the host
-                void to_host(net::DenseForwardNet &net) {
+                void to_host(net::DenseForwardNet::View &, std::span<real_t> weights) {
                     const auto device_weights = static_cast<const float *>([_weights contents]);
-                    auto weights = net.view().weights();
                     for (std::size_t edge = 0; edge < weights.size(); ++edge) {
                         weights[edge] = static_cast<real_t>(device_weights[edge]);
                     }
@@ -251,11 +252,11 @@ namespace hnnet::backprop::metal {
                 }
                 // Describe the activation function for Metal kernels
                 static detail::ActivationDescriptor describe_activation(const Activation *activation) {
-                    if (dynamic_cast<const hnnet::activation::Identity *>(activation) != nullptr) return {0, 1.0f};
-                    if (const auto sigmoid = dynamic_cast<const hnnet::activation::Sigmoid *>(activation)) {
+                    if (dynamic_cast<const activation::Identity *>(activation) != nullptr) return {0, 1.0f};
+                    if (const auto sigmoid = dynamic_cast<const activation::Sigmoid *>(activation)) {
                         return {1, to_float(sigmoid->sigma)};
                     }
-                    if (dynamic_cast<const hnnet::activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
+                    if (dynamic_cast<const activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
                     throw std::invalid_argument("Metal: supported activations are Identity, Sigmoid and ReLU");
                 }
                 // Ensure the scratch buffers are large enough for the given batch size
