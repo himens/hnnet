@@ -1,4 +1,5 @@
 #pragma once
+#include <limits>
 #include <span>
 #include <utility>
 #include <vector>
@@ -15,6 +16,8 @@ namespace hnnet::dense_forward::update::metal {
         id<MTLBuffer> weighted_sums = nil;
         id<MTLBuffer> activations = nil;
         std::uint32_t batch_size = 0;
+        id<MTLBuffer> inputs = nil;
+        std::uint32_t batch_begin = 0;
     };
 
     ///////////////////
@@ -54,6 +57,16 @@ namespace hnnet::dense_forward::update::metal {
                                             hnnet::metal::checked_count(layer.weight_offset)}});
                 }
                 _parameters.output_begin = _layers.back().shape.rx_begin;
+                std::vector<std::uint32_t> input_positions(_parameters.neuron_count, std::numeric_limits<std::uint32_t>::max());
+                const auto input_indices = view.input_neurons_indices();
+                for (std::uint32_t input = 0; input < _parameters.input_count; ++input) {
+                    input_positions[input_indices[input]] = input;
+                }
+                for (const auto bias_index : view.bias_neurons_indices()) {
+                    input_positions[bias_index] = 0xfffffffeu;
+                }
+                _input_positions = _context.upload(input_positions);
+                _seed_pipeline = _context.pipeline("hnnet_seed");
                 _activation_pipeline = _context.pipeline("hnnet_dense_activation");
                 _data = {};
                 _prepared_batch_size = 0;
@@ -62,6 +75,7 @@ namespace hnnet::dense_forward::update::metal {
                 _owned_weights = nil;
                 _owned_signals = nil;
                 _owned_weighted_sums = nil;
+                _owned_inputs = nil;
             }
             // Associate existing device resources without uploading or submitting work
             void to_device(net::DenseForwardNet::View &, const DeviceData &data) {
@@ -69,22 +83,27 @@ namespace hnnet::dense_forward::update::metal {
                     throw std::logic_error("Metal: device association requires init");
                 }
                 if (data.command == nil or data.weights == nil or data.signals == nil or
-                    data.weighted_sums == nil or data.activations == nil) {
+                    data.weighted_sums == nil or data.activations == nil or data.inputs == nil) {
                     throw std::invalid_argument("Metal: update requires a command and all forward buffers");
                 }
                 if ([data.command device] != _context.device() or
                     [data.weights device] != _context.device() or
                     [data.signals device] != _context.device() or
                     [data.weighted_sums device] != _context.device() or
-                    [data.activations device] != _context.device()) {
+                    [data.activations device] != _context.device() or
+                    [data.inputs device] != _context.device()) {
                     throw std::invalid_argument("Metal: update resources must use the context device");
                 }
                 // MPS matrix views need room for their nonzero neuron offsets.
                 const auto elements = hnnet::metal::checked_product(std::size_t{data.batch_size} + 1, _parameters.neuron_count);
+                const auto sample_end = std::size_t{data.batch_begin} + data.batch_size;
+                hnnet::metal::checked_count(sample_end);
+                const auto input_elements = hnnet::metal::checked_product(sample_end, _parameters.input_count);
                 if ([data.weights length] < std::size_t{_parameters.connection_count} * sizeof(float) or
                     [data.signals length] < elements * sizeof(float) or
                     [data.weighted_sums length] < elements * sizeof(float) or
-                    [data.activations length] < std::size_t{_parameters.neuron_count} * sizeof(detail::ActivationDescriptor)) {
+                    [data.activations length] < std::size_t{_parameters.neuron_count} * sizeof(detail::ActivationDescriptor) or
+                    [data.inputs length] < input_elements * sizeof(float)) {
                     throw std::invalid_argument("Metal: update buffers are smaller than the batch");
                 }
                 if (data.weights != _data.weights or data.signals != _data.signals or
@@ -93,19 +112,28 @@ namespace hnnet::dense_forward::update::metal {
                 }
                 _data = data;
                 _parameters.batch_size = data.batch_size;
+                _parameters.batch_begin = data.batch_begin;
                 _host_batch = false;
                 prepare_matrices();
             }
-            // Upload prepared host states for standalone update
-            void to_device(net::DenseForwardNet::View &view, std::span<NNet::State> states) {
+            // Upload inputs and associate the destination states for standalone update
+            void to_device(net::DenseForwardNet::View &view, const NNet::UpdateData &data) {
                 if (_activation_pipeline == nil) {
                     throw std::logic_error("Metal: host upload requires init");
                 }
-                const auto batch_size = hnnet::metal::checked_count(states.size());
+                if (data.inputs.size() != data.states.size()) {
+                    throw std::invalid_argument("Metal: input and state counts must match");
+                }
+                const auto batch_size = hnnet::metal::checked_count(data.states.size());
                 const auto elements = hnnet::metal::checked_product(std::size_t{batch_size} + 1, _parameters.neuron_count);
-                for (const auto &state : states) {
+                for (const auto &state : data.states) {
                     if (state.signals.size() != _parameters.neuron_count or state.weighted_sums.size() != _parameters.neuron_count) {
                         throw std::invalid_argument("Metal: update state size does not match the network");
+                    }
+                }
+                for (const auto input : data.inputs) {
+                    if (input.size() != _parameters.input_count) {
+                        throw std::invalid_argument("Metal: input size does not match the network");
                     }
                 }
                 if (_owned_activations == nil) {
@@ -118,30 +146,39 @@ namespace hnnet::dense_forward::update::metal {
                 _owned_weights = reserve_buffer(_owned_weights, std::size_t{_parameters.connection_count} * sizeof(float));
                 _owned_signals = reserve_buffer(_owned_signals, elements * sizeof(float));
                 _owned_weighted_sums = reserve_buffer(_owned_weighted_sums, elements * sizeof(float));
+                const auto input_elements = hnnet::metal::checked_product(batch_size, _parameters.input_count);
+                _owned_inputs = reserve_buffer(_owned_inputs, input_elements * sizeof(float));
                 const auto weights = view.weights();
                 auto device_weights = static_cast<float *>([_owned_weights contents]);
                 for (std::size_t edge = 0; edge < weights.size(); ++edge) {
                     device_weights[edge] = detail::to_float(weights[edge]);
                 }
-                auto signals = static_cast<float *>([_owned_signals contents]);
-                auto weighted_sums = static_cast<float *>([_owned_weighted_sums contents]);
+                auto input_values = static_cast<float *>([_owned_inputs contents]);
                 std::size_t offset = 0;
-                for (const auto &state : states) {
-                    for (std::uint32_t neuron = 0; neuron < _parameters.neuron_count; ++neuron) {
-                        signals[offset] = detail::to_float(state.signals[neuron]);
-                        weighted_sums[offset++] = detail::to_float(state.weighted_sums[neuron]);
+                for (const auto input : data.inputs) {
+                    for (const auto value : input) {
+                        input_values[offset++] = detail::to_float(value);
                     }
                 }
                 to_device(view, DeviceData{_context.command(), _owned_weights, _owned_signals,
-                                          _owned_weighted_sums, _owned_activations, batch_size});
+                                          _owned_weighted_sums, _owned_activations, batch_size, _owned_inputs, 0});
                 _host_batch = true;
             }
-            // Encode propagation without submitting or waiting for the command
+            // Encode seed and propagation without submitting or waiting for the command
             void update() const {
                 if (_activation_pipeline == nil or _data.command == nil) {
                     throw std::logic_error("Metal: update requires init and to_device");
                 }
                 if (_parameters.batch_size == 0) return;
+                auto seed_encoder = hnnet::metal::encoder(_data.command, _seed_pipeline);
+                [seed_encoder setBytes:&_parameters length:sizeof(_parameters) atIndex:0];
+                [seed_encoder setBuffer:_data.activations offset:0 atIndex:1];
+                [seed_encoder setBuffer:_input_positions offset:0 atIndex:2];
+                [seed_encoder setBuffer:_data.inputs offset:0 atIndex:3];
+                [seed_encoder setBuffer:_data.signals offset:0 atIndex:4];
+                [seed_encoder setBuffer:_data.weighted_sums offset:0 atIndex:5];
+                hnnet::metal::dispatch(seed_encoder, _seed_pipeline,
+                                      hnnet::metal::checked_product(_parameters.batch_size, _parameters.neuron_count));
                 for (const auto &layer : _layers) {
                     [layer.forward encodeToCommandBuffer:_data.command leftMatrix:layer.input rightMatrix:layer.weight resultMatrix:layer.sum];
                     auto encoder = hnnet::metal::encoder(_data.command, _activation_pipeline);
@@ -213,9 +250,12 @@ namespace hnnet::dense_forward::update::metal {
             std::uint32_t _prepared_batch_size = 0;
             bool _host_batch = false;
             id<MTLComputePipelineState> _activation_pipeline = nil;
+            id<MTLComputePipelineState> _seed_pipeline = nil;
+            id<MTLBuffer> _input_positions = nil;
             id<MTLBuffer> _owned_activations = nil;
             id<MTLBuffer> _owned_weights = nil;
             id<MTLBuffer> _owned_signals = nil;
             id<MTLBuffer> _owned_weighted_sums = nil;
+            id<MTLBuffer> _owned_inputs = nil;
     };
 }

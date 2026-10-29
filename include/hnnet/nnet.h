@@ -34,10 +34,18 @@ namespace hnnet {
                 std::vector<real_t> signals{};
                 std::vector<real_t> weighted_sums{};
             };
+            struct UpdateData {
+                std::span<State> states;
+                std::span<const std::span<const real_t>> inputs;
+            };
             class View {
                 public:
                     // Construct an unbound view
                     View() = default;
+                    // Seed an existing state from input data
+                    void seed_state(State &state, std::span<const real_t> inputs) const {
+                        _net->seed_state(state, inputs);
+                    }
                     int_t neuron_count() const {
                         return _net->_neurons.size();
                     }
@@ -121,48 +129,26 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            template <typename Self, net::update::BackendType<typename Self::View, std::span<State>, std::span<State>> Backend>
+            template <typename Self, net::update::BackendType<typename Self::View, UpdateData, std::span<State>> Backend>
                 output_vector_t infer(this Self &self, const DataType auto &inputs, Backend backend) {
                     if (not self._trained) {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    static thread_local State state(self._neurons.size());
-                    state.signals.resize(self._neurons.size());
-                    state.weighted_sums.resize(self._neurons.size());
-                    const auto batch = std::views::single(std::span<const real_t>{inputs});
-                    self.update(std::span<State>{&state, 1}, batch, backend);
+                    State state(self._neurons.size());
+                    const auto input = std::span<const real_t>{inputs};
+                    const std::span<State> states{&state, 1};
+                    const UpdateData data{states, {&input, 1}};
+                    auto view = self.view();
+                    backend.init(view);
+                    backend.to_device(view, data);
+                    backend.update();
+                    backend.to_host(view, states);
                     output_vector_t outputs(self._output_neurons_indices.size());
                     for (const auto &[output_index, output_neuron_index] : self._output_neurons_indices | std::views::enumerate) {
                         outputs[output_index] = state.signals[output_neuron_index];
                     }
                     return outputs;
-                }
-            // Update net states from a batch of input data
-            template <typename Self, typename Backend, DatasetType Inputs>
-                requires net::update::BackendType<Backend, typename Self::View, std::span<State>, std::span<State>>
-                void update(this Self &self,
-                            std::span<State> states,
-                            const Inputs &inputs,
-                            Backend &backend) {
-                    if (std::ranges::size(inputs) != states.size()) {
-                        throw std::invalid_argument("NNet::update: size error!");
-                    }
-                    for (const auto &[state, input] : std::views::zip(states, inputs)) {
-                        if (std::ssize(input) != std::ssize(self._input_neurons_indices) or
-                            state.signals.size() != self._neurons.size() or
-                            state.weighted_sums.size() != self._neurons.size()) {
-                            throw std::invalid_argument("NNet::update: size error!");
-                        }
-                    }
-                    for (auto &&[state, input] : std::views::zip(states, inputs)) {
-                        self.seed_state(state, input);
-                    }
-                    auto view = self.view();
-                    backend.init(view);
-                    backend.to_device(view, states);
-                    backend.update();
-                    backend.to_host(view, states);
                 }
         protected: 
             // Data types
@@ -247,6 +233,11 @@ namespace hnnet {
             }
             // Seed a net state from input data
             void seed_state(State &state, const DataType auto &inputs) const {
+                if (std::ranges::size(inputs)  != _input_neurons_indices.size() or
+                    state.signals.size()       != _neurons.size() or
+                    state.weighted_sums.size() != _neurons.size()) {
+                    throw std::invalid_argument("NNet::seed_state: size error!");
+                }
                 for (const auto &[input_neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
                     state.weighted_sums[input_neuron_index] = input;
                     state.signals[input_neuron_index] = _neurons[input_neuron_index].activate(input);

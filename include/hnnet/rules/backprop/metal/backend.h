@@ -62,7 +62,6 @@ namespace hnnet::backprop::metal {
                                                     detail::checked_count(layer.weight_offset)}});
                         }
                         std::vector<detail::ActivationDescriptor> activations;
-                        std::vector<std::uint32_t> input_positions(neuron_count, std::numeric_limits<std::uint32_t>::max());
                         const auto neurons = view.neurons();
                         for (std::uint32_t neuron = 0; neuron < neuron_count; ++neuron) {
                             activations.push_back(detail::describe_activation(neurons[neuron].activation()));
@@ -70,22 +69,14 @@ namespace hnnet::backprop::metal {
                         const auto &output_layer = _layers.back().shape;
                         const auto input_indices = view.input_neurons_indices();
                         const auto input_count = detail::checked_count(input_indices.size());
-                        for (std::uint32_t input = 0; input < input_count; ++input) {
-                            input_positions[input_indices[input]] = input;
-                        }
-                        for (const auto bias_index : view.bias_neurons_indices()) {
-                            input_positions[bias_index] = 0xfffffffeu;
-                        }
                         _parameters = {neuron_count, connection_count,
                                        input_count, output_layer.rx_count,
                                        output_layer.rx_begin, 0, 0};
                         _context.init(_kernel_directory, _update_kernel_directory);
                         _update_backend.init(view, _context);
                         _activations = _context.upload(activations);
-                        _input_positions = _context.upload(input_positions);
                         _weights = _context.buffer(std::size_t{connection_count} * sizeof(float));
                         _gradient = _context.buffer(std::size_t{connection_count} * sizeof(float));
-                        _seed_pipeline = _context.pipeline("hnnet_seed");
                         _loss_pipeline = _context.pipeline("hnnet_loss");
                         _delta_pipeline = _context.pipeline("hnnet_dense_delta");
                         _optimizer.init(_context, connection_count);
@@ -129,8 +120,8 @@ namespace hnnet::backprop::metal {
                         prepare_matrices(parameters);
                         auto command = _context.command();
                         _update_backend.to_device(view, dense_forward::update::metal::DeviceData{
-                            command, _weights, _signals, _weighted_sums, _activations, batch_size});
-                        encode(command, _seed_pipeline, parameters, {_activations, _input_positions, _inputs, _signals}, detail::checked_product(batch_size, parameters.neuron_count));
+                            command, _weights, _signals, _weighted_sums, _activations, batch_size,
+                            _inputs, parameters.batch_begin});
                         _update_backend.update();
                         encode(command, _loss_pipeline, parameters, {_targets, _signals, _losses}, batch_size);
                         backward(command, parameters);
@@ -241,7 +232,6 @@ namespace hnnet::backprop::metal {
                 std::uint32_t _scratch_capacity = 0;
                 std::uint32_t _prepared_batch_size = 0;
                 id<MTLBuffer> _activations = nil;
-                id<MTLBuffer> _input_positions = nil;
                 id<MTLBuffer> _inputs = nil;
                 id<MTLBuffer> _targets = nil;
                 id<MTLBuffer> _weights = nil;
@@ -251,7 +241,6 @@ namespace hnnet::backprop::metal {
                 id<MTLBuffer> _deltas = nil;
                 id<MTLBuffer> _propagated_deltas = nil;
                 id<MTLBuffer> _losses = nil;
-                id<MTLComputePipelineState> _seed_pipeline = nil;
                 id<MTLComputePipelineState> _loss_pipeline = nil;
                 id<MTLComputePipelineState> _delta_pipeline = nil;
         };

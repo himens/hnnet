@@ -39,17 +39,19 @@ backend; optimizers keep using the backprop context adapter.
 ## Reusable Update Backend
 
 [`dense_forward::update::metal::Backend`](../../../nets/dense_forward/update/metal/backend.h)
-implements dense propagation independently of backprop. It has two usage paths:
+implements input/bias seeding and dense propagation independently of backprop.
+It has two usage paths:
 
-- Standalone: `init(view)`, `to_device(view, states)`, `update()`,
-  `to_host(view, states)`. Host states must already contain seeded inputs and
-  biases and have both vectors sized to the network. Upload converts weights,
-  signals and weighted sums to FP32. `update()` only encodes propagation;
+- Standalone: `init(view)`, `to_device(view, NNet::UpdateData{states, inputs})`,
+  `update()`, `to_host(view, states)`. The payload contains matching spans of
+  destination states and input spans. Both state vectors must be sized to the
+  network; their existing values are not uploaded. Upload converts weights and
+  inputs to FP32. `update()` encodes GPU seed followed by propagation;
   `to_host()` submits, waits and downloads both state vectors.
 - Composed: `init(view, context)` shares the caller's context. Then
   `to_device(view, DeviceData{command, weights, signals, weighted_sums,
-  activations, batch_size})` associates existing GPU resources and `update()`
-  encodes the forward pass. No host transfers, command submission or waiting
+  activations, batch_size, inputs, batch_begin})` associates existing GPU
+  resources and `update()` encodes seed and forward. No host transfers, command submission or waiting
   occur. The caller manages resource lifetime, ordering and completion.
 
 Standalone Objective-C++ command-line callers should enclose the lifecycle in an
@@ -60,8 +62,12 @@ stride. Allocate `(batch_size + 1) * neuron_count` floats for each buffer to
 accommodate the offsets of MPS matrix views. Weights remain row-major as exposed
 by the network; activations use the shared `ActivationDescriptor` layout.
 Use resources from the same Metal device as the context.
+The input buffer contains sample-major input values; `batch_begin` selects the
+first input sample, while the seed writes states from sample zero in the scratch
+buffers. The input/bias index map and seed pipeline are prepared once in `init`.
+The seed initializes both signals and weighted sums for input and bias neurons.
 
-Backprop uses the composed path immediately after encoding the seed, on the same
+Backprop delegates seed and forward to the composed path, on the same
 command buffer and tensors as loss, backward and optimizer. Forward matrices are
 cached until the batch size or associated buffers change. No extra GPU buffer,
 transfer or command completion is introduced in this path.

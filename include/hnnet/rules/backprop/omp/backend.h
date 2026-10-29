@@ -67,20 +67,10 @@ namespace hnnet::backprop::omp {
                         const std::span<NNet::State> states{&state, 1};
                         dag::update::omp::Backend update_backend;
                         update_backend.init(view);
-                        update_backend.to_device(view, states);
-                        const auto neurons = view.neurons();
-                        const auto input_indices = view.input_neurons_indices();
-                        const auto bias_indices = view.bias_neurons_indices();
                         #pragma omp for
                         for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
-                            for (const auto &[input_index, input] : std::views::zip(input_indices, _inputs[sample_index])) {
-                                state.weighted_sums[input_index] = input;
-                                state.signals[input_index] = neurons[input_index].activate(input);
-                            }
-                            for (const auto bias_index : bias_indices) {
-                                state.weighted_sums[bias_index] = 1.0_real;
-                                state.signals[bias_index] = neurons[bias_index].activate(1.0_real);
-                            }
+                            const NNet::UpdateData data{states, {&_inputs[sample_index], 1}};
+                            update_backend.to_device(view, data);
                             update_backend.update();
                             loss_value += backward(view, thread_index, sample_index, loss);
                         }

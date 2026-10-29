@@ -54,6 +54,32 @@ namespace metal {
 }
 }
 
+kernel void hnnet_seed(
+    constant hnnet::dense_forward::update::metal::Parameters &parameters [[buffer(0)]],
+    device const hnnet::dense_forward::update::metal::ActivationDescriptor *activations [[buffer(1)]],
+    device const uint *input_positions [[buffer(2)]],
+    device const float *inputs [[buffer(3)]],
+    device float *signals [[buffer(4)]],
+    device float *weighted_sums [[buffer(5)]],
+    uint item [[thread_position_in_grid]]) {
+    if (item >= parameters.batch_size * parameters.neuron_count) return;
+    const uint neuron = item % parameters.neuron_count;
+    const uint input = input_positions[neuron];
+    float signal = 0.0f;
+    float weighted_sum = 0.0f;
+    if (input < parameters.input_count) {
+        const uint sample = parameters.batch_begin + item / parameters.neuron_count;
+        weighted_sum = inputs[sample * parameters.input_count + input];
+        signal = hnnet::dense_forward::update::metal::activate(activations[neuron], weighted_sum);
+    }
+    else if (input == 0xfffffffeu) {
+        weighted_sum = 1.0f;
+        signal = hnnet::dense_forward::update::metal::activate(activations[neuron], weighted_sum);
+    }
+    signals[item] = signal;
+    weighted_sums[item] = weighted_sum;
+}
+
 kernel void hnnet_dense_activation(
     constant hnnet::dense_forward::update::metal::Parameters &parameters [[buffer(0)]],
     constant hnnet::dense_forward::update::metal::DenseLayer &layer [[buffer(1)]],

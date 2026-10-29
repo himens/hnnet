@@ -24,27 +24,6 @@ namespace metal {
 
 using namespace hnnet::backprop::metal;
 
-kernel void hnnet_seed(
-    constant Parameters &parameters [[buffer(0)]],
-    device const ActivationDescriptor *activations [[buffer(1)]],
-    device const uint *input_positions [[buffer(2)]],
-    device const float *inputs [[buffer(3)]],
-    device float *signals [[buffer(4)]],
-    uint item [[thread_position_in_grid]]) {
-    if (item >= parameters.batch_size * parameters.neuron_count) return;
-    const uint neuron = item % parameters.neuron_count;
-    const uint input = input_positions[neuron];
-    float signal = 0.0f;
-    if (input < parameters.input_count) {
-        const uint sample = parameters.batch_begin + item / parameters.neuron_count;
-        signal = activate(activations[neuron], inputs[sample * parameters.input_count + input]);
-    }
-    else if (input == 0xfffffffeu) {
-        signal = activate(activations[neuron], 1.0f);
-    }
-    signals[item] = signal;
-}
-
 kernel void hnnet_loss(
     constant Parameters &parameters [[buffer(0)]],
     device const float *targets [[buffer(1)]],
