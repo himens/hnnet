@@ -29,49 +29,45 @@ namespace hnnet::backprop::omp {
                     const auto neuron_count = view.neuron_count();
                     const auto connection_count = view.connection_count();
                     const auto max_threads = omp_get_max_threads();
-                    _states.assign(max_threads, NNet::State{neuron_count});
+                    const auto weights = _view.weights();
+                    _weights.assign(weights.begin(), weights.end());            
                     _deltas.assign(max_threads, delta_vector_t(neuron_count, 0.0_real));
                     _gradients.assign(max_threads, grad_vector_t(connection_count, 0.0_real));
                     _batch_gradient.assign(connection_count, 0.0_real);
                     _optimizer.init(connection_count);
+                    _targets.clear();
                     _view = view;
+                    _update_backend.init(view);
                 }
                 // Transfer data to the device
                 template <DatasetType Inputs, DatasetType Targets>
                     void to_device(const TrainingData<Inputs, Targets> &data) {
-                        _weights = _view.weights();
-                        for (const auto &sample : data.inputs) {
-                            _training_data.inputs.emplace_back(sample);
-                        }
+                        _targets.clear();
                         for (const auto &sample : data.targets) {
-                            _training_data.targets.emplace_back(sample);
+                            _targets.emplace_back(sample);
                         }
+                        _update_backend.to_device(data.inputs);
                     }
                 // Transfer data back to the host
-                void to_host(std::span<real_t>) {}
+                void to_host(weight_vector_t &weights) {
+                    weights = std::move(_weights);
+                }
                 // Perform backprop (forward-backward plus weights update)
                 real_t backprop(const index_t batch_begin, const index_t batch_end, const LossType auto &loss) {
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
-                    const auto thread_count = parallel ? std::ssize(_states) : index_t{1};
+                    const auto thread_count = parallel ? std::ssize(_gradients) : index_t{1};
                     for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
                         std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
                     real_t loss_value{0.0_real};
-                    #pragma omp parallel if(parallel) reduction(+:loss_value)
-                    {
+                    #pragma omp parallel for if(parallel) reduction(+:loss_value)
+                    for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
                         const auto thread_index = omp_get_thread_num();
-                        auto &state = _states[thread_index];
-                        const std::span<NNet::State> states{&state, 1};
-                        dag::update::omp::Backend update_backend;
-                        update_backend.init(_view);
-                        #pragma omp for
-                        for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
-                            update_backend.to_device(_training_data.inputs[sample_index]);
-                            update_backend.update();
-                            loss_value += backward(thread_index, sample_index, loss);
-                        }
-                        update_backend.to_host(states);
+                        std::span<const NNet::State> states;
+                        _update_backend.update_states(_weights, sample_index);
+                        _update_backend.to_host(states);
+                        loss_value += backward(thread_index, sample_index, states[thread_index], loss);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
@@ -82,21 +78,22 @@ namespace hnnet::backprop::omp {
                             }
                         }
                     }
-                    _optimizer.update(_weights, parallel ? _batch_gradient : _gradients.front());
+                    _optimizer.update_weights(_weights, parallel ? _batch_gradient : _gradients.front());
                     return loss_value;
                 }
             protected:
                 // Compute the error and delta weights contribution of a single sample
-                real_t backward(const index_t thread_index, const index_t sample_index, const LossType auto &loss) {
-                    const auto targets = _training_data.targets[sample_index];
+                real_t backward(const index_t thread_index,
+                                const index_t sample_index,
+                                const NNet::State &state,
+                                const LossType auto &loss) {
+                    const auto targets = _targets[sample_index];
                     const auto neurons = _view.neurons();
                     const auto connections = _view.connections();
-                    const auto weights = _view.weights();
                     const auto partitions = _view.partitions();
                     const auto layers = _view.layers();
                     const auto partition_layer_indices = _view.partition_layer_indices();
                     const auto output_neurons_indices = _view.output_neurons_indices();
-                    auto &state = _states[thread_index];
                     auto &deltas = _deltas[thread_index];
                     auto &gradient = _gradients[thread_index];
                     std::ranges::fill(deltas, 0.0_real);
@@ -123,7 +120,7 @@ namespace hnnet::backprop::omp {
                                 for (auto column_index{0}; column_index < layer.tx_count; ++column_index) {
                                     const auto tx_index = layer.tx_begin + column_index;
                                     const auto connection_index = row_offset + column_index;
-                                    deltas[tx_index] += deltas[rx_index] * weights[connection_index];
+                                    deltas[tx_index] += deltas[rx_index] * _weights[connection_index];
                                 }
                             }
                             partition_index -= layer.rx_count - 1;
@@ -137,7 +134,7 @@ namespace hnnet::backprop::omp {
                             }
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                                 const auto tx_index = connections[connection_index].tx_index;
-                                deltas[tx_index] += deltas[rx_index] * weights[connection_index];
+                                deltas[tx_index] += deltas[rx_index] * _weights[connection_index];
                             }
                         }
                     }
@@ -167,15 +164,15 @@ namespace hnnet::backprop::omp {
                     }
                     return loss_value;
                 }
-            protected:
+            private:
                 // Data members
                 net::DAGNet::View _view{};
-                TrainingData<std::vector<std::span<const real_t>>, std::vector<std::span<const real_t>>> _training_data{};
-                std::span<real_t> _weights{};
-                std::vector<NNet::State> _states{};
+                std::vector<std::span<const real_t>> _targets{};
+                weight_vector_t _weights{};
                 std::vector<delta_vector_t> _deltas{};
                 std::vector<grad_vector_t> _gradients{};
                 grad_vector_t _batch_gradient{};
                 Optimizer _optimizer;
+                dag::update::omp::Backend _update_backend{};
         };
 }

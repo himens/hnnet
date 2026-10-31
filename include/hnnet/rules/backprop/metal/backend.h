@@ -122,10 +122,10 @@ namespace hnnet::backprop::metal {
                         _update_backend.to_device(view, dense_forward::update::metal::DeviceData{
                             command, _weights, _signals, _weighted_sums, _activations, batch_size,
                             _inputs, parameters.batch_begin});
-                        _update_backend.update();
+                        _update_backend.update_states();
                         encode(command, _loss_pipeline, parameters, {_targets, _signals, _losses}, batch_size);
                         backward(command, parameters);
-                        _optimizer.update(command, _weights, _gradient, _parameters.connection_count);
+                        _optimizer.update_weights(command, _weights, _gradient, _parameters.connection_count);
                         detail::complete(command);
                         const auto losses = static_cast<const float *>([_losses contents]);
                         real_t loss{0.0_real};
@@ -136,7 +136,8 @@ namespace hnnet::backprop::metal {
                     }
                 }
                 // Transfer results back to the host
-                void to_host(net::DenseForwardNet::View &, std::span<real_t> weights) {
+                void to_host(weight_vector_t &weights) {
+                    weights.resize(_parameters.connection_count);
                     const auto device_weights = static_cast<const float *>([_weights contents]);
                     for (std::size_t edge = 0; edge < weights.size(); ++edge) {
                         weights[edge] = static_cast<real_t>(device_weights[edge]);

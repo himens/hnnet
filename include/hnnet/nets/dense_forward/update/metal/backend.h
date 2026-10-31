@@ -165,7 +165,7 @@ namespace hnnet::dense_forward::update::metal {
                 _host_batch = true;
             }
             // Encode seed and propagation without submitting or waiting for the command
-            void update() const {
+            void update_states() const {
                 if (_activation_pipeline == nil or _data.command == nil) {
                     throw std::logic_error("Metal: update requires init and to_device");
                 }

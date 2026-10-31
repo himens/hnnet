@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <print>
 #include <ranges>
 #include <span>
@@ -51,6 +52,9 @@ namespace hnnet {
                     int_t input_neuron_count() const {
                         return std::ssize(_net->_input_neurons_indices);
                     }
+                    int_t output_neuron_count() const {
+                        return std::ssize(_net->_output_neurons_indices);
+                    }
                     int_t connection_count() const {
                         return std::ssize(_net->_connections);
                     }
@@ -60,8 +64,14 @@ namespace hnnet {
                     std::span<const Connection> connections() const {
                         return _net->_connections;
                     }
-                    std::span<real_t> weights() const {
+                    std::span<const real_t> weights() const {
                         return _net->_weights;
+                    }
+                    void set_weights(std::span<const real_t> weights) {
+                        if (weights.size() != _net->_weights.size()) {
+                            throw std::invalid_argument("NNet::View::set_weights: weight counts must match");
+                        }
+                        std::ranges::copy(weights, _net->_weights.begin());
                     }
                     std::span<const Partition> partitions() const {
                         return _net->_partitions;
@@ -132,23 +142,29 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            template <typename Self, net::update::BackendType<typename Self::View, DataType, State> Backend>
-                data_vector_t infer(this Self &self, const DataType auto &inputs, Backend backend) {
+            template <typename Self, DatasetType Inputs, net::update::BackendType<typename Self::View, Inputs, std::vector<data_vector_t>> Backend>
+                std::vector<data_vector_t> infer(this Self &self, const Inputs &inputs, Backend backend) {
                     if (not self._trained) {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    State state(std::ssize(self._neurons));
+                    std::vector<data_vector_t> outputs;
                     auto view = self.view();
                     backend.init(view);
                     backend.to_device(inputs);
-                    backend.update();
-                    backend.to_host(state);
-                    data_vector_t outputs(std::ssize(self._output_neurons_indices));
-                    for (const auto &[output_index, output_neuron_index] : self._output_neurons_indices | std::views::enumerate) {
-                        outputs[output_index] = state.signals[output_neuron_index];
-                    }
+                    backend.update_states(view.weights());
+                    backend.to_host(outputs);
                     return outputs;
+                }
+            // Infer from a single sample using the batch path
+            template <typename Self, DataType Inputs, net::update::BackendType<typename Self::View, std::array<std::span<const real_t>, 1>, std::vector<data_vector_t>> Backend>
+                data_vector_t infer(this Self &self, const Inputs &inputs, Backend backend) {
+                    if (not self._trained) {
+                        std::println("NNet::infer: try to infer from an untrained net!");
+                        return {};
+                    }
+                    auto outputs = self.infer(std::array<std::span<const real_t>, 1>{inputs}, std::move(backend));
+                    return std::move(outputs.front());
                 }
         protected: 
             // Data types

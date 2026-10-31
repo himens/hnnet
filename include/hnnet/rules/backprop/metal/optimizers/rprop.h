@@ -26,7 +26,7 @@ namespace hnnet::backprop::metal::optimizer {
                 _pipeline = context.pipeline("hnnet_rprop");
             }
 
-            void update(id<MTLCommandBuffer> command, id<MTLBuffer> weights,
+            void update_weights(id<MTLCommandBuffer> command, id<MTLBuffer> weights,
                         id<MTLBuffer> gradient, const std::uint32_t weight_count) {
                 const detail::UpdateParameters parameters{weight_count, _eta_plus, _eta_minus};
                 auto encoder = detail::encoder(command, _pipeline);

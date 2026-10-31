@@ -2,7 +2,7 @@
 #include <concepts>
 
 namespace hnnet {
-    template <typename Backend, typename View, typename DeviceData, typename HostData>
+    template <typename Backend, typename View, typename HostData, typename DeviceData>
         concept BackendType = requires(Backend &backend,
                                        View &view,
                                        HostData &host_data,

@@ -43,9 +43,11 @@ namespace hnnet::rule {
                         for (auto batch_index{0}; batch_index < batch_count; ++batch_index) {
                             const auto batch_begin = batch_index * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
-                            loss_value += _backend.backprop(view, batch_begin, batch_end, _loss);
+                            loss_value += _backend.backprop(batch_begin, batch_end, _loss);
                         }
-                        _backend.to_host(view.weights());
+                        weight_vector_t weights;
+                        _backend.to_host(weights);
+                        view.set_weights(weights);
                         std::println("Backprop::learn: average loss: {:.5f}", loss_value / sample_count);
                         return loss_value / sample_count < loss_threshold;
                     }

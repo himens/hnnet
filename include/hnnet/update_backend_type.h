@@ -3,9 +3,9 @@
 #include "hnnet/backend_type.h"
 
 namespace hnnet::net::update {
-    template <typename Backend, typename View, typename DeviceData, typename HostData>
-        concept BackendType = hnnet::BackendType<Backend, View, DeviceData, HostData> and
-                              requires(Backend &backend) {
-                                  { backend.update() } -> std::same_as<void>;
+    template <typename Backend, typename View, typename HostData, typename DeviceData>
+        concept BackendType = hnnet::BackendType<Backend, View, HostData, DeviceData> and
+                              requires(Backend &backend, View &view) {
+                                  { backend.update_states(view.weights()) } -> std::same_as<void>;
                               };
 }

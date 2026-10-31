@@ -10,6 +10,6 @@ namespace hnnet::backprop::omp {
                                          std::span<real_t> weights,
                                          std::span<const real_t> gradient) {
                                     { optimizer.init(weight_count) } -> std::same_as<void>;
-                                    { optimizer.update(weights, gradient) } -> std::same_as<void>;
+                                    { optimizer.update_weights(weights, gradient) } -> std::same_as<void>;
                                 };
 }

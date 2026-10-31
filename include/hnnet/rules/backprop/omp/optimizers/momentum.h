@@ -26,7 +26,7 @@ namespace hnnet::backprop::omp::optimizer {
                 _previous_delta.assign(weight_count, 0.0_real);
             }
             // Update the weights
-            void update(std::span<real_t> weights, std::span<const real_t> gradient) {
+            void update_weights(std::span<real_t> weights, std::span<const real_t> gradient) {
                 //#pragma omp parallel for
                 for (index_t connection_index = 0; connection_index < std::ssize(gradient); ++connection_index) {
                     const auto delta = - (_learning_rate * gradient[connection_index]) + (_momentum * _previous_delta[connection_index]);
