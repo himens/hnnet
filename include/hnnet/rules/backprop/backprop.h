@@ -38,14 +38,14 @@ namespace hnnet::rule {
                         const auto batch_size = _batch_size < 0 ? sample_count : std::min(_batch_size, sample_count);
                         const auto batch_count = utils::math::ceil_div(sample_count, batch_size);
                         const backprop::TrainingData<Inputs, Targets> data{inputs, targets};
-                        _backend.to_device(view, data);
+                        _backend.to_device(data);
                         real_t loss_value{0.0_real};
                         for (auto batch_index{0}; batch_index < batch_count; ++batch_index) {
                             const auto batch_begin = batch_index * batch_size;
                             const auto batch_end = std::min(sample_count, batch_begin + batch_size);
                             loss_value += _backend.backprop(view, batch_begin, batch_end, _loss);
                         }
-                        _backend.to_host(view, view.weights());
+                        _backend.to_host(view.weights());
                         std::println("Backprop::learn: average loss: {:.5f}", loss_value / sample_count);
                         return loss_value / sample_count < loss_threshold;
                     }

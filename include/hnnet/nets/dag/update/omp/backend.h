@@ -13,43 +13,33 @@ namespace hnnet::dag::update::omp {
             void init(net::DAGNet::View &view) {
                 _view = view;
             }
-            // Transfer the network to the device
-            void to_device(net::DAGNet::View &view, const NNet::UpdateData &data) {
-                if (data.inputs.size() != data.states.size()) {
-                    throw std::invalid_argument("OpenMP update: input and state counts must match");
-                }
-                for (std::size_t index = 0; index < data.states.size(); ++index) {
-                    const auto &state = data.states[index];
-                    if (data.inputs[index].size() != static_cast<std::size_t>(view.input_neurons_indices().size()) or
-                        state.signals.size() != static_cast<std::size_t>(view.neuron_count()) or
-                        state.weighted_sums.size() != static_cast<std::size_t>(view.neuron_count())) {
-                        throw std::invalid_argument("OpenMP update: input or state size does not match the network");
+            // Transfer data to the device
+            void to_device(const DatasetType auto &samples) {
+                const auto state_count = std::ssize(samples);
+                _states.resize(state_count);
+                #pragma omp parallel for if(state_count > 1)
+                for (const auto &[state, inputs] : std::views::zip(_states, samples)) {
+                    if (std::ssize(inputs) != _view.input_neuron_count()) {
+                        throw std::invalid_argument("Backend::to_device: input or state size does not match the network");
                     }
+                    state.signals.assign(_view.neuron_count(), 0.0_real);
+                    state.weighted_sums.assign(_view.neuron_count(), 0.0_real);
+                    _view.seed_state(state, inputs);
                 }
-                _view = view;
-                _states = data.states;
-                _inputs = data.inputs;
             }
-            // Transfer the network back to the host
-            void to_host(net::DAGNet::View &, std::span<NNet::State>) {}
+            // Transfer data back to the host
+            void to_host(std::span<NNet::State>) {}
             // Update the states by propagating signals through the net
-            void update() const {
+            void update() {
                 const auto state_count = std::ssize(_states);
-                if (state_count == 1) {
-                    _view.seed_state(_states.front(), _inputs.front());
-                    update_state(_states.front());
-                }
-                else if (state_count > 1) {
-                    #pragma omp parallel for
-                    for (index_t state_index = 0; state_index < state_count; ++state_index) {
-                        _view.seed_state(_states[state_index], _inputs[state_index]);
-                        update_state(_states[state_index]);
-                    }
+                #pragma omp parallel for if(state_count > 1)
+                for (index_t state_index = 0; state_index < state_count; ++state_index) {
+                    update_state(_states[state_index]);
                 }
             }
         private:
             // Propagate signals through one state
-            void update_state(NNet::State &state) const {
+            void update_state(NNet::State &state) {
                 const auto partitions = _view.partitions();
                 const auto partition_layer_indices = _view.partition_layer_indices();
                 const auto layers = _view.layers();
@@ -67,7 +57,7 @@ namespace hnnet::dag::update::omp {
                 }
             }
             // Propagate signals through one sparse partition
-            void update_partition(NNet::State &state, const NNet::Partition &partition) const {
+            void update_partition(NNet::State &state, const NNet::Partition &partition) {
                 real_t weighted_sum{0.0_real};
                 const auto weights = _view.weights();
                 const auto connections = _view.connections();
@@ -104,7 +94,7 @@ namespace hnnet::dag::update::omp {
                     }
                     //#pragma omp simd reduction(+:weighted_sum)
                     for (; column_index < layer.tx_count; ++column_index) {
-                            weighted_sum += weights[row_offset + column_index] * state.signals[layer.tx_begin + column_index];
+                        weighted_sum += weights[row_offset + column_index] * state.signals[layer.tx_begin + column_index];
                     }
                     state.weighted_sums[layer.rx_begin + row_index] = weighted_sum;
                     state.signals[layer.rx_begin + row_index] = neurons[layer.rx_begin + row_index].activate(weighted_sum);
@@ -113,7 +103,6 @@ namespace hnnet::dag::update::omp {
         private:
             // Data members
             net::DAGNet::View _view{};
-            std::span<NNet::State> _states{};
-            std::span<const std::span<const real_t>> _inputs{};
+            std::vector<NNet::State> _states{};
     };
 }

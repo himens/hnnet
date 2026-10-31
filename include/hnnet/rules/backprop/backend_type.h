@@ -14,13 +14,13 @@ namespace hnnet::backprop {
     template <typename Backend, typename View, typename Inputs, typename Targets, typename Loss>
         concept BackendType = DatasetType<Inputs> and
                               DatasetType<Targets> and
-                              hnnet::BackendType<Backend, View, TrainingData<Inputs, Targets>, std::span<real_t>> and
+                              hnnet::BackendType<Backend, View, TrainingData<Inputs, Targets>, weight_vector_t> and
                               LossType<Loss> and
                               requires(Backend &backend,
                                        View &view,
                                        index_t begin,
                                        index_t end,
                                        const Loss &loss) {
-                                  { backend.backprop(view, begin, end, loss) } -> std::same_as<real_t>;
+                                  { backend.backprop(begin, end, loss) } -> std::same_as<real_t>;
                               };
 }

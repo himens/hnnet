@@ -15,6 +15,9 @@
 #include "utils/timer.h"
 
 namespace hnnet {
+    using data_vector_t   = std::vector<real_t>;
+    using weight_vector_t = std::vector<real_t>;
+    // Deprecated
     using input_vector_t  = std::vector<real_t>;
     using output_vector_t = std::vector<real_t>;
     ////////////////
@@ -34,10 +37,6 @@ namespace hnnet {
                 std::vector<real_t> signals{};
                 std::vector<real_t> weighted_sums{};
             };
-            struct UpdateData {
-                std::span<State> states;
-                std::span<const std::span<const real_t>> inputs;
-            };
             class View {
                 public:
                     // Construct an unbound view
@@ -47,10 +46,13 @@ namespace hnnet {
                         _net->seed_state(state, inputs);
                     }
                     int_t neuron_count() const {
-                        return _net->_neurons.size();
+                        return std::ssize(_net->_neurons);
+                    }
+                    int_t input_neuron_count() const {
+                        return std::ssize(_net->_input_neurons_indices);
                     }
                     int_t connection_count() const {
-                        return _net->_connections.size();
+                        return std::ssize(_net->_connections);
                     }
                     std::span<const Neuron> neurons() const {
                         return _net->_neurons;
@@ -81,7 +83,7 @@ namespace hnnet {
             };
         public:
             // Constructor
-            NNet(Topology topology) : _neurons(std::move(topology.neurons)), _connections(std::move(topology.connections)), _weights(_connections.size(), 0.0_real) {
+            NNet(Topology topology) : _neurons(std::move(topology.neurons)), _connections(std::move(topology.connections)), _weights(std::ssize(_connections), 0.0_real) {
                 init();
             }
             // Destructor
@@ -107,10 +109,11 @@ namespace hnnet {
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
                     std::println("NNet::train: ==================================");
                     timer.start();
-                    self._weights = utils::random::generate<real_t>(self._weights.size(), -0.1_real, +0.1_real);
+                    self._weights = utils::random::generate<real_t>(std::ssize(self._weights), -0.1_real, +0.1_real);
                     rule.init(view);
                     for (const auto &[input, target] : std::views::zip(inputs, targets)) {
-                        if (std::ssize(input) != std::ssize(self._input_neurons_indices) or (std::ssize(target) != std::ssize(self._output_neurons_indices))) {
+                        if (std::ssize(input)  != std::ssize(self._input_neurons_indices) or 
+                            std::ssize(target) != std::ssize(self._output_neurons_indices)) {
                             throw std::invalid_argument("NNet::train: size error!");
                         }
                     }
@@ -129,22 +132,19 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            template <typename Self, net::update::BackendType<typename Self::View, UpdateData, std::span<State>> Backend>
-                output_vector_t infer(this Self &self, const DataType auto &inputs, Backend backend) {
+            template <typename Self, net::update::BackendType<typename Self::View, DataType, State> Backend>
+                data_vector_t infer(this Self &self, const DataType auto &inputs, Backend backend) {
                     if (not self._trained) {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    State state(self._neurons.size());
-                    const auto input = std::span<const real_t>{inputs};
-                    const std::span<State> states{&state, 1};
-                    const UpdateData data{states, {&input, 1}};
+                    State state(std::ssize(self._neurons));
                     auto view = self.view();
                     backend.init(view);
-                    backend.to_device(view, data);
+                    backend.to_device(inputs);
                     backend.update();
-                    backend.to_host(view, states);
-                    output_vector_t outputs(self._output_neurons_indices.size());
+                    backend.to_host(state);
+                    data_vector_t outputs(std::ssize(self._output_neurons_indices));
                     for (const auto &[output_index, output_neuron_index] : self._output_neurons_indices | std::views::enumerate) {
                         outputs[output_index] = state.signals[output_neuron_index];
                     }
@@ -202,7 +202,7 @@ namespace hnnet {
                     }
                 }
                 _partitions = make_partitions(_connections);
-                std::println("NNet::init: neuron(s): {}, connection(s): {}, partition(s): {}", _neurons.size(), _connections.size(), _partitions.size());
+                std::println("NNet::init: neuron(s): {}, connection(s): {}, partition(s): {}", std::ssize(_neurons), std::ssize(_connections), std::ssize(_partitions));
             }
             // Check for duplicate connections
             static bool has_duplicate_connection(const std::span<Connection> connections) {
