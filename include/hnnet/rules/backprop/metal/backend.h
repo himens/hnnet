@@ -43,7 +43,7 @@ namespace hnnet::backprop::metal {
                     _update_kernel_directory = std::move(directory);
                 }
                 // Initialize the backend
-                void init(net::DenseForwardNet::View &view) {
+                void init(net::DenseForwardNet::View view) {
                     @autoreleasepool {
                         _scratch_capacity = 0;
                         _prepared_batch_size = 0;
@@ -76,6 +76,11 @@ namespace hnnet::backprop::metal {
                         _update_backend.init(view, _context);
                         _activations = _context.upload(activations);
                         _weights = _context.buffer(std::size_t{connection_count} * sizeof(float));
+                        const auto weights = view.weights();
+                        auto device_weights = static_cast<float *>([_weights contents]);
+                        for (std::size_t edge = 0; edge < weights.size(); ++edge) {
+                            device_weights[edge] = detail::to_float(weights[edge]);
+                        }
                         _gradient = _context.buffer(std::size_t{connection_count} * sizeof(float));
                         _loss_pipeline = _context.pipeline("hnnet_loss");
                         _delta_pipeline = _context.pipeline("hnnet_dense_delta");
@@ -83,48 +88,40 @@ namespace hnnet::backprop::metal {
                     }
                 }
                 // Transfer data to the device
-                template <DatasetType Inputs, DatasetType Targets>
-                    void to_device(net::DenseForwardNet::View &view, const backprop::TrainingData<Inputs, Targets> &data) {
-                        @autoreleasepool {
-                            const auto sample_count = detail::checked_count(std::ranges::size(data.inputs));
-                            _inputs = reserve_buffer(_inputs, detail::checked_product(sample_count, _parameters.input_count) * sizeof(float));
-                            _targets = reserve_buffer(_targets, detail::checked_product(sample_count, _parameters.output_count) * sizeof(float));
-                            auto input_values = static_cast<float *>([_inputs contents]);
-                            auto target_values = static_cast<float *>([_targets contents]);
-                            std::size_t position = 0;
-                            for (const auto &sample : data.inputs) {
-                                for (const auto value : sample) input_values[position++] = detail::to_float(value);
-                            }
-                            position = 0;
-                            for (const auto &sample : data.targets) {
-                                for (const auto value : sample) target_values[position++] = detail::to_float(value);
-                            }
-                            const auto weights = view.weights();
-                            auto device_weights = static_cast<float *>([_weights contents]);
-                            for (std::size_t edge = 0; edge < weights.size(); ++edge) {
-                                device_weights[edge] = detail::to_float(weights[edge]);
-                            }
+                void to_device(const TrainingDataType auto &data) {
+                    @autoreleasepool {
+                        const auto sample_count = detail::checked_count(std::ranges::size(data.inputs));
+                        _inputs = reserve_buffer(_inputs, detail::checked_product(sample_count, _parameters.input_count) * sizeof(float));
+                        _targets = reserve_buffer(_targets, detail::checked_product(sample_count, _parameters.output_count) * sizeof(float));
+                        auto input_values = static_cast<float *>([_inputs contents]);
+                        auto target_values = static_cast<float *>([_targets contents]);
+                        std::size_t position = 0;
+                        for (const auto &sample : data.inputs) {
+                            for (const auto value : sample) input_values[position++] = detail::to_float(value);
+                        }
+                        position = 0;
+                        for (const auto &sample : data.targets) {
+                            for (const auto value : sample) target_values[position++] = detail::to_float(value);
                         }
                     }
+                }
                 // Perform backprop (forward-backward plus weights update)
-                real_t backprop(net::DenseForwardNet::View &view,
-                                const index_t batch_begin,
-                                const index_t batch_end,
-                                const loss::MSE &) {
+                real_t backprop(const index_t batch_begin, const index_t batch_end, const loss::MSE &) {
                     @autoreleasepool {
                         const auto batch_size = detail::checked_count(batch_end - batch_begin);
                         ensure_scratch(batch_size);
                         auto parameters = _parameters;
                         parameters.batch_begin = static_cast<std::uint32_t>(batch_begin);
                         parameters.batch_size = batch_size;
-                        prepare_matrices(parameters);
                         auto command = _context.command();
-                        _update_backend.to_device(view, dense_forward::update::metal::DeviceData{
-                            command, _weights, _signals, _weighted_sums, _activations, batch_size,
-                            _inputs, parameters.batch_begin});
-                        _update_backend.update_states();
-                        encode(command, _loss_pipeline, parameters, {_targets, _signals, _losses}, batch_size);
-                        backward(command, parameters);
+                        _update_backend.to_device(dense_forward::update::metal::DeviceData{
+                            command, batch_size, _inputs, parameters.batch_begin});
+                        _update_backend.update_states(_weights);
+                        dense_forward::update::metal::DeviceStates states;
+                        _update_backend.to_host(states);
+                        prepare_matrices(parameters, states);
+                        encode(command, _loss_pipeline, parameters, {_targets, states.signals, _losses}, batch_size);
+                        backward(command, parameters, states);
                         _optimizer.update_weights(command, _weights, _gradient, _parameters.connection_count);
                         detail::complete(command);
                         const auto losses = static_cast<const float *>([_losses contents]);
@@ -158,14 +155,14 @@ namespace hnnet::backprop::metal {
                 };
                 static_assert(sizeof(DenseLayer) == 20);
                 // Prepare the matrices used by backward and gradient computation
-                void prepare_matrices(const detail::Parameters &parameters) {
+                void prepare_matrices(const detail::Parameters &parameters, const dense_forward::update::metal::DeviceStates &states) {
                     if (_prepared_batch_size == parameters.batch_size) return;
                     for (auto &layer : _layers) {
                         const auto &shape = layer.shape;
                         layer.backward = detail::product(_context.device(), false, false, parameters.batch_size, shape.tx_count, shape.rx_count, 1.0);
                         layer.gradient = detail::product(_context.device(), true, false, shape.rx_count, shape.tx_count, parameters.batch_size,
                                                  1.0 / static_cast<double>(parameters.batch_size));
-                        layer.input = detail::matrix(_signals, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
+                        layer.input = detail::matrix(states.signals, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
                         layer.weight = detail::matrix(_weights, shape.weight_offset, shape.rx_count, shape.tx_count, shape.tx_count);
                         layer.delta = detail::matrix(_deltas, shape.rx_begin, parameters.batch_size, shape.rx_count, parameters.neuron_count);
                         layer.previous_delta = detail::matrix(_propagated_deltas, shape.tx_begin, parameters.batch_size, shape.tx_count, parameters.neuron_count);
@@ -174,7 +171,7 @@ namespace hnnet::backprop::metal {
                     _prepared_batch_size = parameters.batch_size;
                 }
                 // Perform the backward pass for the network
-                void backward(id<MTLCommandBuffer> command, const detail::Parameters &parameters) const {
+                void backward(id<MTLCommandBuffer> command, const detail::Parameters &parameters, const dense_forward::update::metal::DeviceStates &states) const {
                     for (std::size_t position = _layers.size(); position > 0; --position) {
                         const auto &layer = _layers[position - 1];
                         auto encoder = detail::encoder(command, _delta_pipeline);
@@ -182,8 +179,8 @@ namespace hnnet::backprop::metal {
                         [encoder setBytes:&layer.shape length:sizeof(layer.shape) atIndex:1];
                         [encoder setBuffer:_activations offset:0 atIndex:2];
                         [encoder setBuffer:_targets offset:0 atIndex:3];
-                        [encoder setBuffer:_signals offset:0 atIndex:4];
-                        [encoder setBuffer:_weighted_sums offset:0 atIndex:5];
+                        [encoder setBuffer:states.signals offset:0 atIndex:4];
+                        [encoder setBuffer:states.weighted_sums offset:0 atIndex:5];
                         [encoder setBuffer:_deltas offset:0 atIndex:6];
                         [encoder setBuffer:_propagated_deltas offset:0 atIndex:7];
                         detail::dispatch(encoder, _delta_pipeline, detail::checked_product(parameters.batch_size, layer.shape.rx_count));
@@ -198,8 +195,6 @@ namespace hnnet::backprop::metal {
                 void ensure_scratch(const std::uint32_t batch_size) {
                     if (batch_size <= _scratch_capacity) return;
                     const auto elements = detail::checked_product(std::size_t{batch_size} + 1, _parameters.neuron_count);
-                    _signals = _context.buffer(elements * sizeof(float), false);
-                    _weighted_sums = _context.buffer(elements * sizeof(float), false);
                     _deltas = _context.buffer(elements * sizeof(float), false);
                     _propagated_deltas = _context.buffer(elements * sizeof(float), false);
                     _losses = _context.buffer(std::size_t{batch_size} * sizeof(float), false);
@@ -237,8 +232,6 @@ namespace hnnet::backprop::metal {
                 id<MTLBuffer> _targets = nil;
                 id<MTLBuffer> _weights = nil;
                 id<MTLBuffer> _gradient = nil;
-                id<MTLBuffer> _signals = nil;
-                id<MTLBuffer> _weighted_sums = nil;
                 id<MTLBuffer> _deltas = nil;
                 id<MTLBuffer> _propagated_deltas = nil;
                 id<MTLBuffer> _losses = nil;

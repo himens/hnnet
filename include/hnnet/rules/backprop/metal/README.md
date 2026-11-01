@@ -42,23 +42,25 @@ backend; optimizers keep using the backprop context adapter.
 implements input/bias seeding and dense propagation independently of backprop.
 It has two usage paths:
 
-- Standalone: `init(view)`, `to_device(view, NNet::UpdateData{states, inputs})`,
-  `update()`, `to_host(view, states)`. The payload contains matching spans of
-  destination states and input spans. Both state vectors must be sized to the
-  network; their existing values are not uploaded. Upload converts weights and
-  inputs to FP32. `update()` encodes GPU seed followed by propagation;
-  `to_host()` submits, waits and downloads both state vectors.
+- Standalone: `init(view)`, `to_device(inputs)`, `update_states(weights)`,
+  `to_host(outputs)`. Inputs satisfy `DatasetType`, host weights satisfy
+  `DataType`, and outputs are a `dataset_vector_t`. Inputs and weights are
+  converted to FP32 once per inference call. Update owns the GPU state buffers;
+  `update_states` encodes seed followed by propagation. Output export submits,
+  waits and downloads only the output-neuron signals for each sample.
 - Composed: `init(view, context)` shares the caller's context. Then
-  `to_device(view, DeviceData{command, weights, signals, weighted_sums,
-  activations, batch_size, inputs, batch_begin})` associates existing GPU
-  resources and `update()` encodes seed and forward. No host transfers, command submission or waiting
-  occur. The caller manages resource lifetime, ordering and completion.
+  `to_device(DeviceData{command, batch_size, inputs, batch_begin})` associates
+  the caller's command and input buffer, and `update_states(device_weights)`
+  encodes seed and forward using the caller's current GPU weight buffer.
+  `to_host(DeviceStates&)` exposes the update-owned signal and weighted-sum
+  buffers without copying, submitting or waiting. The caller manages ordering
+  and completion; update reuses its state allocations across batches.
 
 Standalone Objective-C++ command-line callers should enclose the lifecycle in an
 `@autoreleasepool`; backprop already scopes its Metal operations this way.
 
 Signal and weighted-sum buffers use sample-major layout with `neuron_count`
-stride. Allocate `(batch_size + 1) * neuron_count` floats for each buffer to
+stride. Update allocates `(batch_size + 1) * neuron_count` floats for each buffer to
 accommodate the offsets of MPS matrix views. Weights remain row-major as exposed
 by the network; activations use the shared `ActivationDescriptor` layout.
 Use resources from the same Metal device as the context.
@@ -69,8 +71,7 @@ The seed initializes both signals and weighted sums for input and bias neurons.
 
 Backprop delegates seed and forward to the composed path, on the same
 command buffer and tensors as loss, backward and optimizer. Forward matrices are
-cached until the batch size or associated buffers change. No extra GPU buffer,
-transfer or command completion is introduced in this path.
+cached until the batch size or associated buffers change. No state download or extra command completion is introduced in this path.
 
 ## Compile a Metal Example
 
@@ -109,7 +110,7 @@ auto training_rule = rule::Backprop{
     64
 };
 
-net.train(inputs, targets, training_rule);
+net.train(TrainingData{inputs, targets}, training_rule);
 ```
 
 Momentum is available in `optimizers/momentum.h`, with constructor parameters
@@ -160,15 +161,18 @@ scheduler or dense/fallback plan.
 MPS operations and matrix views are owned directly by `Backend`; there is no
 separate dense backend or wrapper.
 
-`to_device` uploads the dataset and current host weights once per epoch, as in
-the existing rule. Input and target buffers are reused and filled directly,
-without temporary flattened vectors or a second copy. Data is read again each
-epoch so changes to the caller's samples are not silently ignored.
+Backprop `init(view)` uploads the initial weights once. `to_device(data)` uploads
+the input and target datasets once before the epoch loop. Buffers are filled
+directly, without temporary flattened vectors. Weights, datasets and optimizer
+state stay on the GPU across epochs; changing host samples during training does
+not update the uploaded dataset.
 
-The backend relies on the training protocol: `init(net)` precedes
-`to_device`, batch `backprop` calls, and `to_host` for the same network.
-Dataset dimensions are validated by `NNet::train`, and nonempty datasets and
-batch ranges are handled by `Backprop::learn`; the backend does not repeat
+The backend relies on the training protocol: `init(view)` precedes
+`to_device(data)`, batch `backprop(begin, end, loss)` calls, and final
+`to_host(weights)` for the same network. The View is supplied only during
+initialization. Dataset dimensions, paired sample counts and nonempty datasets
+are validated by the rule's `init(view, data)`, and batch ranges are handled by
+`Backprop::learn`; the backend does not repeat
 these checks. Direct callers must satisfy the same preconditions. GPU limits,
 FP32 conversion checks, and Metal execution errors remain checked.
 
@@ -184,11 +188,17 @@ storage, including a partial final batch.
 Each batch still waits for GPU completion before returning its pre-update loss,
 because the existing rule requests that scalar synchronously. Removing this wait
 would require a separate API decision; it has not been hidden behind stale losses.
-`to_host` copies the updated weights back to the network.
+The rule's `apply(weights)` calls `to_host` once after the epoch loop to copy the
+updated weights back to the network, also when training ends without convergence.
+Later inference uses a separate backend and uploads those final host weights
+once for its input dataset.
 
 Scratch storage grows with the largest batch seen: four FP32 arrays of
 `(batch_size + 1) * neuron_count`, plus losses and the connection gradient. The
 extra row supplies padding for strided MPS views with a nonzero neuron offset.
+Update owns signals and weighted sums; Backprop borrows them for loss and
+backward and owns the delta buffers. Borrowed state handles refer to the current
+scratch storage; obtain them again after associating and updating a new batch.
 Propagated deltas use a separate buffer so matrix multiplication does not need
 an in-place operation on overlapping strided matrix views.
 Full-batch training can therefore require substantial memory. Tensor indexing is
