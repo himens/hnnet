@@ -57,13 +57,13 @@ namespace hnnet::dag::update::omp {
                     #pragma omp parallel for if(sample_count > 1) num_threads(std::ssize(_states))
                     for (index_t index = 0; index < sample_count; ++index) {
                         auto &state = _states[omp_get_thread_num()];
-                        _view.seed_state(state, _inputs[index]);
+                        state.seed(_view, _inputs[index]);
                         update_state(state, _outputs[index], weights);
                     }
                 }
                 else {
                     auto &state = _states[omp_get_thread_num()];
-                    _view.seed_state(state, _inputs[sample_index]);
+                    state.seed(_view, _inputs[sample_index]);
                     update_state(state, _outputs[sample_index], weights);
                 }
             }
@@ -73,6 +73,7 @@ namespace hnnet::dag::update::omp {
                 const auto partitions = _view.partitions();
                 const auto partition_layer_indices = _view.partition_layer_indices();
                 const auto layers = _view.layers();
+                const auto signals = state.signals();
                 for (auto partition_index{0}; partition_index < std::ssize(partitions); ++partition_index) {
                     const auto &partition = partitions[partition_index];
                     const auto layer_index = partition_layer_indices[partition_index];
@@ -86,7 +87,7 @@ namespace hnnet::dag::update::omp {
                     }
                 }
                 for (const auto &[output_index, neuron_index] : _view.output_neurons_indices() | std::views::enumerate) {
-                    output[output_index] = state.signals[neuron_index]; // TODO: it can be optimized using SIMD or parallel reduction?
+                    output[output_index] = signals[neuron_index]; // TODO: it can be optimized using SIMD or parallel reduction?
                 }
             }
             // Propagate signals through one sparse partition
@@ -94,41 +95,45 @@ namespace hnnet::dag::update::omp {
                 real_t weighted_sum{0.0_real};
                 const auto connections = _view.connections();
                 const auto neurons = _view.neurons();
+                auto signals = state.signals();
+                auto weighted_sums = state.weighted_sums();
                 auto connection_index = partition.connection_begin;
                 for (; connection_index <= (partition.connection_end - simd_register_size); connection_index += simd_register_size) {
                     weighted_sum +=
-                        + weights[connection_index]     * state.signals[connections[connection_index].tx_index]
-                        + weights[connection_index + 1] * state.signals[connections[connection_index + 1].tx_index]
-                        + weights[connection_index + 2] * state.signals[connections[connection_index + 2].tx_index]
-                        + weights[connection_index + 3] * state.signals[connections[connection_index + 3].tx_index];
+                        + weights[connection_index]     * signals[connections[connection_index].tx_index]
+                        + weights[connection_index + 1] * signals[connections[connection_index + 1].tx_index]
+                        + weights[connection_index + 2] * signals[connections[connection_index + 2].tx_index]
+                        + weights[connection_index + 3] * signals[connections[connection_index + 3].tx_index];
                 }
                 //#pragma omp simd reduction(+:weighted_sum)
                 for (; connection_index < partition.connection_end; ++connection_index) {
-                    weighted_sum += weights[connection_index] * state.signals[connections[connection_index].tx_index];
+                    weighted_sum += weights[connection_index] * signals[connections[connection_index].tx_index];
                 }
-                state.weighted_sums[partition.rx_index] = weighted_sum;
-                state.signals[partition.rx_index] = neurons[partition.rx_index].activate(weighted_sum);
+                weighted_sums[partition.rx_index] = weighted_sum;
+                signals[partition.rx_index] = neurons[partition.rx_index].activate(weighted_sum);
             }
             // Propagate signals through one dense layer
             void update_layer(NNet::State &state, const net::DAGNet::Layer &layer, std::span<const real_t> weights) const {
                 const auto neurons = _view.neurons();
                 for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
-                    real_t weighted_sum{0.0_real};
                     const auto row_offset = layer.weight_offset + row_index * layer.tx_count;
+                    auto signals = state.signals();
+                    auto weighted_sums = state.weighted_sums();
+                    real_t weighted_sum{0.0_real};
                     index_t column_index{0};
                     for (; column_index <= (layer.tx_count - simd_register_size); column_index += simd_register_size) {
                         weighted_sum +=
-                            + weights[row_offset + column_index]     * state.signals[layer.tx_begin + column_index]
-                            + weights[row_offset + column_index + 1] * state.signals[layer.tx_begin + column_index + 1]
-                            + weights[row_offset + column_index + 2] * state.signals[layer.tx_begin + column_index + 2]
-                            + weights[row_offset + column_index + 3] * state.signals[layer.tx_begin + column_index + 3];
+                            + weights[row_offset + column_index]     * signals[layer.tx_begin + column_index]
+                            + weights[row_offset + column_index + 1] * signals[layer.tx_begin + column_index + 1]
+                            + weights[row_offset + column_index + 2] * signals[layer.tx_begin + column_index + 2]
+                            + weights[row_offset + column_index + 3] * signals[layer.tx_begin + column_index + 3];
                     }
                     //#pragma omp simd reduction(+:weighted_sum)
                     for (; column_index < layer.tx_count; ++column_index) {
-                        weighted_sum += weights[row_offset + column_index] * state.signals[layer.tx_begin + column_index];
+                        weighted_sum += weights[row_offset + column_index] * signals[layer.tx_begin + column_index];
                     }
-                    state.weighted_sums[layer.rx_begin + row_index] = weighted_sum;
-                    state.signals[layer.rx_begin + row_index] = neurons[layer.rx_begin + row_index].activate(weighted_sum);
+                    weighted_sums[layer.rx_begin + row_index] = weighted_sum;
+                    signals[layer.rx_begin + row_index] = neurons[layer.rx_begin + row_index].activate(weighted_sum);
                 }
             }
         private:

@@ -127,7 +127,7 @@ namespace hnnet::dense_forward::update::metal {
                 const auto batch_size = hnnet::metal::checked_count(data.states.size());
                 const auto elements = hnnet::metal::checked_product(std::size_t{batch_size} + 1, _parameters.neuron_count);
                 for (const auto &state : data.states) {
-                    if (state.signals.size() != _parameters.neuron_count or state.weighted_sums.size() != _parameters.neuron_count) {
+                    if (state.signals().size() != _parameters.neuron_count or state.weighted_sums().size() != _parameters.neuron_count) {
                         throw std::invalid_argument("Metal: update state size does not match the network");
                     }
                 }
@@ -197,7 +197,7 @@ namespace hnnet::dense_forward::update::metal {
                     throw std::logic_error("Metal: host download requires a matching host upload");
                 }
                 for (const auto &state : states) {
-                    if (state.signals.size() != _parameters.neuron_count or state.weighted_sums.size() != _parameters.neuron_count) {
+                    if (state.signals().size() != _parameters.neuron_count or state.weighted_sums().size() != _parameters.neuron_count) {
                         throw std::invalid_argument("Metal: update state size does not match the network");
                     }
                 }
@@ -207,8 +207,8 @@ namespace hnnet::dense_forward::update::metal {
                 std::size_t offset = 0;
                 for (auto &state : states) {
                     for (std::uint32_t neuron = 0; neuron < _parameters.neuron_count; ++neuron) {
-                        state.signals[neuron] = static_cast<real_t>(signals[offset]);
-                        state.weighted_sums[neuron] = static_cast<real_t>(weighted_sums[offset++]);
+                        state.signals()[neuron] = static_cast<real_t>(signals[offset]);
+                        state.weighted_sums()[neuron] = static_cast<real_t>(weighted_sums[offset++]);
                     }
                 }
                 _data.command = nil;

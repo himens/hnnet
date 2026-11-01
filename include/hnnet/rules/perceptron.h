@@ -43,7 +43,8 @@ namespace hnnet::rule {
                 const auto connections = view.connections();
                 const auto weights = view.weights();
                 for (const auto &[target, output_neuron_index] : std::views::zip(targets, view.output_neurons_indices())) {
-                    const auto signal = state.signals[output_neuron_index];
+                    const auto signals = state.signals();
+                    const auto signal = signals[output_neuron_index];
                     squared_error += _mean_squared_error(target, signal);
                     if (std::abs(target - signal) < 1e-6_real) {
                         continue;  // No update needed if the error is negligible
@@ -55,7 +56,7 @@ namespace hnnet::rule {
                         }
                         for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                             const auto tx_index = connections[connection_index].tx_index;
-                            weights[connection_index] += _learning_rate * target * state.signals[tx_index];
+                            weights[connection_index] += _learning_rate * target * signals[tx_index];
                         }
                     }
                 }

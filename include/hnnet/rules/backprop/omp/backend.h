@@ -94,14 +94,16 @@ namespace hnnet::backprop::omp {
                     const auto layers = _view.layers();
                     const auto partition_layer_indices = _view.partition_layer_indices();
                     const auto output_neurons_indices = _view.output_neurons_indices();
+                    const auto signals = state.signals();
+                    const auto weighted_sums = state.weighted_sums();
                     auto &deltas = _deltas[thread_index];
                     auto &gradient = _gradients[thread_index];
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss_value{0.0_real};
                     for (const auto &[target, output_neuron_index] : std::views::zip(targets, output_neurons_indices)) {
-                        const auto &signal = state.signals[output_neuron_index];
-                        const auto &weighted_sum = state.weighted_sums[output_neuron_index];
+                        const auto &signal = signals[output_neuron_index];
+                        const auto &weighted_sum = weighted_sums[output_neuron_index];
                         deltas[output_neuron_index] = loss.derivative(target, signal) * neurons[output_neuron_index].activation()->derivative(weighted_sum);
                         loss_value += loss(target, signal);
                     }
@@ -113,7 +115,7 @@ namespace hnnet::backprop::omp {
                             for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
                                 const auto rx_index = layer.rx_begin + row_index;
                                 if (neurons[rx_index].type() != NeuronType::output) {
-                                    const auto &weighted_sum = state.weighted_sums[rx_index];
+                                    const auto &weighted_sum = weighted_sums[rx_index];
                                     deltas[rx_index] *= neurons[rx_index].activation()->derivative(weighted_sum);
                                 }
                                 const auto row_offset = layer.weight_offset + (row_index * layer.tx_count);
@@ -129,7 +131,7 @@ namespace hnnet::backprop::omp {
                             const auto &partition = partitions[partition_index];
                             const auto &rx_index = partition.rx_index;
                             if (neurons[rx_index].type() != NeuronType::output) {
-                                const auto &weighted_sum = state.weighted_sums[rx_index];
+                                const auto &weighted_sum = weighted_sums[rx_index];
                                 deltas[rx_index] *= neurons[rx_index].activation()->derivative(weighted_sum);
                             }
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
@@ -149,7 +151,7 @@ namespace hnnet::backprop::omp {
                                 for (auto column_index{0}; column_index < layer.tx_count; ++column_index) {
                                     const auto tx_index = layer.tx_begin + column_index;
                                     const auto connection_index = row_offset + column_index;
-                                    gradient[connection_index] += deltas[rx_index] * state.signals[tx_index];
+                                    gradient[connection_index] += deltas[rx_index] * signals[tx_index];
                                 }
                             }
                             partition_index += layer.rx_count - 1;
@@ -158,7 +160,7 @@ namespace hnnet::backprop::omp {
                             const auto &partition = partitions[partition_index];
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                                 const auto &[tx_index, rx_index] = connections[connection_index];
-                                gradient[connection_index] += deltas[rx_index] * state.signals[tx_index];
+                                gradient[connection_index] += deltas[rx_index] * signals[tx_index];
                             }
                         }
                     }

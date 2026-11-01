@@ -32,20 +32,10 @@ namespace hnnet {
                 index_t connection_begin;
                 index_t connection_end;
             };
-            struct State { // TODO: c'è bisogno del constructor State?
-                State() = default;
-                explicit State(const int_t neuron_count) : signals(neuron_count, 0.0_real), weighted_sums(neuron_count, 0.0_real) {}
-                std::vector<real_t> signals{};
-                std::vector<real_t> weighted_sums{};
-            };
             class View {
                 public:
                     // Construct an unbound view
                     View() = default;
-                    // Seed an existing state from input data
-                    void seed_state(State &state, std::span<const real_t> inputs) const {
-                        _net->seed_state(state, inputs);
-                    }
                     int_t neuron_count() const {
                         return std::ssize(_net->_neurons);
                     }
@@ -90,6 +80,42 @@ namespace hnnet {
                 private:
                     friend class NNet;
                     NNet* _net{nullptr};
+            };
+            class State {
+                public:
+                    explicit State(const int_t neuron_count) : _signals(neuron_count, 0.0_real), _weighted_sums(neuron_count, 0.0_real) {}
+                    std::span<real_t> signals() {
+                        return _signals;
+                    }
+                    std::span<const real_t> signals() const {
+                        return _signals;
+                    }
+                    std::span<real_t> weighted_sums() {
+                        return _weighted_sums;
+                    }
+                    std::span<const real_t> weighted_sums() const {
+                        return _weighted_sums;
+                    }
+                    // Seed a net state from input data
+                    void seed(const View &view, const DataType auto &inputs) {
+                        const auto neurons = view.neurons();
+                        if (inputs.size()         != view.input_neurons_indices().size() or
+                            _signals.size()       != neurons.size() or
+                            _weighted_sums.size() != neurons.size()) {
+                            throw std::invalid_argument("NNet::State::seed: size error!");
+                        }
+                        for (const auto &[input_neuron_index, input] : std::views::zip(view.input_neurons_indices(), inputs)) {
+                            _weighted_sums[input_neuron_index] = input;
+                            _signals[input_neuron_index] = neurons[input_neuron_index].activate(input);
+                        }
+                        for (const auto &bias_neuron_index : view.bias_neurons_indices()) {
+                            _weighted_sums[bias_neuron_index] = 1.0_real;
+                            _signals[bias_neuron_index] = neurons[bias_neuron_index].activate(1.0_real);
+                        }
+                    }
+                private:
+                    std::vector<real_t> _signals{};
+                    std::vector<real_t> _weighted_sums{};
             };
         public:
             // Constructor
@@ -246,22 +272,6 @@ namespace hnnet {
                     connection_begin = connection_end;
                 }
                 return partitions;
-            }
-            // Seed a net state from input data
-            void seed_state(State &state, const DataType auto &inputs) const {
-                if (std::ranges::size(inputs)  != _input_neurons_indices.size() or
-                    state.signals.size()       != _neurons.size() or
-                    state.weighted_sums.size() != _neurons.size()) {
-                    throw std::invalid_argument("NNet::seed_state: size error!");
-                }
-                for (const auto &[input_neuron_index, input] : std::views::zip(_input_neurons_indices, inputs)) {
-                    state.weighted_sums[input_neuron_index] = input;
-                    state.signals[input_neuron_index] = _neurons[input_neuron_index].activate(input);
-                }
-                for (const auto &bias_neuron_index : _bias_neurons_indices) {
-                    state.weighted_sums[bias_neuron_index] = 1.0_real;
-                    state.signals[bias_neuron_index] = _neurons[bias_neuron_index].activate(1.0_real);
-                }
             }
         private:
             // Data members
