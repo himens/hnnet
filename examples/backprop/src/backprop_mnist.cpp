@@ -57,8 +57,8 @@ TrainingData<dataset_vector_t> encode(const std::vector<DigitData> &digits) {
         return data;
     };
     TrainingData<dataset_vector_t> data;
-    data.inputs.resize(nb_training_samples);
-    data.targets.resize(nb_training_samples);
+    data.inputs.resize(digits.size());
+    data.targets.resize(digits.size());
     for (const auto &[digit_index, digit] : digits | std::views::enumerate) {
         data.inputs[digit_index]  = encode_pixels(digit.pixels);
         data.targets[digit_index] = encode_value(digit.value);
@@ -172,6 +172,7 @@ void metal_benchmark(const std::vector<DigitData> &train_digits, const std::vect
     const auto train_outputs = classifier.infer(train_data.inputs, dense_forward::update::metal::Backend{});
     const auto test_outputs = classifier.infer(test_data.inputs, dense_forward::update::metal::Backend{});
     std::println("MNIST classification efficiency (train) = {:.2f}%", eval_efficiency(train_outputs, train_data.targets));
+    std::println("MNIST classification efficiency (test) = {:.2f}%", eval_efficiency(test_outputs, test_data.targets));
 }
 #endif
 // Classify MNIST handwritten digits using a back-propagation neural network w/ one hidden layer
