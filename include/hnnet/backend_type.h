@@ -7,7 +7,7 @@ namespace hnnet {
                                        HostData &data,
                                        DeviceData &result,
                                        InitArgs &...args) {
-                                  { backend.init(args...) } -> std::same_as<void>;
+                                  { backend.init(args...) }   -> std::same_as<void>;
                                   { backend.to_device(data) } -> std::same_as<void>;
                                   { backend.to_host(result) } -> std::same_as<void>;
                               };

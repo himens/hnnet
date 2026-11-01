@@ -115,10 +115,10 @@ namespace hnnet::dag::update::omp {
             // Propagate signals through one dense layer
             void update_layer(NNet::State &state, const net::DAGNet::Layer &layer, std::span<const real_t> weights) const {
                 const auto neurons = _view.neurons();
+                auto signals = state.signals();
+                auto weighted_sums = state.weighted_sums();
                 for (auto row_index{0}; row_index < layer.rx_count; ++row_index) {
                     const auto row_offset = layer.weight_offset + row_index * layer.tx_count;
-                    auto signals = state.signals();
-                    auto weighted_sums = state.weighted_sums();
                     real_t weighted_sum{0.0_real};
                     index_t column_index{0};
                     for (; column_index <= (layer.tx_count - simd_register_size); column_index += simd_register_size) {

@@ -23,7 +23,7 @@ namespace hnnet::rule {
                 }
                 // Initialize the rule
                 template <std::derived_from<NNet::View> View, TrainingDataType Data>
-                    requires backprop::BackendType<Backend, View, Data, Loss>
+                    requires backprop::BackendType<Backend, Data, View, Loss>
                     void init(View view, const Data &data) {
                         _input_count = std::ssize(data.inputs);
                         if (_input_count == 0) {

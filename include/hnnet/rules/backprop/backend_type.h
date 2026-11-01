@@ -6,10 +6,10 @@
 #include "hnnet/types.h"
 
 namespace hnnet::backprop {
-    template <typename Backend, typename View, typename Data, typename Loss>
+    template <typename Backend, typename Data, typename View, typename Loss>
         concept BackendType = TrainingDataType<Data> and
-                              hnnet::BackendType<Backend, const Data, std::vector<real_t>, View> and
                               LossType<Loss> and
+                              hnnet::BackendType<Backend, Data, std::vector<real_t>, View> and
                               requires(Backend &backend,
                                        View &view,
                                        index_t begin,

@@ -84,7 +84,6 @@ namespace hnnet {
                     std::span<const real_t> weighted_sums() const {
                         return _weighted_sums;
                     }
-                    // Seed a net state from input data
                     void seed(const View &view, const DataType auto &input) {
                         const auto neurons = view.neurons();
                         if (input.size()          != view.input_neurons_indices().size() or
@@ -149,7 +148,7 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            template <typename Self, DatasetType Inputs, net::update::BackendType<typename Self::View, Inputs, dataset_vector_t> Backend>
+            template <typename Self, DatasetType Inputs, net::update::BackendType<Inputs, dataset_vector_t, typename Self::View> Backend>
                 dataset_vector_t infer(this Self &self, const Inputs &inputs, Backend backend) {
                     if (not self._trained) {
                         std::println("NNet::infer: try to infer from an untrained net!");
