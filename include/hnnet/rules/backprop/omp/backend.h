@@ -59,12 +59,12 @@ namespace hnnet::backprop::omp {
                     }
                     real_t loss_value{0.0_real};
                     #pragma omp parallel for if(parallel) reduction(+:loss_value)
-                    for (auto sample_index = batch_begin; sample_index < batch_end; ++sample_index) {
+                    for (auto input_index = batch_begin; input_index < batch_end; ++input_index) {
                         const auto thread_index = omp_get_thread_num();
                         std::span<const NNet::State> states;
-                        _update_backend.update_states(_weights, sample_index);
+                        _update_backend.update_states(_weights, input_index);
                         _update_backend.to_host(states);
-                        loss_value += backward(thread_index, sample_index, states[thread_index], loss);
+                        loss_value += backward(thread_index, input_index, states[thread_index], loss);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);
@@ -81,10 +81,10 @@ namespace hnnet::backprop::omp {
             protected:
                 // Compute the error and delta weights contribution of a single sample
                 real_t backward(const index_t thread_index,
-                                const index_t sample_index,
+                                const index_t input_index,
                                 const NNet::State &state,
                                 const LossType auto &loss) {
-                    const auto target = _targets[sample_index];
+                    const auto target = _targets[input_index];
                     const auto neurons = _view.neurons();
                     const auto connections = _view.connections();
                     const auto partitions = _view.partitions();

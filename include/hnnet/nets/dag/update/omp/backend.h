@@ -45,15 +45,15 @@ namespace hnnet::dag::update::omp {
                 outputs = std::move(_outputs);
             }
             // Seed and update all samples or one sample using supplied weights
-            void update_states(const DataType auto &weights, index_t sample_index = -1) {
+            void update_states(const DataType auto &weights, index_t input_index = -1) {
                 const auto input_count = std::ssize(_inputs);
-                if (sample_index < -1 or sample_index >= input_count) {
+                if (input_index < -1 or input_index >= input_count) {
                     throw std::invalid_argument("Backend::update_states: sample index out of range");
                 }
                 if (std::ssize(weights) != _view.connection_count()) {
                     throw std::invalid_argument("Backend::update_states: weight counts must match");
                 }
-                if (sample_index == -1) {
+                if (input_index == -1) {
                     #pragma omp parallel for if(input_count > 1) num_threads(std::ssize(_states))
                     for (index_t index = 0; index < input_count; ++index) {
                         auto &state = _states[omp_get_thread_num()];
@@ -63,8 +63,8 @@ namespace hnnet::dag::update::omp {
                 }
                 else {
                     auto &state = _states[omp_get_thread_num()];
-                    state.seed(_view, _inputs[sample_index]);
-                    update_state(state, _outputs[sample_index], weights);
+                    state.seed(_view, _inputs[input_index]);
+                    update_state(state, _outputs[input_index], weights);
                 }
             }
         private:
