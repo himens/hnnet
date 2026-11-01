@@ -136,7 +136,7 @@ namespace hnnet::backprop::metal {
                     }
                 }
                 // Transfer results back to the host
-                void to_host(weight_vector_t &weights) {
+                void to_host(std::vector<real_t> &weights) {
                     weights.resize(_parameters.connection_count);
                     const auto device_weights = static_cast<const float *>([_weights contents]);
                     for (std::size_t edge = 0; edge < weights.size(); ++edge) {
