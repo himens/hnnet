@@ -14,13 +14,14 @@
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/activations/relu.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
-#include "hnnet/nets/dag/update/omp/backend.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
 #include "hnnet/rules/backprop/backprop.h"
 #ifdef METAL
+#include "hnnet/nets/dense/update/metal/backend.h"
 #include "hnnet/rules/backprop/metal/backend.h"
 #include "hnnet/rules/backprop/metal/optimizers/momentum.h"
 #else
+#include "hnnet/nets/dense/update/omp/backend.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
 #endif
@@ -116,9 +117,9 @@ void omp_benchmark(const std::vector<DigitData> &train_digits, const std::vector
     // create net
     constexpr size_t nb_hidden{128};
     net::DenseForwardNet classifier{
-        net::DenseLayer{nb_pixels, NeuronType::input,  activation::Identity{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
-        net::DenseLayer{nb_digits, NeuronType::output, activation::Sigmoid{}}
+        dense::Layer{nb_pixels, NeuronType::input,  activation::Identity{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::Sigmoid{}},
+        dense::Layer{nb_digits, NeuronType::output, activation::Sigmoid{}}
     };
     // encode data
     const auto train_data = encode(train_digits);
@@ -132,8 +133,8 @@ void omp_benchmark(const std::vector<DigitData> &train_digits, const std::vector
             1
         });
     // eval efficiency
-    const auto train_outputs = classifier.infer(train_data.inputs, dag::update::omp::Backend{});
-    const auto test_outputs = classifier.infer(test_data.inputs, dag::update::omp::Backend{});
+    const auto train_outputs = classifier.infer(train_data.inputs, dense::update::omp::Backend{});
+    const auto test_outputs = classifier.infer(test_data.inputs, dense::update::omp::Backend{});
     std::println("MNIST classification efficiency (train) = {:.2f}%", eval_efficiency(train_outputs, train_data.targets));
     std::println("MNIST classification efficiency (test) = {:.2f}%", eval_efficiency(test_outputs, test_data.targets));
 }
@@ -147,15 +148,15 @@ void metal_benchmark(const std::vector<DigitData> &train_digits, const std::vect
     // create net
     constexpr size_t nb_hidden{1024};
     net::DenseForwardNet classifier{
-        net::DenseLayer{nb_pixels, NeuronType::input,  activation::Identity{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
-        net::DenseLayer{nb_digits, NeuronType::output, activation::Sigmoid{}}
+        dense::Layer{nb_pixels, NeuronType::input,  activation::Identity{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_hidden, NeuronType::hidden, activation::ReLU{}},
+        dense::Layer{nb_digits, NeuronType::output, activation::Sigmoid{}}
     };
     // encode data
     const auto train_data = encode(train_digits);
@@ -169,8 +170,8 @@ void metal_benchmark(const std::vector<DigitData> &train_digits, const std::vect
             1024
     });
     // eval efficiency
-    const auto train_outputs = classifier.infer(train_data.inputs, dense_forward::update::metal::Backend{});
-    const auto test_outputs = classifier.infer(test_data.inputs, dense_forward::update::metal::Backend{});
+    const auto train_outputs = classifier.infer(train_data.inputs, dense::update::metal::Backend{});
+    const auto test_outputs = classifier.infer(test_data.inputs, dense::update::metal::Backend{});
     std::println("MNIST classification efficiency (train) = {:.2f}%", eval_efficiency(train_outputs, train_data.targets));
     std::println("MNIST classification efficiency (test) = {:.2f}%", eval_efficiency(test_outputs, test_data.targets));
 }

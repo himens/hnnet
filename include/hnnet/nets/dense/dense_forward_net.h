@@ -1,26 +1,13 @@
 #pragma once
-#include <concepts>
 #include <cstddef>
 #include <stdexcept>
 #include <utility>
 #include "hnnet/activations/identity.h"
 #include "hnnet/nets/dag/dag_net.h"
+#include "hnnet/nets/dense/layer.h"
 #include "hnnet/topology.h"
 
 namespace hnnet::net {
-    template <typename T>
-        concept DenseLayerType = requires(T layer) {
-            { auto(layer.size) } -> std::same_as<int_t>;
-            { auto(layer.type) } -> std::same_as<NeuronType>;
-            { auto(layer.activation) } -> ActivationType;
-        };
-    template <ActivationType Activation>
-        struct DenseLayer {
-            int_t size;
-            NeuronType type;
-            Activation activation;
-            bool biased{false};
-        };
     ///////////////////////////
     // DenseForwardNet class //
     ///////////////////////////
@@ -33,7 +20,7 @@ namespace hnnet::net {
                     explicit View(DenseForwardNet &net) : DAGNet::View(net) {}
             };
             // Constructor
-            template <DenseLayerType... Layers>
+            template <dense::LayerType... Layers>
                 requires (sizeof...(Layers) > 0)
                 explicit DenseForwardNet(const Layers &...layers) : DAGNet(make_topology(layers...)) {}
             // Create a dense-forward view of the network.
@@ -42,7 +29,7 @@ namespace hnnet::net {
             }
         private:
             // Make dense topology
-            template <DenseLayerType... Layers>
+            template <dense::LayerType... Layers>
                 requires (sizeof...(Layers) > 0)
                 static Topology make_topology(const Layers &...layers) {
                     if (layers...[0].type != NeuronType::input) {

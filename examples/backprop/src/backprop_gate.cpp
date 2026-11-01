@@ -3,7 +3,7 @@
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
 #include "hnnet/rules/backprop/backprop.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
@@ -13,12 +13,12 @@ int main() {
     using namespace hnnet;
     // create net
     net::DenseForwardNet gate{
-        net::DenseLayer{2, NeuronType::input,  activation::Identity{}},
-        net::DenseLayer{4, NeuronType::hidden, activation::Sigmoid{}, true},
-        net::DenseLayer{1, NeuronType::output, activation::Sigmoid{}, true}
+        dense::Layer{2, NeuronType::input,  activation::Identity{}},
+        dense::Layer{4, NeuronType::hidden, activation::Sigmoid{}, true},
+        dense::Layer{1, NeuronType::output, activation::Sigmoid{}, true}
     };
     // train net
-    const std::array<std::vector<real_t>, 4> inputs{{
+    const std::array<std::array<real_t, 2>, 4> inputs{{
         // binary
         {1, 1},
         {1, 0},
@@ -30,7 +30,7 @@ int main() {
         //{-1, +1},
         //{-1, -1}
     }};
-    const std::array<std::vector<real_t>, 4> targets{{
+    const std::array<std::array<real_t, 1>, 4> targets{{
         {0}, 
         {1}, 
         {1}, 

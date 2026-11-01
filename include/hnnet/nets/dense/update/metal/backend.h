@@ -6,9 +6,9 @@
 #include <vector>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #include "runtime.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
 
-namespace hnnet::dense_forward::update::metal {
+namespace hnnet::dense::update::metal {
     // Resources supplied by a caller that owns GPU execution
     struct DeviceData {
         id<MTLCommandBuffer> command = nil;

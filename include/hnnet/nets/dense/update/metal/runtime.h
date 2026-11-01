@@ -9,7 +9,7 @@
 #include "hnnet/activations/relu.h"
 #include "hnnet/activations/sigmoid.h"
 
-namespace hnnet::dense_forward::update::metal::detail {
+namespace hnnet::dense::update::metal::detail {
     struct Parameters {
         std::uint32_t neuron_count;
         std::uint32_t connection_count;

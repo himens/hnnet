@@ -12,8 +12,8 @@ Language kernels. No OpenMP code is used by the Metal backend.
 - Link Metal, MetalPerformanceShaders and Foundation (`-framework Metal
   -framework MetalPerformanceShaders -framework Foundation`).
 - Keep the local `kernels.metal` and the shared forward shaders
-  [`activations.h`](../../../nets/dense_forward/update/metal/activations.h)
-  and [`kernels.metal`](../../../nets/dense_forward/update/metal/kernels.metal)
+  [`activations.h`](../../../nets/dense/update/metal/activations.h)
+  and [`kernels.metal`](../../../nets/dense/update/metal/kernels.metal)
   available at runtime. Default paths are recorded by `__FILE__` and relative
   paths are resolved against the process working directory. For relocated
   installations, call `set_kernel_directory(path)` for backprop shaders and
@@ -38,7 +38,7 @@ backend; optimizers keep using the backprop context adapter.
 
 ## Reusable Update Backend
 
-[`dense_forward::update::metal::Backend`](../../../nets/dense_forward/update/metal/backend.h)
+[`dense::update::metal::Backend`](../../../nets/dense/update/metal/backend.h)
 implements input/bias seeding and dense propagation independently of backprop.
 It has two usage paths:
 

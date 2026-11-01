@@ -1,5 +1,5 @@
 #pragma once
-#include "hnnet/nets/dense_forward/update/metal/runtime.h"
+#include "hnnet/nets/dense/update/metal/runtime.h"
 
 namespace hnnet::backprop::metal::detail {
     using hnnet::metal::checked_count;
@@ -9,14 +9,14 @@ namespace hnnet::backprop::metal::detail {
     using hnnet::metal::encoder;
     using hnnet::metal::error_message;
 
-    using dense_forward::update::metal::detail::Parameters;
-    using dense_forward::update::metal::detail::ActivationDescriptor;
-    using dense_forward::update::metal::detail::DenseLayer;
-    using dense_forward::update::metal::detail::read_source;
-    using dense_forward::update::metal::detail::to_float;
-    using dense_forward::update::metal::detail::describe_activation;
-    using dense_forward::update::metal::detail::matrix;
-    using dense_forward::update::metal::detail::product;
+    using dense::update::metal::detail::Parameters;
+    using dense::update::metal::detail::ActivationDescriptor;
+    using dense::update::metal::detail::DenseLayer;
+    using dense::update::metal::detail::read_source;
+    using dense::update::metal::detail::to_float;
+    using dense::update::metal::detail::describe_activation;
+    using dense::update::metal::detail::matrix;
+    using dense::update::metal::detail::product;
 
     struct UpdateParameters {
         std::uint32_t weight_count;
@@ -32,7 +32,7 @@ namespace hnnet::backprop::metal::detail {
         public:
             // Assemble the backprop shaders and initialize the common context
             void init(const std::filesystem::path &directory, const std::filesystem::path &update_directory) {
-                const auto source = dense_forward::update::metal::detail::shader_source(update_directory)
+                const auto source = dense::update::metal::detail::shader_source(update_directory)
                     + read_source(directory / "kernels.metal");
                 hnnet::metal::Context::init(source);
             }

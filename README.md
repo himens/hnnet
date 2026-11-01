@@ -71,7 +71,7 @@ Classifier data representation details:
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
 #include "hnnet/rules/backprop/backprop.h"
 #include "hnnet/rules/backprop/omp/backend.h"
 #include "hnnet/rules/backprop/omp/optimizers/momentum.h"
@@ -79,9 +79,9 @@ Classifier data representation details:
 int main() {
     using namespace hnnet;
     net::DenseForwardNet gate{
-        net::DenseLayer{2, NeuronType::input, activation::Identity{}},
-        net::DenseLayer{4, NeuronType::hidden, activation::Sigmoid{}, true},
-        net::DenseLayer{1, NeuronType::output, activation::Sigmoid{}, true}
+        dense::Layer{2, NeuronType::input, activation::Identity{}},
+        dense::Layer{4, NeuronType::hidden, activation::Sigmoid{}, true},
+        dense::Layer{1, NeuronType::output, activation::Sigmoid{}, true}
     };
 
     const std::array<input_vector_t, 4> inputs{{
@@ -174,7 +174,8 @@ Input and output samples are contiguous ranges of `real_t`; datasets are contigu
 2. `DAGNet` and `DenseForwardNet`
     - `DAGNet` can be constructed directly from a `Topology`; it propagates dense layers and remaining sparse partitions in topological order
     - dense candidates are grouped directly by their contiguous source range, then checked for contiguous partitions, receivers, and weights; descriptors are stored in topological order and include single-receiver layers
-    - `DenseForwardNet` assembles a `Topology` from `DenseLayer` descriptions and passes it to the `DAGNet` constructor; each requested bias is created before the receivers, keeping it contiguous with the source neurons, and connected with independent weights to every receiver
+    - `DenseForwardNet` assembles a `Topology` from `dense::Layer` descriptions and passes it to the `DAGNet` constructor; each requested bias is created before the receivers, keeping it contiguous with the source neurons, and connected with independent weights to every receiver
+    - `dense::update::omp::Backend` provides dense-network inference through the DAG OpenMP update backend; Metal provides the corresponding `dense::update::metal::Backend`
 
 3. `LearningRule`
     - implements `learn(net, inputs, targets)` and is passed to `net.train(inputs, targets, rule)`

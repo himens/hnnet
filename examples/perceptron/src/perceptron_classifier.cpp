@@ -10,7 +10,7 @@
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/perceptron.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
 #include "hnnet/rules/perceptron.h"
 
 // Constants
@@ -98,8 +98,8 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 int main() {
     // create net
     net::DenseForwardNet classifier{
-        net::DenseLayer{nb_rows * nb_columns, NeuronType::input, activation::Identity{}},
-        net::DenseLayer{nb_letters, NeuronType::output, activation::Perceptron{}}
+        dense::Layer{nb_rows * nb_columns, NeuronType::input, activation::Identity{}},
+        dense::Layer{nb_letters, NeuronType::output, activation::Perceptron{}}
     };
     // train net
     std::vector<LetterData> letters{};

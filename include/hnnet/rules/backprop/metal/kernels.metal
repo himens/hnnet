@@ -1,16 +1,16 @@
 #include <metal_stdlib>
 #ifndef HNNET_METAL_UPDATE_INCLUDED
-#include "../../../nets/dense_forward/update/metal/kernels.metal"
+#include "../../../nets/dense/update/metal/kernels.metal"
 #endif
 
 namespace hnnet {
 namespace backprop {
 namespace metal {
-    using dense_forward::update::metal::Parameters;
-    using dense_forward::update::metal::ActivationDescriptor;
-    using dense_forward::update::metal::DenseLayer;
-    using dense_forward::update::metal::activate;
-    using dense_forward::update::metal::derivative;
+    using dense::update::metal::Parameters;
+    using dense::update::metal::ActivationDescriptor;
+    using dense::update::metal::DenseLayer;
+    using dense::update::metal::activate;
+    using dense::update::metal::derivative;
 
     struct UpdateParameters {
         uint weight_count;

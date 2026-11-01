@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 
 namespace hnnet {
-namespace dense_forward {
+namespace dense {
 namespace update {
 namespace metal {
 namespace activation {

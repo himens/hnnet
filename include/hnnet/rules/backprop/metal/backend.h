@@ -19,8 +19,8 @@
 #include "hnnet/activations/relu.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
-#include "hnnet/nets/dense_forward/dense_forward_net.h"
-#include "hnnet/nets/dense_forward/update/metal/backend.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
+#include "hnnet/nets/dense/update/metal/backend.h"
 #include "hnnet/rules/backprop/backend_type.h"
 
 namespace hnnet::backprop::metal {
@@ -114,10 +114,10 @@ namespace hnnet::backprop::metal {
                         parameters.batch_begin = static_cast<std::uint32_t>(batch_begin);
                         parameters.batch_size = batch_size;
                         auto command = _context.command();
-                        _update_backend.to_device(dense_forward::update::metal::DeviceData{
+                        _update_backend.to_device(dense::update::metal::DeviceData{
                             command, batch_size, _inputs, parameters.batch_begin});
                         _update_backend.update_states(_weights);
-                        dense_forward::update::metal::DeviceStates states;
+                        dense::update::metal::DeviceStates states;
                         _update_backend.to_host(states);
                         prepare_matrices(parameters, states);
                         encode(command, _loss_pipeline, parameters, {_targets, states.signals, _losses}, batch_size);
@@ -155,7 +155,7 @@ namespace hnnet::backprop::metal {
                 };
                 static_assert(sizeof(DenseLayer) == 20);
                 // Prepare the matrices used by backward and gradient computation
-                void prepare_matrices(const detail::Parameters &parameters, const dense_forward::update::metal::DeviceStates &states) {
+                void prepare_matrices(const detail::Parameters &parameters, const dense::update::metal::DeviceStates &states) {
                     if (_prepared_batch_size == parameters.batch_size) return;
                     for (auto &layer : _layers) {
                         const auto &shape = layer.shape;
@@ -171,7 +171,7 @@ namespace hnnet::backprop::metal {
                     _prepared_batch_size = parameters.batch_size;
                 }
                 // Perform the backward pass for the network
-                void backward(id<MTLCommandBuffer> command, const detail::Parameters &parameters, const dense_forward::update::metal::DeviceStates &states) const {
+                void backward(id<MTLCommandBuffer> command, const detail::Parameters &parameters, const dense::update::metal::DeviceStates &states) const {
                     for (std::size_t position = _layers.size(); position > 0; --position) {
                         const auto &layer = _layers[position - 1];
                         auto encoder = detail::encoder(command, _delta_pipeline);
@@ -220,9 +220,9 @@ namespace hnnet::backprop::metal {
                 // Data members
                 Optimizer _optimizer;
                 detail::Context _context;
-                dense_forward::update::metal::Backend _update_backend;
+                dense::update::metal::Backend _update_backend;
                 std::filesystem::path _kernel_directory{std::filesystem::path{__FILE__}.parent_path()};
-                std::filesystem::path _update_kernel_directory{dense_forward::update::metal::detail::kernel_directory()};
+                std::filesystem::path _update_kernel_directory{dense::update::metal::detail::kernel_directory()};
                 detail::Parameters _parameters{};
                 std::vector<Layer> _layers;
                 std::uint32_t _scratch_capacity = 0;
