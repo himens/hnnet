@@ -16,11 +16,6 @@
 #include "utils/timer.h"
 
 namespace hnnet {
-    using data_vector_t   = std::vector<real_t>;
-    using weight_vector_t = std::vector<real_t>;
-    // Deprecated
-    using input_vector_t  = std::vector<real_t>;
-    using output_vector_t = std::vector<real_t>;
     ////////////////
     // NNet class //
     ////////////////
@@ -34,7 +29,6 @@ namespace hnnet {
             };
             class View {
                 public:
-                    // Construct an unbound view
                     View() = default;
                     int_t neuron_count() const {
                         return std::ssize(_net->_neurons);
@@ -56,12 +50,6 @@ namespace hnnet {
                     }
                     std::span<const real_t> weights() const {
                         return _net->_weights;
-                    }
-                    void set_weights(std::span<const real_t> weights) {
-                        if (weights.size() != _net->_weights.size()) {
-                            throw std::invalid_argument("NNet::View::set_weights: weight counts must match");
-                        }
-                        std::ranges::copy(weights, _net->_weights.begin());
                     }
                     std::span<const Partition> partitions() const {
                         return _net->_partitions;
@@ -97,16 +85,16 @@ namespace hnnet {
                         return _weighted_sums;
                     }
                     // Seed a net state from input data
-                    void seed(const View &view, const DataType auto &inputs) {
+                    void seed(const View &view, const DataType auto &input) {
                         const auto neurons = view.neurons();
-                        if (inputs.size()         != view.input_neurons_indices().size() or
+                        if (input.size()          != view.input_neurons_indices().size() or
                             _signals.size()       != neurons.size() or
                             _weighted_sums.size() != neurons.size()) {
                             throw std::invalid_argument("NNet::State::seed: size error!");
                         }
-                        for (const auto &[input_neuron_index, input] : std::views::zip(view.input_neurons_indices(), inputs)) {
-                            _weighted_sums[input_neuron_index] = input;
-                            _signals[input_neuron_index] = neurons[input_neuron_index].activate(input);
+                        for (const auto &[input_neuron_index, input_value] : std::views::zip(view.input_neurons_indices(), input)) {
+                            _weighted_sums[input_neuron_index] = input_value;
+                            _signals[input_neuron_index] = neurons[input_neuron_index].activate(input_value);
                         }
                         for (const auto &bias_neuron_index : view.bias_neurons_indices()) {
                             _weighted_sums[bias_neuron_index] = 1.0_real;
@@ -129,35 +117,28 @@ namespace hnnet {
                 return View(*this);
             }
             // Train net using a set of training samples
-            template <typename Self, DatasetType Inputs, DatasetType Targets, LearningRuleType<typename Self::View, Inputs, Targets> LearningRule>
-                void train(this Self &self, 
-                           const Inputs &inputs, 
-                           const Targets &targets, 
-                           LearningRule rule) {
-                    if (std::ranges::size(inputs) != std::ranges::size(targets)) {
-                        throw std::invalid_argument("NNet::train: size error!");
+            template <typename Self, TrainingDataType Data, LearningRuleType<typename Self::View, Data> LearningRule>
+                void train(this Self &self, const Data &data, LearningRule rule) {
+                    if (self._trained) {
+                        std::println("NNet::train: net is already trained!");
+                        return;
                     }
                     constexpr int_t max_epochs{1'000'000};
                     int_t epoch{0};
                     utils::Timer timer{};
                     auto view = self.view();
                     std::println("NNet::train: ==================================");
-                    std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(inputs));
+                    std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(data.inputs));
                     std::println("NNet::train: ==================================");
                     timer.start();
                     self._weights = utils::random::generate<real_t>(std::ssize(self._weights), -0.1_real, +0.1_real);
-                    rule.init(view);
-                    for (const auto &[input, target] : std::views::zip(inputs, targets)) {
-                        if (std::ssize(input)  != std::ssize(self._input_neurons_indices) or 
-                            std::ssize(target) != std::ssize(self._output_neurons_indices)) {
-                            throw std::invalid_argument("NNet::train: size error!");
-                        }
-                    }
+                    rule.init(view, data);
                     while (not self._trained and (epoch <= max_epochs)) {
-                        self._trained = rule.learn(view, inputs, targets);
+                        self._trained = rule.learn();
                         epoch++;
                         std::println("NNet::train: epoch: {}, elapsed time: {:.5f}s", epoch, timer.get_elapsed_time_s());
                     }
+                    rule.apply(self._weights);
                     if (self._trained) {
                         std::println("NNet::train: Training summary:");
                         std::println("NNet::train: elapsed time: {:.5f}s", timer.get_elapsed_time_s());
@@ -168,29 +149,19 @@ namespace hnnet {
                     }
                 }
             // Infer from data
-            template <typename Self, DatasetType Inputs, net::update::BackendType<typename Self::View, Inputs, std::vector<data_vector_t>> Backend>
-                std::vector<data_vector_t> infer(this Self &self, const Inputs &inputs, Backend backend) {
+            template <typename Self, DatasetType Inputs, net::update::BackendType<typename Self::View, Inputs, dataset_vector_t> Backend>
+                dataset_vector_t infer(this Self &self, const Inputs &inputs, Backend backend) {
                     if (not self._trained) {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    std::vector<data_vector_t> outputs;
+                    dataset_vector_t outputs;
                     auto view = self.view();
                     backend.init(view);
                     backend.to_device(inputs);
                     backend.update_states(view.weights());
                     backend.to_host(outputs);
                     return outputs;
-                }
-            // Infer from a single sample using the batch path
-            template <typename Self, DataType Inputs, net::update::BackendType<typename Self::View, std::array<std::span<const real_t>, 1>, std::vector<data_vector_t>> Backend>
-                data_vector_t infer(this Self &self, const Inputs &inputs, Backend backend) {
-                    if (not self._trained) {
-                        std::println("NNet::infer: try to infer from an untrained net!");
-                        return {};
-                    }
-                    auto outputs = self.infer(std::array<std::span<const real_t>, 1>{inputs}, std::move(backend));
-                    return std::move(outputs.front());
                 }
         protected: 
             // Data types
@@ -280,8 +251,8 @@ namespace hnnet {
             std::vector<Connection> _connections{};
             std::vector<real_t> _weights{};
             std::vector<Partition> _partitions{};
-            index_vector_t _input_neurons_indices{};
-            index_vector_t _output_neurons_indices{};
-            index_vector_t _bias_neurons_indices{};
+            std::vector<index_t> _input_neurons_indices{};
+            std::vector<index_t> _output_neurons_indices{};
+            std::vector<index_t> _bias_neurons_indices{};
     };
 }

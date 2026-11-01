@@ -2,13 +2,13 @@
 #include <concepts>
 
 namespace hnnet {
-    template <typename Backend, typename View, typename HostData, typename DeviceData>
+    template <typename Backend, typename HostData, typename DeviceData, typename ...InitArgs>
         concept BackendType = requires(Backend &backend,
-                                       View &view,
-                                       HostData &host_data,
-                                       DeviceData &device_data) {
-                                  { backend.init(view) } -> std::same_as<void>;
-                                  { backend.to_device(host_data) } -> std::same_as<void>;
-                                  { backend.to_host(device_data) } -> std::same_as<void>;
+                                       HostData &data,
+                                       DeviceData &result,
+                                       InitArgs &...args) {
+                                  { backend.init(args...) } -> std::same_as<void>;
+                                  { backend.to_device(data) } -> std::same_as<void>;
+                                  { backend.to_host(result) } -> std::same_as<void>;
                               };
 }

@@ -13,14 +13,14 @@ namespace hnnet {
         std::vector<Connection> connections;
          // Create new neurons
         template <ActivationType Activation>
-            index_vector_t new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
+            std::vector<index_t> new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
                 if (count < 0) {
                     throw std::invalid_argument("NNet::new_neurons: invalid count!");
                 }
                 for (auto count_index{0}; count_index < count; ++count_index) {
                     neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
                 }
-                return std::views::iota(neurons.size() - count, neurons.size()) | std::ranges::to<index_vector_t>();
+                return std::views::iota(neurons.size() - count, neurons.size()) | std::ranges::to<std::vector<index_t>>();
             }
         // Append connections; endpoint validation is performed by the network constructor.
         void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {

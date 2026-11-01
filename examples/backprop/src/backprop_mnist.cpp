@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
@@ -35,16 +36,16 @@ struct DigitData {
     Pixels pixels{};
 };
 // Encode pixel grid (grayscale [0, 255] -> normalized [0.0, 1.0])
-input_vector_t encode(const Pixels &pixels) {
-    input_vector_t data(nb_pixels, 0.0_real);
+std::vector<real_t> encode(const Pixels &pixels) {
+    std::vector<real_t> data(nb_pixels, 0.0_real);
     for (const auto &[ipx, pixel] : pixels | std::views::enumerate) {
         data[ipx] = static_cast<real_t>(pixel) / 255.0_real;
     }
     return data;
 }
 // Encode digit label (one-hot)
-output_vector_t encode(const int_t label) {
-    output_vector_t data(nb_digits, 0.0_real);
+std::vector<real_t> encode(const int_t label) {
+    std::vector<real_t> data(nb_digits, 0.0_real);
     if (label < 0 or label >= static_cast<int_t>(nb_digits)) {
         throw std::invalid_argument("encode: invalid label: " + std::to_string(label));
     }
@@ -98,18 +99,18 @@ int main() {
         net::DenseLayer{nb_digits, NeuronType::output, activation::Sigmoid{}}
     };
     // read train and test samples
+    TrainingData<dataset_vector_t, dataset_vector_t> data;
     const auto train_digits = read_digits("data/mnist/mnist_train.csv", nb_training_samples);
     const auto test_digits = read_digits("data/mnist/mnist_test.csv", nb_test_samples);
-    std::vector<input_vector_t> inputs(nb_training_samples);
-    std::vector<output_vector_t> targets(nb_training_samples);
+    data.inputs.resize(nb_training_samples);
+    data.targets.resize(nb_training_samples);
     for (const auto &[i, digit] : train_digits | std::views::enumerate) {
-        inputs[i] = encode(digit.pixels);
-        targets[i] = encode(digit.label);
+        data.inputs[i] = encode(digit.pixels);
+        data.targets[i] = encode(digit.label);
     }
     // train net
     classifier.train(
-        inputs,
-        targets,
+        data,
         rule::Backprop{
             //backprop::metal::Backend<backprop::metal::optimizer::Momentum>{0.1_real, 0.6_real},
             backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.1_real, 0.6_real},
@@ -117,16 +118,14 @@ int main() {
             512
     });
     //classifier.train(
-    //    inputs,
-    //    targets,
+    //    data,
     //    rule::Backprop{
     //        backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05_real, 0.9_real},
     //        loss::MSE{},
     //        1
     //});
     //classifier.train(
-    //    inputs,
-    //    targets,
+    //    data,
     //    rule::Backprop{
     //        backend::omp::backprop::Rprop{1.2, 0.5},
     //        loss::MSE{},
@@ -136,8 +135,8 @@ int main() {
     auto eval_efficiency = [&] (const std::vector<DigitData> &digits) {
         size_t error_count{0};
         for (const auto &[label, pixels] : digits) {
-            const auto outputs = classifier.infer(encode(pixels), dag::update::omp::Backend{});
-            const auto predicted_label = decode(outputs);
+            const auto outputs = classifier.infer(std::array{encode(pixels)}, dag::update::omp::Backend{});
+            const auto predicted_label = decode(outputs.front());
             error_count += (predicted_label != label);
         }
         return 100.0 * (1.0 - static_cast<real_t>(error_count) / digits.size());

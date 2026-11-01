@@ -6,15 +6,9 @@
 #include "hnnet/types.h"
 
 namespace hnnet::backprop {
-    template <DatasetType Inputs, DatasetType Targets>
-        struct TrainingData {
-            const Inputs &inputs;
-            const Targets &targets;
-        };
-    template <typename Backend, typename View, typename Inputs, typename Targets, typename Loss>
-        concept BackendType = DatasetType<Inputs> and
-                              DatasetType<Targets> and
-                              hnnet::BackendType<Backend, View, TrainingData<Inputs, Targets>, weight_vector_t> and
+    template <typename Backend, typename View, typename Data, typename Loss>
+        concept BackendType = TrainingDataType<Data> and
+                              hnnet::BackendType<Backend, const Data, std::vector<real_t>, View> and
                               LossType<Loss> and
                               requires(Backend &backend,
                                        View &view,

@@ -1,4 +1,5 @@
 #include <array>
+#include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
@@ -17,7 +18,7 @@ int main() {
         net::DenseLayer{1, NeuronType::output, activation::Sigmoid{}, true}
     };
     // train net
-    const std::array<input_vector_t, 4> inputs{{
+    const std::array<std::vector<real_t>, 4> inputs{{
         // binary
         {1, 1},
         {1, 0},
@@ -29,15 +30,14 @@ int main() {
         //{-1, +1},
         //{-1, -1}
     }};
-    const std::array<output_vector_t, 4> targets{{
+    const std::array<std::vector<real_t>, 4> targets{{
         {0}, 
         {1}, 
         {1}, 
         {0}
     }};
     gate.train(
-        inputs,
-        targets,
+        TrainingData{inputs, targets},
         rule::Backprop{
             backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.2_real},
             loss::MSE{},

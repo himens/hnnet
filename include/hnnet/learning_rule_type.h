@@ -1,16 +1,17 @@
 #pragma once
 #include <concepts>
+#include <vector>
 #include "hnnet/types.h"
 
 namespace hnnet {
-    template <typename Rule, typename Net, typename Inputs, typename Targets>
-        concept LearningRuleType = DatasetType<Inputs> and
-                                   DatasetType<Targets> and
+    template <typename Rule, typename View, typename Data>
+        concept LearningRuleType = TrainingDataType<Data> and
                                    requires(Rule& rule,
-                                            Net& net,
-                                            const Inputs &inputs,
-                                            const Targets &targets) {
-                                       { rule.init(net) } -> std::same_as<void>;
-                                       { rule.learn(net, inputs, targets) } -> std::same_as<bool>;
+                                            View& view,
+                                            const Data &data,
+                                            std::vector<real_t> &weights) {
+                                       { rule.init(view, data) } -> std::same_as<void>;
+                                       { rule.learn() } -> std::same_as<bool>;
+                                       { rule.apply(weights) } -> std::same_as<void>;
                                    };
 }

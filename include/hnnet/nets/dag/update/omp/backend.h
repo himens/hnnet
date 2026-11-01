@@ -21,16 +21,16 @@ namespace hnnet::dag::update::omp {
                 _outputs.clear();
             }
             // Transfer data to the device
-            void to_device(const DatasetType auto &samples) {
-                for (const auto &inputs : samples) {
-                    if (std::ssize(inputs) != _view.input_neuron_count()) {
+            void to_device(const DatasetType auto &inputs) {
+                for (const auto &input : inputs) {
+                    if (std::ssize(input) != _view.input_neuron_count()) {
                         throw std::invalid_argument("Backend::to_device: input or state size does not match the network");
                     }
                 }
                 _inputs.clear();
-                _inputs.reserve(std::ranges::size(samples));
-                for (const auto &inputs : samples) {
-                    _inputs.emplace_back(inputs);
+                _inputs.reserve(std::ranges::size(inputs));
+                for (const auto &input : inputs) {
+                    _inputs.emplace_back(input);
                 }
                 _outputs.resize(_inputs.size());
                 for (auto &output : _outputs) {
@@ -41,21 +41,21 @@ namespace hnnet::dag::update::omp {
             void to_host(std::span<const NNet::State> &states) const {
                 states = _states;
             }
-            void to_host(std::vector<data_vector_t> &outputs) {
+            void to_host(dataset_vector_t &outputs) {
                 outputs = std::move(_outputs);
             }
             // Seed and update all samples or one sample using supplied weights
             void update_states(const DataType auto &weights, index_t sample_index = -1) {
-                const auto sample_count = std::ssize(_inputs);
-                if (sample_index < -1 or sample_index >= sample_count) {
+                const auto input_count = std::ssize(_inputs);
+                if (sample_index < -1 or sample_index >= input_count) {
                     throw std::invalid_argument("Backend::update_states: sample index out of range");
                 }
                 if (std::ssize(weights) != _view.connection_count()) {
                     throw std::invalid_argument("Backend::update_states: weight counts must match");
                 }
                 if (sample_index == -1) {
-                    #pragma omp parallel for if(sample_count > 1) num_threads(std::ssize(_states))
-                    for (index_t index = 0; index < sample_count; ++index) {
+                    #pragma omp parallel for if(input_count > 1) num_threads(std::ssize(_states))
+                    for (index_t index = 0; index < input_count; ++index) {
                         auto &state = _states[omp_get_thread_num()];
                         state.seed(_view, _inputs[index]);
                         update_state(state, _outputs[index], weights);
@@ -69,7 +69,7 @@ namespace hnnet::dag::update::omp {
             }
         private:
             // Propagate signals through one state
-            void update_state(NNet::State &state, data_vector_t &output, std::span<const real_t> weights) {
+            void update_state(NNet::State &state, std::vector<real_t> &output, std::span<const real_t> weights) {
                 const auto partitions = _view.partitions();
                 const auto partition_layer_indices = _view.partition_layer_indices();
                 const auto layers = _view.layers();
@@ -141,6 +141,6 @@ namespace hnnet::dag::update::omp {
             net::DAGNet::View _view{};
             std::vector<std::span<const real_t>> _inputs{};
             std::vector<NNet::State> _states{};
-            std::vector<data_vector_t> _outputs{};
+            dataset_vector_t _outputs{};
     };
 }

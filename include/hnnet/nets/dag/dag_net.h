@@ -58,7 +58,7 @@ namespace hnnet::net {
                 const auto neurons = this->neurons();
                 auto partitions = this->partitions();
                 // topologically order partitions (Kahn's algorithm)
-                std::vector<index_vector_t> rx_indices(neurons.size());
+                std::vector<std::vector<index_t>> rx_indices(neurons.size());
                 for (const auto &[tx_index, rx_index] : connections) {
                     rx_indices[tx_index].push_back(rx_index);
                 }
@@ -66,7 +66,7 @@ namespace hnnet::net {
                 for (const auto &[rx_index, connection_begin, connection_end] : partitions) {
                     visits_left[rx_index] = connection_end - connection_begin;
                 }
-                index_vector_t visited_indices;
+                std::vector<index_t> visited_indices;
                 for (auto neuron_index{0}; neuron_index < std::ssize(neurons); ++neuron_index) {
                     if (visits_left[neuron_index] == 0) {
                         visited_indices.push_back(neuron_index);
@@ -90,7 +90,7 @@ namespace hnnet::net {
                 std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_index] < topo_ranks[rhs.rx_index]; });
                 // group partitions sharing the exact same (contiguous) tx range
                 _partition_layer_indices.assign(std::ssize(partitions), Layer::no_layer);
-                std::vector<index_vector_t> groups;
+                std::vector<std::vector<index_t>> groups;
                 std::unordered_map<IndexPair, index_t, IndexPairHash> group_indices;
                 for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
                     const auto count = (partition.connection_end - partition.connection_begin);
@@ -141,6 +141,6 @@ namespace hnnet::net {
         private:
             // Data members
             std::vector<Layer> _layers{};
-            index_vector_t _partition_layer_indices{};
+            std::vector<index_t> _partition_layer_indices{};
     };
 }
