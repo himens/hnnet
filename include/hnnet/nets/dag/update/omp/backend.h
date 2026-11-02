@@ -86,8 +86,16 @@ namespace hnnet::dag::update::omp {
                         update_partition(state, partition, weights);
                     }
                 }
-                for (const auto &[output_index, neuron_index] : _view.output_neurons_indices() | std::views::enumerate) {
-                    output[output_index] = signals[neuron_index]; // TODO: it can be optimized using SIMD or parallel reduction?
+                const auto output_neurons_indices = _view.output_neurons_indices();
+                index_t output_index{0};
+                for (; output_index <= (std::ssize(output_neurons_indices) - simd_register_size); output_index += simd_register_size) {
+                    output[output_index]     = signals[output_neurons_indices[output_index]];
+                    output[output_index + 1] = signals[output_neurons_indices[output_index + 1]];
+                    output[output_index + 2] = signals[output_neurons_indices[output_index + 2]];
+                    output[output_index + 3] = signals[output_neurons_indices[output_index + 3]];
+                }
+                for (; output_index < std::ssize(output_neurons_indices); ++output_index) {
+                    output[output_index] = signals[output_neurons_indices[output_index]];
                 }
             }
             // Propagate signals through one sparse partition
