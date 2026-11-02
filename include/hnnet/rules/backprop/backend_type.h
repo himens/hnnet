@@ -8,7 +8,7 @@
 namespace hnnet::backprop {
     template <typename Backend, typename Data, typename View, typename Loss>
         concept BackendType = hnnet::BackendType<Backend, Data, std::vector<real_t>, View> and
-                               TrainingDataType<Data> and
+                              TrainingDataType<Data> and
                               LossType<Loss> and
                               requires(Backend &backend,
                                        index_t begin,
