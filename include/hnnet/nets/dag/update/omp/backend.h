@@ -27,17 +27,17 @@ namespace hnnet::dag::update::omp {
                         throw std::invalid_argument("Backend::to_device: input or state size does not match the network");
                     }
                 }
+                _states.clear();
+                _outputs.clear();
                 _inputs.clear();
                 _inputs.reserve(std::ranges::size(inputs));
                 for (const auto &input : inputs) {
-                    _inputs.emplace_back(input);
+                    _inputs.emplace_back(input.begin(), input.end());
                 }
-                _states.clear();
-                _outputs.clear();
             }
             // Transfer data to the host
-            void to_host(std::span<const NNet::State> &states) const {
-                states = _states;
+            void to_host(std::vector<NNet::State> &states) const {
+                states = std::move(_states);
             }
             void to_host(dataset_vector_t &outputs) {
                 outputs = std::move(_outputs);
@@ -153,7 +153,7 @@ namespace hnnet::dag::update::omp {
         private:
             // Data members
             net::DAGNet::View _view{};
-            std::vector<std::span<const real_t>> _inputs{};
+            dataset_vector_t _inputs{};
             std::vector<NNet::State> _states{};
             dataset_vector_t _outputs{};
     };

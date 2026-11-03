@@ -15,7 +15,7 @@ namespace hnnet::dense::update::omp {
                 _backend.to_device(inputs);
             }
             // Transfer data to the host.
-            void to_host(std::span<const NNet::State> &states) const {
+            void to_host(std::vector<NNet::State> &states) const {
                 _backend.to_host(states);
             }
             void to_host(dataset_vector_t &outputs) {
