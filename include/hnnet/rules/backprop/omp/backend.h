@@ -54,7 +54,7 @@ namespace hnnet::backprop::omp {
                     if (batch_begin < 0 or batch_end <= batch_begin or batch_end > std::ssize(_targets)) {
                         throw std::invalid_argument("Backend::backprop: batch range out of bounds");
                     }
-                    std::vector<NNet::State> states;
+                    std::span<const NNet::State> states;
                     _update_backend.update_states(_weights, batch_begin, batch_end);
                     _update_backend.to_host(states);
                     const auto batch_size = batch_end - batch_begin;

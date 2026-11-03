@@ -36,8 +36,8 @@ namespace hnnet::dag::update::omp {
                 }
             }
             // Transfer data to the host
-            void to_host(std::vector<NNet::State> &states) const {
-                states = std::move(_states);
+            void to_host(std::span<const NNet::State> &states) const {
+                states = _states;
             }
             void to_host(dataset_vector_t &outputs) {
                 outputs = std::move(_outputs);
@@ -48,7 +48,7 @@ namespace hnnet::dag::update::omp {
                 if (batch_end == -1) {
                     batch_end = input_count;
                 }
-                if (batch_begin < 0 or batch_end < batch_begin or batch_end > input_count) {
+                if ((batch_begin < 0) or (batch_end < batch_begin) or (batch_end > input_count)) {
                     throw std::invalid_argument("Backend::update_states: batch range out of bounds");
                 }
                 if (std::ssize(weights) != _view.connection_count()) {
