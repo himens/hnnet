@@ -16,7 +16,7 @@ namespace hnnet::dag::update::omp {
             // Initialize the backend
             void init(net::DAGNet::View view) {
                 _view = view;
-                _states.assign(omp_get_max_threads(), NNet::State{view.neuron_count()});
+                _states.clear();
                 _inputs.clear();
                 _outputs.clear();
             }
@@ -32,10 +32,8 @@ namespace hnnet::dag::update::omp {
                 for (const auto &input : inputs) {
                     _inputs.emplace_back(input);
                 }
-                _outputs.resize(_inputs.size());
-                for (auto &output : _outputs) {
-                    output.resize(_view.output_neuron_count());
-                }
+                _states.clear();
+                _outputs.clear();
             }
             // Transfer data to the host
             void to_host(std::span<const NNet::State> &states) const {
@@ -44,32 +42,40 @@ namespace hnnet::dag::update::omp {
             void to_host(dataset_vector_t &outputs) {
                 outputs = std::move(_outputs);
             }
-            // Seed and update all samples or one sample using supplied weights
-            void update_states(const DataType auto &weights, index_t input_index = -1) {
+            // Seed and update a batch; result index i corresponds to input batch_begin + i
+            void update_states(const DataType auto &weights, index_t batch_begin = 0, index_t batch_end = -1) {
                 const auto input_count = std::ssize(_inputs);
-                if (input_index < -1 or input_index >= input_count) {
-                    throw std::invalid_argument("Backend::update_states: sample index out of range");
+                if (batch_end == -1) {
+                    batch_end = input_count;
+                }
+                if (batch_begin < 0 or batch_end < batch_begin or batch_end > input_count) {
+                    throw std::invalid_argument("Backend::update_states: batch range out of bounds");
                 }
                 if (std::ssize(weights) != _view.connection_count()) {
                     throw std::invalid_argument("Backend::update_states: weight counts must match");
                 }
-                if (input_index == -1) {
-                    #pragma omp parallel for if(input_count > 1) num_threads(std::ssize(_states))
-                    for (index_t index = 0; index < input_count; ++index) {
-                        auto &state = _states[omp_get_thread_num()];
-                        state.seed(_view, _inputs[index]);
-                        update_state(state, _outputs[index], weights);
-                    }
+                const auto batch_size = batch_end - batch_begin;
+                if (std::ssize(_states) > batch_size) {
+                    _states.erase(_states.begin() + batch_size, _states.end());
                 }
-                else {
-                    auto &state = _states[omp_get_thread_num()];
-                    state.seed(_view, _inputs[input_index]);
-                    update_state(state, _outputs[input_index], weights);
+                _states.reserve(batch_size);
+                while (std::ssize(_states) < batch_size) {
+                    _states.emplace_back(_view.neuron_count());
+                }
+                _outputs.resize(batch_size);
+                for (auto &output : _outputs) {
+                    output.resize(_view.output_neuron_count());
+                }
+                #pragma omp parallel for if(batch_size > 1)
+                for (index_t index = 0; index < batch_size; ++index) {
+                    auto &state = _states[index];
+                    state.seed(_view, _inputs[batch_begin + index]);
+                    update_state(state, _outputs[index], weights);
                 }
             }
         private:
             // Propagate signals through one state
-            void update_state(NNet::State &state, std::vector<real_t> &output, std::span<const real_t> weights) {
+            void update_state(NNet::State &state, std::vector<real_t> &output, std::span<const real_t> weights) const {
                 const auto partitions = _view.partitions();
                 const auto partition_layer_indices = _view.partition_layer_indices();
                 const auto layers = _view.layers();
@@ -99,7 +105,7 @@ namespace hnnet::dag::update::omp {
                 }
             }
             // Propagate signals through one sparse partition
-            void update_partition(NNet::State &state, const NNet::Partition &partition, std::span<const real_t> weights) {
+            void update_partition(NNet::State &state, const NNet::Partition &partition, std::span<const real_t> weights) const {
                 real_t weighted_sum{0.0_real};
                 const auto connections = _view.connections();
                 const auto neurons = _view.neurons();

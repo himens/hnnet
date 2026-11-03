@@ -51,20 +51,23 @@ namespace hnnet::backprop::omp {
                 }
                 // Perform backprop (forward-backward plus weights update)
                 real_t backprop(const index_t batch_begin, const index_t batch_end, const LossType auto &loss) {
+                    if (batch_begin < 0 or batch_end <= batch_begin or batch_end > std::ssize(_targets)) {
+                        throw std::invalid_argument("Backend::backprop: batch range out of bounds");
+                    }
                     const auto batch_size = batch_end - batch_begin;
+                    std::span<const NNet::State> states;
+                    _update_backend.update_states(_weights, batch_begin, batch_end);
+                    _update_backend.to_host(states);
                     const auto parallel = batch_size > 1;
                     const auto thread_count = parallel ? std::ssize(_gradients) : index_t{1};
                     for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
                         std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
                     real_t loss_value{0.0_real};
-                    #pragma omp parallel for if(parallel) reduction(+:loss_value)
+                    #pragma omp parallel for if(parallel) num_threads(thread_count) reduction(+:loss_value)
                     for (auto input_index = batch_begin; input_index < batch_end; ++input_index) {
                         const auto thread_index = omp_get_thread_num();
-                        std::span<const NNet::State> states;
-                        _update_backend.update_states(_weights, input_index);
-                        _update_backend.to_host(states);
-                        loss_value += backward(thread_index, input_index, states[thread_index], loss);
+                        loss_value += backward(thread_index, input_index, states[input_index - batch_begin], loss);
                     }
                     if (parallel) {
                         std::ranges::fill(_batch_gradient, 0.0_real);

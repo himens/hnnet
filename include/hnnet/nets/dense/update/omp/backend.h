@@ -21,9 +21,9 @@ namespace hnnet::dense::update::omp {
             void to_host(dataset_vector_t &outputs) {
                 _backend.to_host(outputs);
             }
-            // Update states using host weights.
-            void update_states(const DataType auto &weights, index_t input_index = -1) {
-                _backend.update_states(weights, input_index);
+            // Update batch states using host weights.
+            void update_states(const DataType auto &weights, index_t batch_begin = 0, index_t batch_end = -1) {
+                _backend.update_states(weights, batch_begin, batch_end);
             }
         private:
             // Data members
