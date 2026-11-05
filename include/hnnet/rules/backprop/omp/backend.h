@@ -59,7 +59,7 @@ namespace hnnet::backprop::omp {
                     _update_backend.to_host(states);
                     const auto batch_size = batch_end - batch_begin;
                     const auto parallel = batch_size > 1;
-                    const auto thread_count = parallel ? std::ssize(_gradients) : index_t{1};
+                    const auto thread_count = parallel ? omp_get_max_threads() : index_t{1};
                     for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
                         std::ranges::fill(_gradients[thread_index], 0.0_real);
                     }
