@@ -128,9 +128,9 @@ void omp_benchmark(const std::vector<DigitData> &train_digits, const std::vector
     classifier.train(
         train_data,
         rule::Backprop{
-            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.05_real, 0.9_real},
+            backprop::omp::Backend<backprop::omp::optimizer::Momentum>{0.3_real, 0.9_real},
             loss::MSE{},
-            1
+            32
         });
     // eval efficiency
     const auto train_outputs = classifier.infer(train_data.inputs, dense::update::omp::Backend{});
