@@ -85,7 +85,9 @@ namespace hnnet {
                     }
                     void seed(const View &view, const DataType auto &input) {
                         const auto neurons = view.neurons();
-                        if ((input.size() != view.input_neurons_indices().size()) or (_signals.size() != neurons.size()) or (_weighted_sums.size() != neurons.size())) {
+                        if ((input.size() != view.input_neurons_indices().size()) or 
+                            (_signals.size() != neurons.size()) or 
+                            (_weighted_sums.size() != neurons.size())) {
                             throw std::invalid_argument("NNet::State::seed: size error!");
                         }
                         for (const auto &[input_neuron_index, input_value] : std::views::zip(view.input_neurons_indices(), input)) {
@@ -103,7 +105,7 @@ namespace hnnet {
             };
         public:
             // Constructor
-            NNet(Topology topology) : _neurons(std::move(topology.neurons)), _connections(std::move(topology.connections)), _weights(std::ssize(_connections), 0.0_real) {
+            NNet(Topology topology) : _neurons(std::move(topology.neurons)), _connections(std::move(topology.connections)), _weights(_connections.size(), 0.0_real) {
                 init();
             }
             // Destructor
@@ -211,7 +213,7 @@ namespace hnnet {
                     }
                 }
                 _partitions = make_partitions(_connections);
-                std::println("NNet::init: neuron(s): {}, connection(s): {}, partition(s): {}", std::ssize(_neurons), std::ssize(_connections), std::ssize(_partitions));
+                std::println("NNet::init: neuron(s): {}, connection(s): {}, partition(s): {}", _neurons.size(), _connections.size(), _partitions.size());
             }
             // Check for duplicate connections
             static bool has_duplicate_connection(const std::span<Connection> connections) {
