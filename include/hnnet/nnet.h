@@ -29,7 +29,6 @@ namespace hnnet {
             };
             class View {
                 public:
-                    View() = default;
                     int_t neuron_count() const {
                         return std::ssize(_net->_neurons);
                     }
@@ -86,9 +85,7 @@ namespace hnnet {
                     }
                     void seed(const View &view, const DataType auto &input) {
                         const auto neurons = view.neurons();
-                        if (input.size()          != view.input_neurons_indices().size() or
-                            _signals.size()       != neurons.size() or
-                            _weighted_sums.size() != neurons.size()) {
+                        if ((input.size() != view.input_neurons_indices().size()) or (_signals.size() != neurons.size()) or (_weighted_sums.size() != neurons.size())) {
                             throw std::invalid_argument("NNet::State::seed: size error!");
                         }
                         for (const auto &[input_neuron_index, input_value] : std::views::zip(view.input_neurons_indices(), input)) {
@@ -154,8 +151,8 @@ namespace hnnet {
                         std::println("NNet::infer: try to infer from an untrained net!");
                         return {};
                     }
-                    dataset_vector_t outputs;
                     auto view = self.view();
+                    dataset_vector_t outputs;
                     backend.init(view);
                     backend.to_device(inputs);
                     backend.update_states(view.weights());
@@ -191,7 +188,7 @@ namespace hnnet {
             void init() {
                 const auto neuron_count = std::ssize(_neurons);
                 for (const auto &[tx_index, rx_index] : _connections) {
-                    if (tx_index < 0 or tx_index >= neuron_count or rx_index < 0 or rx_index >= neuron_count) {
+                    if ((tx_index < 0) or (tx_index >= neuron_count) or (rx_index < 0) or (rx_index >= neuron_count)) {
                         throw std::out_of_range("NNet::init: connection index out-of-range!");
                     }
                 }

@@ -26,8 +26,6 @@ namespace hnnet::net {
             };
             class View : public NNet::View {
                 public:
-                    // Construct an unbound view
-                    View() = default;
                     std::span<const index_t> partition_layer_indices() const {
                         return _net->_partition_layer_indices;
                     }

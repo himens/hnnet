@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <vector>
@@ -33,9 +34,8 @@ namespace hnnet::backprop::omp {
                     _gradients.assign(max_threads, std::vector<real_t>(connection_count, 0.0_real));
                     _batch_gradient.assign(connection_count, 0.0_real);
                     _optimizer.init(connection_count);
-                    _targets.clear();
-                    _view = view;
                     _update_backend.init(view);
+                    _view = view;
                 }
                 // Transfer data to the device
                 void to_device(const TrainingDataType auto &data) {
@@ -51,7 +51,7 @@ namespace hnnet::backprop::omp {
                 }
                 // Perform backprop (forward-backward plus weights update)
                 real_t backprop(const index_t batch_begin, const index_t batch_end, const LossType auto &loss) {
-                    if (batch_begin < 0 or batch_end <= batch_begin or batch_end > std::ssize(_targets)) {
+                    if ((batch_begin < 0) or (batch_end <= batch_begin) or (batch_end > std::ssize(_targets))) {
                         throw std::invalid_argument("Backend::backprop: batch range out of bounds");
                     }
                     std::span<const NNet::State> states;
@@ -73,7 +73,7 @@ namespace hnnet::backprop::omp {
                         std::ranges::fill(_batch_gradient, 0.0_real);
                         for (auto thread_index{0}; thread_index < thread_count; ++thread_index) {
                             const auto &gradient = _gradients[thread_index];
-                            for (auto connection_index{0}; connection_index < _view.connection_count(); ++connection_index) {
+                            for (auto connection_index{0}; connection_index < _view->connection_count(); ++connection_index) {
                                 _batch_gradient[connection_index] += gradient[connection_index] / batch_size;
                             }
                         }
@@ -88,12 +88,12 @@ namespace hnnet::backprop::omp {
                                 const NNet::State &state,
                                 const LossType auto &loss) {
                     const auto target = _targets[input_index];
-                    const auto neurons = _view.neurons();
-                    const auto connections = _view.connections();
-                    const auto partitions = _view.partitions();
-                    const auto layers = _view.layers();
-                    const auto partition_layer_indices = _view.partition_layer_indices();
-                    const auto output_neurons_indices = _view.output_neurons_indices();
+                    const auto neurons = _view->neurons();
+                    const auto connections = _view->connections();
+                    const auto partitions = _view->partitions();
+                    const auto layers = _view->layers();
+                    const auto partition_layer_indices = _view->partition_layer_indices();
+                    const auto output_neurons_indices = _view->output_neurons_indices();
                     const auto signals = state.signals();
                     const auto weighted_sums = state.weighted_sums();
                     auto &deltas = _deltas[thread_index];
@@ -101,11 +101,11 @@ namespace hnnet::backprop::omp {
                     std::ranges::fill(deltas, 0.0_real);
                     // compute loss and output deltas
                     real_t loss_value{0.0_real};
-                    for (const auto &[target_value, output_neuron_index] : std::views::zip(target, output_neurons_indices)) {
+                    for (const auto &[target, output_neuron_index] : std::views::zip(target, output_neurons_indices)) {
                         const auto &signal = signals[output_neuron_index];
                         const auto &weighted_sum = weighted_sums[output_neuron_index];
-                        deltas[output_neuron_index] = loss.derivative(target_value, signal) * neurons[output_neuron_index].activation()->derivative(weighted_sum);
-                        loss_value += loss(target_value, signal);
+                        deltas[output_neuron_index] = loss.derivative(target, signal) * neurons[output_neuron_index].activation()->derivative(weighted_sum);
+                        loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
                     for (auto partition_index = std::ssize(partitions) - 1; partition_index >= 0; --partition_index) {
@@ -168,7 +168,7 @@ namespace hnnet::backprop::omp {
                 }
             private:
                 // Data members
-                net::DAGNet::View _view{};
+                std::optional<net::DAGNet::View> _view{};
                 std::vector<std::span<const real_t>> _targets{};
                 std::vector<real_t> _weights{};
                 dataset_vector_t _deltas{};

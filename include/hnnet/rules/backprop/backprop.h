@@ -8,7 +8,7 @@
 #include "utils/math.h"
 
 namespace hnnet::rule {
-    ///////////////////
+    ////////////////////
     // Backprop class //
     ////////////////////
     template <typename Backend, LossType Loss>
@@ -33,8 +33,7 @@ namespace hnnet::rule {
                             throw std::invalid_argument("Backprop::init: input and target sample counts must match");
                         }
                         for (const auto &[input, target] : std::views::zip(data.inputs, data.targets)) {
-                            if (std::ssize(input) != view.input_neuron_count() or
-                                std::ssize(target) != view.output_neuron_count()) {
+                            if (std::ssize(input) != view.input_neuron_count() or std::ssize(target) != view.output_neuron_count()) {
                                 throw std::invalid_argument("Backprop::init: input or target size does not match the network");
                             }
                         }
