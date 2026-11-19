@@ -30,13 +30,13 @@ namespace hnnet {
     template <typename T>
         concept DataType = std::ranges::contiguous_range<T> and std::same_as<std::ranges::range_value_t<T>, real_t>;
     template <typename T>
-        concept DatasetType = std::ranges::contiguous_range<const T> and DataType<std::ranges::range_reference_t<const T>>;
+        concept DatasetType = std::ranges::contiguous_range<T> and DataType<std::ranges::range_reference_t<T>>;
     template <typename T>
         concept IndexRange = std::ranges::input_range<T> and std::same_as<std::ranges::range_value_t<T>, index_t>;
     // Data types
     template <DatasetType Inputs, DatasetType Targets = dataset_vector_t>
         struct TrainingData {
-            Inputs inputs;
+            Inputs inputs{};
             Targets targets{};
         };
     template <typename T>

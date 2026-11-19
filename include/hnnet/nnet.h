@@ -129,7 +129,7 @@ namespace hnnet {
                     std::println("NNet::train: Training net with {} samples...   ", std::ranges::size(data.inputs));
                     std::println("NNet::train: ==================================");
                     timer.start();
-                    self._weights = utils::random::generate<real_t>(std::ssize(self._weights), -0.1_real, +0.1_real);
+                    self._weights = utils::random::generate<real_t>(self._weights.size(), -0.1_real, +0.1_real);
                     rule.init(view, data);
                     while (not self._trained and (epoch <= max_epochs)) {
                         self._trained = rule.learn();

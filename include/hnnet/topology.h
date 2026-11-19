@@ -22,9 +22,8 @@ namespace hnnet {
                 }
                 return std::views::iota(neurons.size() - count, neurons.size()) | std::ranges::to<std::vector<index_t>>();
             }
-        // Append connections; endpoint validation is performed by the network constructor.
+        // Connect neurons (cartesian product)
         void connect(IndexRange auto &&tx_indices, IndexRange auto &&rx_indices) {
-            //for (const auto &[tx_index, rx_index] : std::views::cartesian_product(tx_indices, rx_indices))
             for (const auto &tx_index : tx_indices) {
                 for (const auto &rx_index : rx_indices) {
                     connections.push_back({.tx_index = tx_index, .rx_index = rx_index});

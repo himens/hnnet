@@ -7,7 +7,6 @@
 #include <vector>
 #include <omp.h>
 #include "optimizer_type.h"
-#include "hnnet/rules/backprop/backend_type.h"
 #include "hnnet/loss_type.h"
 #include "hnnet/nets/dag/dag_net.h"
 #include "hnnet/nets/dag/update/omp/backend.h"
