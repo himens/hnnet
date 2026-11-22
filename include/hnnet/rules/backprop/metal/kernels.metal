@@ -9,7 +9,6 @@ namespace metal {
     using dense::update::metal::Parameters;
     using dense::update::metal::ActivationDescriptor;
     using dense::update::metal::DenseLayer;
-    using dense::update::metal::activate;
     using dense::update::metal::derivative;
 
     struct UpdateParameters {

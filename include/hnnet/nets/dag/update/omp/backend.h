@@ -1,11 +1,8 @@
 #pragma once
-#include <algorithm>
-#include <array>
 #include <iterator>
 #include <optional>
 #include <span>
 #include <utility>
-#include <omp.h>
 #include "hnnet/nets/dag/dag_net.h"
 
 namespace hnnet::dag::update::omp {

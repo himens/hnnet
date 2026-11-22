@@ -8,7 +8,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"

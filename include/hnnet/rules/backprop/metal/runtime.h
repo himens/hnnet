@@ -7,7 +7,6 @@ namespace hnnet::backprop::metal::detail {
     using hnnet::metal::complete;
     using hnnet::metal::dispatch;
     using hnnet::metal::encoder;
-    using hnnet::metal::error_message;
 
     using dense::update::metal::detail::Parameters;
     using dense::update::metal::detail::ActivationDescriptor;

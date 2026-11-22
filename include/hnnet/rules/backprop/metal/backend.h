@@ -1,27 +1,18 @@
 #pragma once
-#include <algorithm>
-#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <initializer_list>
-#include <iterator>
-#include <limits>
 #include <ranges>
-#include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 #include "optimizer_type.h"
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
-#include "hnnet/activations/identity.h"
-#include "hnnet/activations/relu.h"
-#include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
 #include "hnnet/nets/dense/dense_forward_net.h"
 #include "hnnet/nets/dense/update/metal/backend.h"
-#include "hnnet/rules/backprop/backend_type.h"
 
 namespace hnnet::backprop::metal {
     template <OptimizerType Optimizer>

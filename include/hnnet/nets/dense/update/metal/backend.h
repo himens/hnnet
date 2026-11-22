@@ -1,7 +1,6 @@
 #pragma once
 #include <limits>
 #include <ranges>
-#include <span>
 #include <utility>
 #include <vector>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>

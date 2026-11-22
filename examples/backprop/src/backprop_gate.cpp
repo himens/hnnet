@@ -1,5 +1,4 @@
 #include <array>
-#include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/sigmoid.h"
 #include "hnnet/losses/mse.h"
