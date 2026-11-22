@@ -10,7 +10,8 @@
 #include <vector>
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/perceptron.h"
-#include "hnnet/nets/dense_forward_net.h"
+#include "hnnet/nets/dense/dense_forward_net.h"
+#include "hnnet/nets/dense/update/omp/backend.h"
 #include "hnnet/rules/perceptron.h"
 
 // Constants
@@ -26,8 +27,8 @@ struct LetterData {
     Pixels pixels{};
 };
 // Encode pixel grid
-input_vector_t encode(const Pixels &pixels) {
-    input_vector_t data(nb_pixels, -1);
+std::vector<real_t> encode(const Pixels &pixels) {
+    std::vector<real_t> data(nb_pixels, -1);
     for (const auto &[row, row_pixels] : pixels | std::views::enumerate) {
         for (const auto &[col, pixel] : row_pixels | std::views::enumerate) {
             const auto idx = row * nb_columns + col;
@@ -37,8 +38,8 @@ input_vector_t encode(const Pixels &pixels) {
     return data;
 }
 // Encode letters
-output_vector_t encode(const std::initializer_list<char> &letters) {
-    output_vector_t data(nb_letters, -1);
+std::vector<real_t> encode(const std::initializer_list<char> &letters) {
+    std::vector<real_t> data(nb_letters, -1);
     for (const auto &letter : letters) {
         if (letter < 'A' or letter > 'Z') {
             throw std::invalid_argument("encode: invalid letter: " + std::string{letter});
@@ -98,25 +99,27 @@ std::vector<LetterData> read_letters(const std::string &filename) {
 int main() {
     // create net
     net::DenseForwardNet classifier{
-        net::DenseLayer{nb_rows * nb_columns, NeuronType::input, activation::Identity{}},
-        net::DenseLayer{nb_letters, NeuronType::output, activation::Perceptron{}}
+        dense::Layer{nb_rows * nb_columns, NeuronType::input, activation::Identity{}},
+        dense::Layer{nb_letters, NeuronType::output, activation::Perceptron{}}
     };
     // train net
     std::vector<LetterData> letters{};
     letters.append_range(read_letters("data/letters/train_1.txt"));
     letters.append_range(read_letters("data/letters/train_2.txt"));
     letters.append_range(read_letters("data/letters/train_3.txt"));
-    std::vector<input_vector_t> inputs(letters.size());
-    std::vector<output_vector_t> targets(letters.size());
+    dataset_vector_t inputs(letters.size());
+    dataset_vector_t targets(letters.size());
     for (const auto &[i, letter] : letters | std::views::enumerate) {
         inputs[i] = encode(letter.pixels);
         targets[i] = encode({letter.character});
     }
-    classifier.train(inputs, targets, rule::Perceptron{1.0_real});
+    classifier.train(TrainingData{inputs, targets}, rule::Perceptron{1.0_real});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
-        const auto outputs = classifier.infer(encode(pixels));
-        std::println("Expected letter = {}, classifier response = {}", ch, decode(outputs));
+        const auto outputs = classifier.infer(dataset_vector_t{encode(pixels)}, dense::update::omp::Backend{});
+        for (const auto &output : outputs) {
+            std::println("Expected letter = {}, classifier response = {}", ch, decode(output));
+        }
     }
 
     return 0;

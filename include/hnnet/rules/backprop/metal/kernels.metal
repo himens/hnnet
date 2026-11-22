@@ -1,25 +1,16 @@
 #include <metal_stdlib>
-#ifndef HNNET_METAL_ACTIVATIONS_INCLUDED
-#include "activations.h"
+#ifndef HNNET_METAL_UPDATE_INCLUDED
+#include "../../../nets/dense/update/metal/kernels.metal"
 #endif
 
 namespace hnnet {
 namespace backprop {
 namespace metal {
-    struct Parameters {
-        uint neuron_count;
-        uint connection_count;
-        uint input_count;
-        uint output_count;
-        uint output_begin;
-        uint batch_begin;
-        uint batch_size;
-    };
-
-    struct ActivationDescriptor {
-        uint kind;
-        float sigma;
-    };
+    using dense::update::metal::Parameters;
+    using dense::update::metal::ActivationDescriptor;
+    using dense::update::metal::DenseLayer;
+    using dense::update::metal::activate;
+    using dense::update::metal::derivative;
 
     struct UpdateParameters {
         uint weight_count;
@@ -27,59 +18,11 @@ namespace metal {
         float second;
     };
 
-    struct DenseLayer {
-        uint tx_begin;
-        uint tx_count;
-        uint rx_begin;
-        uint rx_count;
-        uint weight_offset;
-        uint weight_stride;
-        uint ibias;
-    };
-
-    inline float activate(const ActivationDescriptor descriptor, const float value) {
-        switch (descriptor.kind) {
-            case 0: return activation::identity(value);
-            case 1: return activation::sigmoid(value, descriptor.sigma);
-            case 2: return activation::relu(value);
-        }
-        return 0.0f;
-    }
-
-    inline float derivative(const ActivationDescriptor descriptor, const float value) {
-        switch (descriptor.kind) {
-            case 0: return activation::identity_derivative(value);
-            case 1: return activation::sigmoid_derivative(value, descriptor.sigma);
-            case 2: return activation::relu_derivative(value);
-        }
-        return 0.0f;
-    }
 }
 }
 }
 
 using namespace hnnet::backprop::metal;
-
-kernel void hnnet_seed(
-    constant Parameters &parameters [[buffer(0)]],
-    device const ActivationDescriptor *activations [[buffer(1)]],
-    device const uint *input_positions [[buffer(2)]],
-    device const float *inputs [[buffer(3)]],
-    device float *signals [[buffer(4)]],
-    uint item [[thread_position_in_grid]]) {
-    if (item >= parameters.batch_size * parameters.neuron_count) return;
-    const uint neuron = item % parameters.neuron_count;
-    const uint input = input_positions[neuron];
-    float signal = 0.0f;
-    if (input < parameters.input_count) {
-        const uint sample = parameters.batch_begin + item / parameters.neuron_count;
-        signal = activate(activations[neuron], inputs[sample * parameters.input_count + input]);
-    }
-    else if (input == 0xfffffffeu) {
-        signal = activate(activations[neuron], 1.0f);
-    }
-    signals[item] = signal;
-}
 
 kernel void hnnet_loss(
     constant Parameters &parameters [[buffer(0)]],
@@ -96,28 +39,6 @@ kernel void hnnet_loss(
         loss += 0.5f * error * error;
     }
     losses[sample] = loss;
-}
-
-kernel void hnnet_dense_activation(
-    constant Parameters &parameters [[buffer(0)]],
-    constant DenseLayer &layer [[buffer(1)]],
-    device const ActivationDescriptor *activations [[buffer(2)]],
-    device const float *weights [[buffer(3)]],
-    device float *weighted_sums [[buffer(4)]],
-    device float *signals [[buffer(5)]],
-    uint item [[thread_position_in_grid]]) {
-    if (item >= parameters.batch_size * layer.rx_count) return;
-    const uint row = item % layer.rx_count;
-    const uint neuron = layer.rx_begin + row;
-    const uint sample_offset = (item / layer.rx_count) * parameters.neuron_count;
-    const uint offset = sample_offset + neuron;
-    float sum = weighted_sums[offset];
-    if (layer.ibias != 0xffffffffu) {
-        sum += weights[layer.weight_offset + row * layer.weight_stride + layer.tx_count]
-            * signals[sample_offset + layer.ibias];
-    }
-    weighted_sums[offset] = sum;
-    signals[offset] = activate(activations[neuron], sum);
 }
 
 kernel void hnnet_dense_delta(
@@ -143,22 +64,6 @@ kernel void hnnet_dense_delta(
     else {
         deltas[offset] = propagated_deltas[offset] * slope;
     }
-}
-
-kernel void hnnet_bias_gradient(
-    constant Parameters &parameters [[buffer(0)]],
-    constant DenseLayer &layer [[buffer(1)]],
-    device const float *signals [[buffer(2)]],
-    device const float *deltas [[buffer(3)]],
-    device float *gradient [[buffer(4)]],
-    uint row [[thread_position_in_grid]]) {
-    if (row >= layer.rx_count) return;
-    float sum = 0.0f;
-    for (uint sample = 0; sample < parameters.batch_size; ++sample) {
-        const uint offset = sample * parameters.neuron_count;
-        sum += deltas[offset + layer.rx_begin + row] * signals[offset + layer.ibias];
-    }
-    gradient[layer.weight_offset + row * layer.weight_stride + layer.tx_count] = sum / float(parameters.batch_size);
 }
 
 kernel void hnnet_momentum(

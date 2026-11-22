@@ -1,0 +1,144 @@
+#pragma once
+#include <algorithm>
+#include <iterator>
+#include <print>
+#include <ranges>
+#include <stdexcept>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+#include "hnnet/nnet.h"
+
+namespace hnnet::net {
+    //////////////////
+    // DAGNet class //
+    //////////////////
+    class DAGNet : public NNet {
+        public:
+            // Data types
+            struct Layer {
+                static constexpr index_t no_layer{-1};
+                index_t tx_begin;
+                int_t tx_count;
+                index_t rx_begin;
+                int_t rx_count;
+                index_t weight_offset;
+            };
+            class View : public NNet::View {
+                public:
+                    std::span<const index_t> partition_layer_indices() const {
+                        return _net->_partition_layer_indices;
+                    }
+                    std::span<const Layer> layers() const {
+                        return _net->_layers;
+                    }
+                protected:
+                    explicit View(DAGNet &net) : NNet::View(net), _net(&net) {}
+                private:
+                    friend class DAGNet;
+                    DAGNet *_net{nullptr};
+            };
+        public:
+            // Constructor
+            DAGNet(Topology topology) : NNet(std::move(topology)) {
+                init();
+            }
+            // Destructor
+            virtual ~DAGNet() = default;
+            // Create a view of the net
+            View view() {
+                return View(*this);
+            }
+        private:
+            // Initialize net
+            void init() {
+                const auto connections = this->connections();
+                const auto neurons = this->neurons();
+                auto partitions = this->partitions();
+                // topologically order partitions (Kahn's algorithm)
+                std::vector<std::vector<index_t>> rx_indices(neurons.size());
+                for (const auto &[tx_index, rx_index] : connections) {
+                    rx_indices[tx_index].push_back(rx_index);
+                }
+                std::vector<int_t> visits_left(neurons.size(), 0);
+                for (const auto &[rx_index, connection_begin, connection_end] : partitions) {
+                    visits_left[rx_index] = connection_end - connection_begin;
+                }
+                std::vector<index_t> visited_indices;
+                for (auto neuron_index{0}; neuron_index < std::ssize(neurons); ++neuron_index) {
+                    if (visits_left[neuron_index] == 0) {
+                        visited_indices.push_back(neuron_index);
+                    }
+                }
+                int_t visited_count{0};
+                std::vector<int_t> topo_ranks(neurons.size(), 0);
+                while (not visited_indices.empty()) {
+                    const auto visited_index = visited_indices.back();
+                    visited_indices.pop_back();
+                    topo_ranks[visited_index] = visited_count++;
+                    for (const auto &rx_index : rx_indices[visited_index]) {
+                        if (--visits_left[rx_index] == 0) {
+                            visited_indices.push_back(rx_index);
+                        }
+                    }
+                }
+                if (visited_count != std::ssize(neurons)) {
+                    throw std::runtime_error("DAGNet::init: net contains a cycle, topological order does not exist!");
+                }
+                std::ranges::sort(partitions, [&] (const auto &lhs, const auto &rhs) { return topo_ranks[lhs.rx_index] < topo_ranks[rhs.rx_index]; });
+                // group partitions sharing the exact same (contiguous) tx range
+                _partition_layer_indices.assign(std::ssize(partitions), Layer::no_layer);
+                std::vector<std::vector<index_t>> groups;
+                std::unordered_map<IndexPair, index_t, IndexPairHash> group_indices;
+                for (const auto &[partition_index, partition] : partitions | std::views::enumerate) {
+                    const auto count = (partition.connection_end - partition.connection_begin);
+                    const auto tx_begin = connections[partition.connection_begin].tx_index;
+                    if ((connections[partition.connection_end - 1].tx_index - tx_begin) != count - 1) {
+                        continue;  // tx range has gaps: not a pure dense candidate
+                    }
+                    const auto [it, inserted] = group_indices.try_emplace(std::pair{tx_begin, count}, std::ssize(groups));
+                    if (inserted) {
+                        groups.emplace_back();
+                    }
+                    groups[it->second].push_back(partition_index);
+                }
+                // find dense layers
+                for (auto &partition_indices : groups) {
+                    const auto [min_partition_index, max_partition_index] = std::ranges::minmax(partition_indices);
+                    if ((max_partition_index - min_partition_index + 1) != std::ssize(partition_indices)) {
+                        continue; // must be contiguous partitions (in topo order)
+                    }
+                    // sort partition indices per increasing receiver
+                    std::ranges::sort(partition_indices, [&] (const auto &lhs, const auto &rhs) { return partitions[lhs].rx_index < partitions[rhs].rx_index; });
+                    // check their ranges are contiguous
+                    auto contiguous = true;
+                    for (auto member_index{1}; member_index < std::ssize(partition_indices); ++member_index) {
+                        const auto &prev = partitions[partition_indices[member_index - 1]];
+                        const auto &curr = partitions[partition_indices[member_index]];
+                        if ((curr.rx_index != prev.rx_index + 1) or (curr.connection_begin != prev.connection_end)) {
+                            contiguous = false;
+                            break;
+                        }
+                    }
+                    if (not contiguous) {
+                        continue;
+                    }
+                    // add dense layer
+                    const auto &first = partitions[partition_indices.front()];
+                    _layers.push_back({.tx_begin     = connections[first.connection_begin].tx_index,
+                                      .tx_count      = first.connection_end - first.connection_begin,
+                                      .rx_begin      = first.rx_index,
+                                      .rx_count      = std::ssize(partition_indices),
+                                      .weight_offset = first.connection_begin});
+                    for (const auto partition_index : partition_indices) {
+                        _partition_layer_indices[partition_index] = _layers.size() - 1;
+                    }
+                }
+                std::println("DAGNet::init: layer(s): {}", _layers.size());
+            }
+        private:
+            // Data members
+            std::vector<Layer> _layers{};
+            std::vector<index_t> _partition_layer_indices{};
+    };
+}

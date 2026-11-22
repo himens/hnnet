@@ -12,6 +12,6 @@ namespace hnnet::backprop::metal {
                                          id<MTLBuffer> weights,
                                          id<MTLBuffer> gradient) {
                                      { optimizer.init(context, weight_count) } -> std::same_as<void>;
-                                     { optimizer.update(command, weights, gradient, weight_count) } -> std::same_as<void>;
+                                     { optimizer.update_weights(command, weights, gradient, weight_count) } -> std::same_as<void>;
                                  };
 }
