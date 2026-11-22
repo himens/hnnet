@@ -2,7 +2,7 @@
 #include <cmath>
 #include "hnnet/activation.h"
 
-namespace hnnet::::activation {
+namespace hnnet::activation {
     class Gaussian : public Activation {
         public:
             constexpr real_t operator()(const real_t x) const final {
