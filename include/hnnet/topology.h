@@ -18,7 +18,7 @@ namespace hnnet {
                     throw std::invalid_argument("NNet::new_neurons: invalid count!");
                 }
                 for (auto count_index{0}; count_index < count; ++count_index) {
-                    neurons.push_back(Neuron{type, std::make_unique<Activation>(activation)});
+                    neurons.push_back(Neuron{type, ActivationDescriptor{activation}});
                 }
                 return std::views::iota(neurons.size() - count, neurons.size()) | std::ranges::to<std::vector<index_t>>();
             }

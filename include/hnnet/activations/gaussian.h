@@ -1,17 +1,16 @@
 #pragma once
 #include <cmath>
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class Gaussian : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return std::exp(-std::pow(x - mean, 2_real) / (2_real * sigma * sigma));
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                return - (x - mean) / (sigma * sigma) * (*this)(x);
-            }
-            real_t mean{0.0_real};
-            real_t sigma{1.0_real};
+    struct Gaussian {
+        real_t operator()(const real_t x) const {
+            return std::exp(-std::pow(x - mean, real_t(2)) / (real_t(2) * sigma * sigma));
+        }
+        real_t derivative(const real_t x) const {
+            return - (x - mean) / (sigma * sigma) * (*this)(x);
+        }
+        real_t mean{real_t(0.0)};
+        real_t sigma{real_t(1.0)};
     };
 }

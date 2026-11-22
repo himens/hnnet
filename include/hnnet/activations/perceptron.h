@@ -1,15 +1,14 @@
 #pragma once
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class Perceptron : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return x > threshold ? +1_real : x < -threshold ? -1_real : 0_real;
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                return 0.0_real;
-            }
-            real_t threshold{0.2_real};
+    struct Perceptron {
+        real_t operator()(const real_t x) const {
+            return x > threshold ? +real_t(1) : x < -threshold ? -real_t(1) : real_t(0);
+        }
+        real_t derivative(const real_t x) const {
+            return real_t(0.0);
+        }
+        real_t threshold{real_t(0.2)};
     };
 }

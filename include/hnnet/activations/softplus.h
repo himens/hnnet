@@ -1,15 +1,14 @@
 #pragma once
 #include <cmath>
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class Softplus : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return std::log(1.0_real + std::exp(x));
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                return 1.0_real / (1.0_real + std::exp(-x));
-            }
+    struct Softplus {
+        real_t operator()(const real_t x) const {
+            return std::log(real_t(1.0) + std::exp(x));
+        }
+        real_t derivative(const real_t x) const {
+            return real_t(1.0) / (real_t(1.0) + std::exp(-x));
+        }
     };
 }

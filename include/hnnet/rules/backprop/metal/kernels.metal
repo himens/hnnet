@@ -7,9 +7,9 @@ namespace hnnet {
 namespace backprop {
 namespace metal {
     using dense::update::metal::Parameters;
-    using dense::update::metal::ActivationDescriptor;
+    using hnnet::ActivationDescriptor;
     using dense::update::metal::DenseLayer;
-    using dense::update::metal::derivative;
+    using hnnet::derivative;
 
     struct UpdateParameters {
         uint weight_count;

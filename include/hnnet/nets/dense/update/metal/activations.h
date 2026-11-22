@@ -1,37 +1,16 @@
-#pragma once
 #include <metal_stdlib>
 
+// Names used by the activation headers shared with the CPU
 namespace hnnet {
-namespace dense {
-namespace update {
-namespace metal {
-namespace activation {
-    inline float identity(const float x) {
-        return x;
-    }
-
-    inline float identity_derivative(const float) {
-        return 1.0f;
-    }
-
-    inline float sigmoid(const float x, const float sigma = 1.0f) {
-        return 1.0f / (1.0f + ::metal::exp(-sigma * x));
-    }
-
-    inline float sigmoid_derivative(const float x, const float sigma = 1.0f) {
-        const auto signal = sigmoid(x, sigma);
-        return sigma * signal * (1.0f - signal);
-    }
-
-    inline float relu(const float x) {
-        return x > 0.0f ? x : 0.0f;
-    }
-
-    inline float relu_derivative(const float x) {
-        return x > 0.0f ? 1.0f : 0.0f;
-    }
+    using real_t = float;
 }
-}
-}
-}
+namespace std {
+    using ::metal::exp;
+    using ::metal::log;
+    using ::metal::max;
+    using ::metal::pow;
+    using ::metal::tanh;
+    inline float abs(const float x) {
+        return ::metal::fabs(x);
+    }
 }

@@ -1,16 +1,15 @@
 #pragma once
 #include <cmath>
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class Tanh : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return std::tanh(x);
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                const auto t = (*this)(x);
-                return 1.0_real - t * t;
-            }
+    struct Tanh {
+        real_t operator()(const real_t x) const {
+            return std::tanh(x);
+        }
+        real_t derivative(const real_t x) const {
+            const auto t = (*this)(x);
+            return real_t(1.0) - t * t;
+        }
     };
 }
