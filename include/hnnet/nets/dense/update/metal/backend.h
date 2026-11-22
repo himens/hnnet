@@ -67,11 +67,7 @@ namespace hnnet::dense::update::metal {
                     input_positions[bias_index] = 0xfffffffeu;
                 }
                 _input_positions = _context.upload(input_positions);
-                std::vector<detail::ActivationDescriptor> activations;
-                for (const auto &neuron : view.neurons()) {
-                    activations.push_back(detail::describe_activation(neuron.activation()));
-                }
-                _owned_activations = _context.upload(activations);
+                _owned_activations = _context.upload(detail::describe_activations(view.neurons(), _kernel_directory));
                 _seed_pipeline = _context.pipeline("hnnet_seed");
                 _activation_pipeline = _context.pipeline("hnnet_dense_activation");
                 _data = {};

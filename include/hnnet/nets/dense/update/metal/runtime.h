@@ -1,13 +1,11 @@
 #pragma once
 #include "hnnet/metal_runtime.h"
+#include <bit>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
+#include <ranges>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
-#include "hnnet/activations/identity.h"
-#include "hnnet/activations/relu.h"
-#include "hnnet/activations/sigmoid.h"
+#include "activations.h"
 
 namespace hnnet::dense::update::metal::detail {
     struct Parameters {
@@ -20,11 +18,6 @@ namespace hnnet::dense::update::metal::detail {
         std::uint32_t batch_size;
     };
 
-    struct ActivationDescriptor {
-        std::uint32_t kind;
-        float sigma;
-    };
-
     struct DenseLayer {
         std::uint32_t tx_begin;
         std::uint32_t tx_count;
@@ -34,20 +27,11 @@ namespace hnnet::dense::update::metal::detail {
     };
 
     static_assert(sizeof(Parameters) == 28);
-    static_assert(sizeof(ActivationDescriptor) == 8);
     static_assert(sizeof(DenseLayer) == 20);
-
-    // Read a shader source file
-    inline std::string read_source(const std::filesystem::path &path) {
-        std::ifstream stream{path, std::ios::binary};
-        if (not stream) throw std::runtime_error("Metal: cannot read " + path.string());
-        return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
-    }
 
     // Assemble the shaders shared by standalone update and backprop
     inline std::string shader_source(const std::filesystem::path &directory) {
-        return std::string{"#define HNNET_METAL_ACTIVATIONS_INCLUDED 1\n"}
-            + read_source(directory / "activations.h") + "\n"
+        return activation_shader(activation_sources(activation_directory(directory))) + "\n"
             + read_source(directory / "kernels.metal") + "\n";
     }
 
@@ -65,14 +49,28 @@ namespace hnnet::dense::update::metal::detail {
         return result;
     }
 
-    // Describe the activation function for Metal kernels
-    inline ActivationDescriptor describe_activation(const Activation *activation) {
-        if (dynamic_cast<const activation::Identity *>(activation) != nullptr) return {0, 1.0f};
-        if (const auto sigmoid = dynamic_cast<const activation::Sigmoid *>(activation)) {
-            return {1, to_float(sigmoid->sigma)};
+    // Pack the neurons' activations in the layout of the generated ActivationDescriptor
+    inline std::vector<std::uint32_t> describe_activations(const std::ranges::input_range auto &neurons, const std::filesystem::path &directory) {
+        const auto sources = activation_sources(activation_directory(directory));
+        const auto stride = descriptor_stride(sources);
+        std::vector<std::uint32_t> result;
+        for (const auto &neuron : neurons) {
+            const auto description = describe_activation(neuron.activation());
+            const auto source = std::ranges::find(sources, description.name, &ActivationSource::name);
+            if (source == sources.end() or source->fields.size() != description.fields.size()) {
+                throw std::invalid_argument("Metal: no matching header for activation " + std::string{description.name});
+            }
+            result.push_back(static_cast<std::uint32_t>(source - sources.begin()));
+            for (const auto &field : source->fields) {
+                const auto value = std::ranges::find(description.fields, field, &std::pair<std::string_view, real_t>::first);
+                if (value == description.fields.end()) {
+                    throw std::invalid_argument("Metal: no value for " + source->name + "::" + field);
+                }
+                result.push_back(std::bit_cast<std::uint32_t>(to_float(value->second)));
+            }
+            result.resize(result.size() + stride - 1 - source->fields.size(), 0);
         }
-        if (dynamic_cast<const activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
-        throw std::invalid_argument("Metal: supported activations are Identity, Sigmoid and ReLU");
+        return result;
     }
 
     // Helper function to create an MPS matrix view from a buffer

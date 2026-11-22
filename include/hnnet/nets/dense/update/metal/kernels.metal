@@ -1,9 +1,6 @@
 #ifndef HNNET_METAL_UPDATE_INCLUDED
 #define HNNET_METAL_UPDATE_INCLUDED
 #include <metal_stdlib>
-#ifndef HNNET_METAL_ACTIVATIONS_INCLUDED
-#include "activations.h"
-#endif
 
 namespace hnnet {
 namespace dense {
@@ -19,11 +16,6 @@ namespace metal {
         uint batch_size;
     };
 
-    struct ActivationDescriptor {
-        uint kind;
-        float sigma;
-    };
-
     struct DenseLayer {
         uint tx_begin;
         uint tx_count;
@@ -31,24 +23,6 @@ namespace metal {
         uint rx_count;
         uint weight_offset;
     };
-
-    inline float activate(const ActivationDescriptor descriptor, const float value) {
-        switch (descriptor.kind) {
-            case 0: return activation::identity(value);
-            case 1: return activation::sigmoid(value, descriptor.sigma);
-            case 2: return activation::relu(value);
-        }
-        return 0.0f;
-    }
-
-    inline float derivative(const ActivationDescriptor descriptor, const float value) {
-        switch (descriptor.kind) {
-            case 0: return activation::identity_derivative(value);
-            case 1: return activation::sigmoid_derivative(value, descriptor.sigma);
-            case 2: return activation::relu_derivative(value);
-        }
-        return 0.0f;
-    }
 }
 }
 }

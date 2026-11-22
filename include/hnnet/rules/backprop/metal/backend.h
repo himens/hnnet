@@ -52,11 +52,7 @@ namespace hnnet::backprop::metal {
                                                     detail::checked_count(layer.rx_begin), detail::checked_count(layer.rx_count),
                                                     detail::checked_count(layer.weight_offset)}});
                         }
-                        std::vector<detail::ActivationDescriptor> activations;
-                        const auto neurons = view.neurons();
-                        for (std::uint32_t neuron = 0; neuron < neuron_count; ++neuron) {
-                            activations.push_back(detail::describe_activation(neurons[neuron].activation()));
-                        }
+                        const auto activations = detail::describe_activations(view.neurons(), _update_kernel_directory);
                         const auto &output_layer = _layers.back().shape;
                         const auto input_indices = view.input_neurons_indices();
                         const auto input_count = detail::checked_count(input_indices.size());
@@ -64,6 +60,7 @@ namespace hnnet::backprop::metal {
                                        input_count, output_layer.rx_count,
                                        output_layer.rx_begin, 0, 0};
                         _context.init(_kernel_directory, _update_kernel_directory);
+                        _update_backend.set_kernel_directory(_update_kernel_directory);
                         _update_backend.init(view, _context);
                         _activations = _context.upload(activations);
                         _weights = _context.buffer(std::size_t{connection_count} * sizeof(float));
