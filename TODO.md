@@ -76,6 +76,11 @@
   - `layers()` restituisce uno span const ordinato topologicamente; `partition_layer_indices()` associa ogni partizione a un layer o a `Layer::no_layer`.
   - Rimosso `is_dense()`; OpenMP usa la mappatura senza cursori sincronizzati, mentre Metal percorre direttamente i layer e usa gli indici di input e bias esposti da `NNet::View`.
 
+- [x] **Allineare `rule::Perceptron` all'interfaccia delle learning rule**
+  - La rule implementa `init(view, data)`, `learn()` e `apply(weights)`: riceve una `NNet::View`, lavora su una copia propria dei pesi e la consegna alla rete a fine training.
+  - Il forward pass è interno alla rule e scorre direttamente le connessioni, senza backend di update né partizioni; la dimensione dei target è validata in `init()`.
+  - Gli esempi perceptron usano `train(TrainingData{...}, rule)` e `infer(inputs, backend)`.
+
 ## Priorita alta
 
 - [ ] **Aggiungere optimizer adattivi**

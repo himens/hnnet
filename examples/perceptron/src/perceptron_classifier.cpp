@@ -11,6 +11,7 @@
 #include "hnnet/activations/identity.h"
 #include "hnnet/activations/perceptron.h"
 #include "hnnet/nets/dense/dense_forward_net.h"
+#include "hnnet/nets/dense/update/omp/backend.h"
 #include "hnnet/rules/perceptron.h"
 
 // Constants
@@ -112,11 +113,13 @@ int main() {
         inputs[i] = encode(letter.pixels);
         targets[i] = encode({letter.character});
     }
-    classifier.train(inputs, targets, rule::Perceptron{1.0_real});
+    classifier.train(TrainingData{inputs, targets}, rule::Perceptron{1.0_real});
     // use net (inference)
     for (const auto &[ch, pixels] : read_letters("data/letters/noisy_1.txt")) {
-        const auto outputs = classifier.infer(encode(pixels));
-        std::println("Expected letter = {}, classifier response = {}", ch, decode(outputs));
+        const auto outputs = classifier.infer(dataset_vector_t{encode(pixels)}, dense::update::omp::Backend{});
+        for (const auto &output : outputs) {
+            std::println("Expected letter = {}, classifier response = {}", ch, decode(output));
+        }
     }
 
     return 0;

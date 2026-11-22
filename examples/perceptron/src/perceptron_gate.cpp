@@ -26,7 +26,7 @@ int main() {
         {-1}, 
         {-1}
     }};
-    gate.train(inputs, targets, rule::Perceptron{1.0_real});
+    gate.train(TrainingData{inputs, targets}, rule::Perceptron{1.0_real});
 
     return 0;
 }
