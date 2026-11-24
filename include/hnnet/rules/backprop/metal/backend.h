@@ -52,7 +52,7 @@ namespace hnnet::backprop::metal {
                                                     detail::checked_count(layer.rx_begin), detail::checked_count(layer.rx_count),
                                                     detail::checked_count(layer.weight_offset)}});
                         }
-                        std::vector<ActivationDescriptor> activations;
+                        std::vector<Activation> activations;
                         const auto neurons = view.neurons();
                         for (std::uint32_t neuron = 0; neuron < neuron_count; ++neuron) {
                             activations.push_back(neurons[neuron].activation());

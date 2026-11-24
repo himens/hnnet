@@ -12,13 +12,13 @@ namespace hnnet {
         std::vector<Neuron> neurons;
         std::vector<Connection> connections;
          // Create new neurons
-        template <ActivationType Activation>
-            std::vector<index_t> new_neurons(const int_t count, const NeuronType &type, const Activation &activation) {
+        template <ActivationType ActivationFunction>
+            std::vector<index_t> new_neurons(const int_t count, const NeuronType &type, const ActivationFunction &activation) {
                 if (count < 0) {
                     throw std::invalid_argument("NNet::new_neurons: invalid count!");
                 }
                 for (auto count_index{0}; count_index < count; ++count_index) {
-                    neurons.push_back(Neuron{type, ActivationDescriptor{activation}});
+                    neurons.push_back(Neuron{type, Activation{activation}});
                 }
                 return std::views::iota(neurons.size() - count, neurons.size()) | std::ranges::to<std::vector<index_t>>();
             }

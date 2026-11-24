@@ -28,7 +28,7 @@ namespace hnnet::dense::update::metal::detail {
     };
 
     static_assert(sizeof(Parameters) == 28);
-    static_assert(sizeof(real_t) == sizeof(float), "Metal: ActivationDescriptor is uploaded as is and requires FP32 real_t");
+    static_assert(sizeof(real_t) == sizeof(float), "Metal: Activation is uploaded as is and requires FP32 real_t");
     static_assert(sizeof(DenseLayer) == 20);
 
     // Read a shader source file

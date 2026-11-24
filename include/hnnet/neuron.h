@@ -9,22 +9,22 @@ namespace hnnet {
     class Neuron {
         public:
             // Constructor
-            explicit Neuron(const NeuronType type, const ActivationDescriptor activation) : _type(type), _activation(activation) {}
+            explicit Neuron(const NeuronType type, const Activation activation) : _type(type), _activation(activation) {}
             // Get neuron type
             NeuronType type() const {
                 return _type;
             }
             // Get the activation function
-            const ActivationDescriptor& activation() const {
+            const Activation& activation() const {
                 return _activation;
             }
             // Activate neuron (calculate activation value), returns the computed signal
             real_t activate(const real_t weighted_sum) const {
-                return hnnet::activate(_activation, weighted_sum);
+                return _activation(weighted_sum);
             }
         private:
             // Data members
             NeuronType _type;
-            ActivationDescriptor _activation;
+            Activation _activation;
     };
 }

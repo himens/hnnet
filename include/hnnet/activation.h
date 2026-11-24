@@ -16,26 +16,26 @@
 #include "hnnet/activations/tanh.h"
 
 namespace hnnet {
-    /////////////////////////////////
-    // ActivationDescriptor struct //
-    /////////////////////////////////
+    ///////////////////////
+    // Activation struct //
+    ///////////////////////
     // Holds any activation by value; this file is compiled by the CPU and by the GPU backends
-    struct ActivationDescriptor {
+    struct Activation {
         // Constructors
-        explicit ActivationDescriptor(const activation::BipolarSigmoid activation) : kind(0), bipolar_sigmoid(activation) {}
-        explicit ActivationDescriptor(const activation::BipolarStep activation) : kind(1), bipolar_step(activation) {}
-        explicit ActivationDescriptor(const activation::ELU activation) : kind(2), elu(activation) {}
-        explicit ActivationDescriptor(const activation::Gaussian activation) : kind(3), gaussian(activation) {}
-        explicit ActivationDescriptor(const activation::Identity activation) : kind(4), identity(activation) {}
-        explicit ActivationDescriptor(const activation::LeakyReLU activation) : kind(5), leaky_relu(activation) {}
-        explicit ActivationDescriptor(const activation::Linear activation) : kind(6), linear(activation) {}
-        explicit ActivationDescriptor(const activation::Perceptron activation) : kind(7), perceptron(activation) {}
-        explicit ActivationDescriptor(const activation::ReLU activation) : kind(8), relu(activation) {}
-        explicit ActivationDescriptor(const activation::Sigmoid activation) : kind(9), sigmoid(activation) {}
-        explicit ActivationDescriptor(const activation::Softplus activation) : kind(10), softplus(activation) {}
-        explicit ActivationDescriptor(const activation::Softsign activation) : kind(11), softsign(activation) {}
-        explicit ActivationDescriptor(const activation::Step activation) : kind(12), step(activation) {}
-        explicit ActivationDescriptor(const activation::Tanh activation) : kind(13), tanh(activation) {}
+        explicit Activation(const activation::BipolarSigmoid activation) : kind(0), bipolar_sigmoid(activation) {}
+        explicit Activation(const activation::BipolarStep activation) : kind(1), bipolar_step(activation) {}
+        explicit Activation(const activation::ELU activation) : kind(2), elu(activation) {}
+        explicit Activation(const activation::Gaussian activation) : kind(3), gaussian(activation) {}
+        explicit Activation(const activation::Identity activation) : kind(4), identity(activation) {}
+        explicit Activation(const activation::LeakyReLU activation) : kind(5), leaky_relu(activation) {}
+        explicit Activation(const activation::Linear activation) : kind(6), linear(activation) {}
+        explicit Activation(const activation::Perceptron activation) : kind(7), perceptron(activation) {}
+        explicit Activation(const activation::ReLU activation) : kind(8), relu(activation) {}
+        explicit Activation(const activation::Sigmoid activation) : kind(9), sigmoid(activation) {}
+        explicit Activation(const activation::Softplus activation) : kind(10), softplus(activation) {}
+        explicit Activation(const activation::Softsign activation) : kind(11), softsign(activation) {}
+        explicit Activation(const activation::Step activation) : kind(12), step(activation) {}
+        explicit Activation(const activation::Tanh activation) : kind(13), tanh(activation) {}
         // Data members
         unsigned int kind;
         union {
@@ -54,49 +54,49 @@ namespace hnnet {
             activation::Step step;
             activation::Tanh tanh;
         };
+        // Compute the activation value
+        real_t operator()(const real_t x) const {
+            switch (kind) {
+                case 0: return bipolar_sigmoid(x);
+                case 1: return bipolar_step(x);
+                case 2: return elu(x);
+                case 3: return gaussian(x);
+                case 4: return identity(x);
+                case 5: return leaky_relu(x);
+                case 6: return linear(x);
+                case 7: return perceptron(x);
+                case 8: return relu(x);
+                case 9: return sigmoid(x);
+                case 10: return softplus(x);
+                case 11: return softsign(x);
+                case 12: return step(x);
+                case 13: return tanh(x);
+            }
+            return real_t(0);
+        }
+        // Compute the activation derivative
+        real_t derivative(const real_t x) const {
+            switch (kind) {
+                case 0: return bipolar_sigmoid.derivative(x);
+                case 1: return bipolar_step.derivative(x);
+                case 2: return elu.derivative(x);
+                case 3: return gaussian.derivative(x);
+                case 4: return identity.derivative(x);
+                case 5: return leaky_relu.derivative(x);
+                case 6: return linear.derivative(x);
+                case 7: return perceptron.derivative(x);
+                case 8: return relu.derivative(x);
+                case 9: return sigmoid.derivative(x);
+                case 10: return softplus.derivative(x);
+                case 11: return softsign.derivative(x);
+                case 12: return step.derivative(x);
+                case 13: return tanh.derivative(x);
+            }
+            return real_t(0);
+        }
     };
-    // Compute the activation value
-    inline real_t activate(const ActivationDescriptor descriptor, const real_t x) {
-        switch (descriptor.kind) {
-            case 0: return descriptor.bipolar_sigmoid(x);
-            case 1: return descriptor.bipolar_step(x);
-            case 2: return descriptor.elu(x);
-            case 3: return descriptor.gaussian(x);
-            case 4: return descriptor.identity(x);
-            case 5: return descriptor.leaky_relu(x);
-            case 6: return descriptor.linear(x);
-            case 7: return descriptor.perceptron(x);
-            case 8: return descriptor.relu(x);
-            case 9: return descriptor.sigmoid(x);
-            case 10: return descriptor.softplus(x);
-            case 11: return descriptor.softsign(x);
-            case 12: return descriptor.step(x);
-            case 13: return descriptor.tanh(x);
-        }
-        return real_t(0);
-    }
-    // Compute the activation derivative
-    inline real_t derivative(const ActivationDescriptor descriptor, const real_t x) {
-        switch (descriptor.kind) {
-            case 0: return descriptor.bipolar_sigmoid.derivative(x);
-            case 1: return descriptor.bipolar_step.derivative(x);
-            case 2: return descriptor.elu.derivative(x);
-            case 3: return descriptor.gaussian.derivative(x);
-            case 4: return descriptor.identity.derivative(x);
-            case 5: return descriptor.leaky_relu.derivative(x);
-            case 6: return descriptor.linear.derivative(x);
-            case 7: return descriptor.perceptron.derivative(x);
-            case 8: return descriptor.relu.derivative(x);
-            case 9: return descriptor.sigmoid.derivative(x);
-            case 10: return descriptor.softplus.derivative(x);
-            case 11: return descriptor.softsign.derivative(x);
-            case 12: return descriptor.step.derivative(x);
-            case 13: return descriptor.tanh.derivative(x);
-        }
-        return real_t(0);
-    }
 #ifndef __METAL_VERSION__
     template <typename T>
-        concept ActivationType = std::constructible_from<ActivationDescriptor, T>;
+        concept ActivationType = std::constructible_from<Activation, T>;
 #endif
 }

@@ -103,7 +103,7 @@ namespace hnnet::backprop::omp {
                     for (const auto &[target, output_neuron_index] : std::views::zip(target, output_neurons_indices)) {
                         const auto &signal = signals[output_neuron_index];
                         const auto &weighted_sum = weighted_sums[output_neuron_index];
-                        deltas[output_neuron_index] = loss.derivative(target, signal) * derivative(neurons[output_neuron_index].activation(), weighted_sum);
+                        deltas[output_neuron_index] = loss.derivative(target, signal) * neurons[output_neuron_index].activation().derivative(weighted_sum);
                         loss_value += loss(target, signal);
                     }
                     // walk backwards and compute other deltas (partitions are in topological order)
@@ -115,7 +115,7 @@ namespace hnnet::backprop::omp {
                                 const auto rx_index = layer.rx_begin + row_index;
                                 if (neurons[rx_index].type() != NeuronType::output) {
                                     const auto &weighted_sum = weighted_sums[rx_index];
-                                    deltas[rx_index] *= derivative(neurons[rx_index].activation(), weighted_sum);
+                                    deltas[rx_index] *= neurons[rx_index].activation().derivative(weighted_sum);
                                 }
                                 const auto row_offset = layer.weight_offset + (row_index * layer.tx_count);
                                 for (auto column_index{0}; column_index < layer.tx_count; ++column_index) {
@@ -131,7 +131,7 @@ namespace hnnet::backprop::omp {
                             const auto &rx_index = partition.rx_index;
                             if (neurons[rx_index].type() != NeuronType::output) {
                                 const auto &weighted_sum = weighted_sums[rx_index];
-                                deltas[rx_index] *= derivative(neurons[rx_index].activation(), weighted_sum);
+                                deltas[rx_index] *= neurons[rx_index].activation().derivative(weighted_sum);
                             }
                             for (const auto &connection_index : std::views::iota(partition.connection_begin, partition.connection_end)) {
                                 const auto tx_index = connections[connection_index].tx_index;
