@@ -9,11 +9,9 @@ namespace hnnet::backprop::metal::detail {
     using hnnet::metal::encoder;
 
     using dense::update::metal::detail::Parameters;
-    using dense::update::metal::detail::ActivationDescriptor;
     using dense::update::metal::detail::DenseLayer;
     using dense::update::metal::detail::read_source;
     using dense::update::metal::detail::to_float;
-    using dense::update::metal::detail::describe_activation;
     using dense::update::metal::detail::matrix;
     using dense::update::metal::detail::product;
 
@@ -24,7 +22,6 @@ namespace hnnet::backprop::metal::detail {
     };
 
     static_assert(sizeof(Parameters) == 28);
-    static_assert(sizeof(ActivationDescriptor) == 8);
     static_assert(sizeof(UpdateParameters) == 12);
 
     class Context : public hnnet::metal::Context {

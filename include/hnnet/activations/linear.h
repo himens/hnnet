@@ -1,16 +1,15 @@
 #pragma once
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class Linear : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return slope * x + offset;
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                return slope;
-            }
-            real_t slope{1.0_real};
-            real_t offset{0.0_real};
+    struct Linear {
+        real_t operator()(const real_t x) const {
+            return slope * x + offset;
+        }
+        real_t derivative(const real_t x) const {
+            return slope;
+        }
+        real_t slope{real_t(1.0)};
+        real_t offset{real_t(0.0)};
     };
 }

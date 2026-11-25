@@ -1,15 +1,14 @@
 #pragma once
 #include <algorithm>
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class ReLU : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return std::max(0.0_real, x);
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                return x > 0.0_real ? 1.0_real : 0.0_real;
-            }
+    struct ReLU {
+        real_t operator()(const real_t x) const {
+            return std::max(real_t(0.0), x);
+        }
+        real_t derivative(const real_t x) const {
+            return x > real_t(0.0) ? real_t(1.0) : real_t(0.0);
+        }
     };
 }

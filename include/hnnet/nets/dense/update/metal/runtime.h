@@ -4,10 +4,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
-#include "hnnet/activations/identity.h"
-#include "hnnet/activations/relu.h"
-#include "hnnet/activations/sigmoid.h"
+#include "hnnet/activations/to_gpu.h"
 
 namespace hnnet::dense::update::metal::detail {
     struct Parameters {
@@ -20,11 +19,6 @@ namespace hnnet::dense::update::metal::detail {
         std::uint32_t batch_size;
     };
 
-    struct ActivationDescriptor {
-        std::uint32_t kind;
-        float sigma;
-    };
-
     struct DenseLayer {
         std::uint32_t tx_begin;
         std::uint32_t tx_count;
@@ -34,7 +28,7 @@ namespace hnnet::dense::update::metal::detail {
     };
 
     static_assert(sizeof(Parameters) == 28);
-    static_assert(sizeof(ActivationDescriptor) == 8);
+    static_assert(sizeof(real_t) == sizeof(float), "Metal: GpuActivation is uploaded as is and requires FP32 real_t");
     static_assert(sizeof(DenseLayer) == 20);
 
     // Read a shader source file
@@ -44,10 +38,26 @@ namespace hnnet::dense::update::metal::detail {
         return {std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
     }
 
+    // Read a header shared with the CPU: activation includes are inlined, any other include is dropped
+    inline std::string read_shared_source(const std::filesystem::path &include_directory, const std::filesystem::path &file) {
+        constexpr std::string_view prefix{"#include \"hnnet/activations/"};
+        std::istringstream stream{read_source(include_directory / file)};
+        std::string result;
+        for (std::string line; std::getline(stream, line);) {
+            if (line.starts_with(prefix)) {
+                result += read_shared_source(include_directory, line.substr(10, line.find('"', 10) - 10));
+            }
+            else if (not line.starts_with("#include") and not line.starts_with("#pragma once")) {
+                result += line + "\n";
+            }
+        }
+        return result;
+    }
+
     // Assemble the shaders shared by standalone update and backprop
     inline std::string shader_source(const std::filesystem::path &directory) {
-        return std::string{"#define HNNET_METAL_ACTIVATIONS_INCLUDED 1\n"}
-            + read_source(directory / "activations.h") + "\n"
+        return read_source(directory / "activations.h") + "\n"
+            + read_shared_source(directory / "../../../../..", "hnnet/activations/gpu_activation.h") + "\n"
             + read_source(directory / "kernels.metal") + "\n";
     }
 
@@ -63,16 +73,6 @@ namespace hnnet::dense::update::metal::detail {
             throw std::invalid_argument("Metal: values must be finite and representable in FP32");
         }
         return result;
-    }
-
-    // Describe the activation function for Metal kernels
-    inline ActivationDescriptor describe_activation(const Activation *activation) {
-        if (dynamic_cast<const activation::Identity *>(activation) != nullptr) return {0, 1.0f};
-        if (const auto sigmoid = dynamic_cast<const activation::Sigmoid *>(activation)) {
-            return {1, to_float(sigmoid->sigma)};
-        }
-        if (dynamic_cast<const activation::ReLU *>(activation) != nullptr) return {2, 1.0f};
-        throw std::invalid_argument("Metal: supported activations are Identity, Sigmoid and ReLU");
     }
 
     // Helper function to create an MPS matrix view from a buffer

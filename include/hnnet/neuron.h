@@ -1,7 +1,4 @@
 #pragma once
-#include <memory>
-#include <stdexcept>
-#include <utility>
 #include "hnnet/activation.h"
 
 namespace hnnet {
@@ -12,26 +9,22 @@ namespace hnnet {
     class Neuron {
         public:
             // Constructor
-            explicit Neuron(const NeuronType type, std::unique_ptr<Activation> activation) : _type(type), _activation(std::move(activation)) {
-                if (_activation == nullptr) {
-                    throw std::invalid_argument("Neuron::Neuron: invalid activation!");
-                }
-            }
+            explicit Neuron(const NeuronType type, const Activation activation) : _type(type), _activation(activation) {}
             // Get neuron type
             NeuronType type() const {
                 return _type;
             }
             // Get the activation function
-            const Activation* activation() const {
-                return _activation.get();
+            const Activation& activation() const {
+                return _activation;
             }
             // Activate neuron (calculate activation value), returns the computed signal
             real_t activate(const real_t weighted_sum) const {
-                return (*_activation)(weighted_sum);
+                return _activation(weighted_sum);
             }
         private:
             // Data members
             NeuronType _type;
-            std::unique_ptr<Activation> _activation{nullptr};
+            Activation _activation;
     };
 }

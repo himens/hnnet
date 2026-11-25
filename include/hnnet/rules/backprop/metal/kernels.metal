@@ -7,9 +7,8 @@ namespace hnnet {
 namespace backprop {
 namespace metal {
     using dense::update::metal::Parameters;
-    using dense::update::metal::ActivationDescriptor;
+    using hnnet::activation::GpuActivation;
     using dense::update::metal::DenseLayer;
-    using dense::update::metal::derivative;
 
     struct UpdateParameters {
         uint weight_count;
@@ -43,7 +42,7 @@ kernel void hnnet_loss(
 kernel void hnnet_dense_delta(
     constant Parameters &parameters [[buffer(0)]],
     constant DenseLayer &layer [[buffer(1)]],
-    device const ActivationDescriptor *activations [[buffer(2)]],
+    device const GpuActivation *activations [[buffer(2)]],
     device const float *targets [[buffer(3)]],
     device const float *signals [[buffer(4)]],
     device const float *weighted_sums [[buffer(5)]],
@@ -55,7 +54,8 @@ kernel void hnnet_dense_delta(
     const uint row = item % layer.rx_count;
     const uint neuron = layer.rx_begin + row;
     const uint offset = sample * parameters.neuron_count + neuron;
-    const float slope = derivative(activations[neuron], weighted_sums[offset]);
+    const auto activation = activations[neuron];
+    const float slope = activation.derivative(weighted_sums[offset]);
     if (layer.rx_begin == parameters.output_begin) {
         const float target = targets[(parameters.batch_begin + sample) * parameters.output_count + row];
         deltas[offset] = (signals[offset] - target) * slope;

@@ -8,7 +8,7 @@
   - La rule delega il lavoro al backend tramite i concept `BackendType`; gradienti e aggiornamento dei pesi sono gestiti nell'operazione di backprop del backend.
 
 - [x] **Disaccoppiare il backpropagation dal tipo concreto del neurone**
-  - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi e ogni neurone possiede un'istanza polimorfica di `Activation`.
+  - `Neuron` non è più templata sull'attivazione: `BackpropNeuron`/`PerceptronNeuron` sono stati rimossi e ogni neurone possiede un'istanza type-erased di `Activation`.
   - La logica di apprendimento è estratta nelle learning rule (`rule::Backprop`, `rule::Perceptron`), che operano su `NNet::View`/`Neuron`.
   - Reti con attivazioni diverse per neurone sono già possibili.
 
@@ -87,10 +87,11 @@
   - Implementare Adam e valutare RMSProp; Rprop è già disponibile come optimizer OpenMP.
   - I nuovi optimizer devono mantenere stato per peso e funzionare con i mini-batch.
 
-- [ ] **Unificare le formule di attivazioni e loss tra CPU e backend GPU**
-  - Metal implementa separatamente Identity, Sigmoid, ReLU e MSE: formule, derivate e gestione dei parametri sono duplicate rispetto al codice CPU.
-  - Valutare una sorgente comune delle formule, con adattamenti per le funzioni matematiche e i vincoli di Metal ed eventuali altri backend, evitando implementazioni indipendenti che possano divergere.
-  - Definire come estendere il supporto ad attivazioni e loss personalizzate; verificare la coerenza di valori e derivate tra backend con tolleranze adeguate alla precisione numerica.
+- [ ] **Unificare le formule di loss tra CPU e backend GPU**
+  - Metal implementa ancora MSE separatamente; valutare una sorgente comune delle formule e il supporto a loss personalizzate.
+
+- [ ] **Verificare le attivazioni condivise su Metal**
+  - Compilare ed eseguire su Metal reale; confrontare valori e derivate con la CPU usando tolleranze adeguate.
 
 ## Discussioni aperte
 
@@ -120,7 +121,7 @@
   - Valutare layout, blocking e riduzione del traffico read-modify-write nel passo di update prima di introdurre rappresentazioni duplicate dei pesi.
 
 - [ ] **Ridurre il dispatch di attivazione nei batch densi**
-  - `Neuron` conserva un puntatore polimorfico a `Activation`; il dispatch avviene una volta per neurone attivato.
+  - `Neuron` conserva un'istanza type-erased di `Activation`; il dispatch avviene una volta per neurone attivato.
   - Raggruppare neuroni/layer per attivazione può rendere possibile applicare la funzione in batch su dati contigui.
 
 ## Stress test / Benchmark

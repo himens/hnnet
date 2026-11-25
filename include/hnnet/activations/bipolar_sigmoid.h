@@ -1,17 +1,16 @@
 #pragma once
 #include <cmath>
-#include "hnnet/activation.h"
+#include "hnnet/types.h"
 
 namespace hnnet::activation {
-    class BipolarSigmoid : public Activation {
-        public:
-            constexpr real_t operator()(const real_t x) const final {
-                return 2.0_real / (1.0_real + std::exp(-sigma * x)) - 1.0_real;
-            }
-            constexpr real_t derivative(const real_t x) const final {
-                const auto sig = (*this)(x);
-                return 0.5_real * sigma * (1.0_real + sig) * (1.0_real - sig);
-            }
-            real_t sigma{1.0_real};
+    struct BipolarSigmoid {
+        real_t operator()(const real_t x) const {
+            return real_t(2.0) / (real_t(1.0) + std::exp(-sigma * x)) - real_t(1.0);
+        }
+        real_t derivative(const real_t x) const {
+            const auto sig = (*this)(x);
+            return real_t(0.5) * sigma * (real_t(1.0) + sig) * (real_t(1.0) - sig);
+        }
+        real_t sigma{real_t(1.0)};
     };
 }
