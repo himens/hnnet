@@ -6,7 +6,7 @@
 #include <iterator>
 #include <sstream>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
-#include "hnnet/activation.h"
+#include "hnnet/activations/to_gpu.h"
 
 namespace hnnet::dense::update::metal::detail {
     struct Parameters {
@@ -28,7 +28,7 @@ namespace hnnet::dense::update::metal::detail {
     };
 
     static_assert(sizeof(Parameters) == 28);
-    static_assert(sizeof(real_t) == sizeof(float), "Metal: Activation is uploaded as is and requires FP32 real_t");
+    static_assert(sizeof(real_t) == sizeof(float), "Metal: GpuActivation is uploaded as is and requires FP32 real_t");
     static_assert(sizeof(DenseLayer) == 20);
 
     // Read a shader source file
@@ -57,7 +57,7 @@ namespace hnnet::dense::update::metal::detail {
     // Assemble the shaders shared by standalone update and backprop
     inline std::string shader_source(const std::filesystem::path &directory) {
         return read_source(directory / "activations.h") + "\n"
-            + read_shared_source(directory / "../../../../..", "hnnet/activation.h") + "\n"
+            + read_shared_source(directory / "../../../../..", "hnnet/activations/gpu_activation.h") + "\n"
             + read_source(directory / "kernels.metal") + "\n";
     }
 

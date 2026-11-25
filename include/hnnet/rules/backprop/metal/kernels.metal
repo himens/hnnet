@@ -7,7 +7,7 @@ namespace hnnet {
 namespace backprop {
 namespace metal {
     using dense::update::metal::Parameters;
-    using hnnet::Activation;
+    using hnnet::GpuActivation;
     using dense::update::metal::DenseLayer;
 
     struct UpdateParameters {
@@ -42,7 +42,7 @@ kernel void hnnet_loss(
 kernel void hnnet_dense_delta(
     constant Parameters &parameters [[buffer(0)]],
     constant DenseLayer &layer [[buffer(1)]],
-    device const Activation *activations [[buffer(2)]],
+    device const GpuActivation *activations [[buffer(2)]],
     device const float *targets [[buffer(3)]],
     device const float *signals [[buffer(4)]],
     device const float *weighted_sums [[buffer(5)]],
