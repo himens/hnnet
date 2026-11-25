@@ -10,6 +10,15 @@ hNNet is a small C++26 framework for building neural networks. Its core separate
 
 `Neuron` is a concrete type. Its role (`input`, `hidden`, `output`, or `bias`) and activation function are selected when it is created. The built-in learning rules are examples of strategies that operate on the network without making the neuron type depend on a particular learning algorithm.
 
+Each neuron stores a type-erased `Activation`: a copyable object providing
+`operator()(real_t)` and `derivative(real_t)`. The core does not depend on the
+concrete activation types, and neurons can use different activations.
+Built-in activation structs share their formulas between CPU and Metal.
+At initialization, the GPU backend converts registered activations to
+`activation::GpuActivation` with `activation::to_gpu`. A custom activation
+can be used on CPU without registration; GPU support also requires adding it
+to the tagged union, its dispatch, and the conversion.
+
 ## Requirements
 
 - CMake 4.4 or newer
@@ -121,11 +130,11 @@ cmake --build build --target hnnet-backprop-gate
 
 - `include/`: library headers
     - `hnnet/types.h`: numeric aliases, range concepts for data and datasets, and `TrainingData`
-    - `hnnet/activation.h`, `hnnet/neuron.h`: activation interface and neuron definition
+    - `hnnet/activation.h`, `hnnet/neuron.h`: type-erased activation and neuron definition
     - `hnnet/topology.h`: `Connection`, the mutable `Topology` container, and neuron/connection construction helpers
     - `hnnet/loss_type.h`, `hnnet/learning_rule_type.h`, `hnnet/backend_type.h`, `hnnet/update_backend_type.h`: concepts used by losses, learning rules, and backends
     - `hnnet/nnet.h`: base network storage, `NNet::View`, `NNet::State`, training loop, and inference API
-    - `hnnet/activations/`, `hnnet/losses/`: built-in activation and loss implementations
+    - `hnnet/activations/`, `hnnet/losses/`: built-in activation and loss implementations; GPU activation union and host conversion
     - `hnnet/rules/`: learning rules; backpropagation backends and optimizers are under `rules/backprop/`
     - `hnnet/nets/dag/`, `hnnet/nets/dense/`: `DAGNet` and `DenseForwardNet`, each with its update backends under `update/`
 - `examples/`: example implementations built on top of the generic framework
@@ -213,11 +222,10 @@ The Metal backend in `hnnet/rules/backprop/metal/` accepts `DenseForwardNet`
 specifically and uses Metal Performance Shaders matrix multiplication for
 forward propagation, backward propagation, and gradients. Bias columns are part
 of those products, not separate bias kernels. It supports FP32 computation,
-Identity/Sigmoid/ReLU activations, MSE, and Momentum or Rprop optimizers.
+the registered built-in activations, MSE, and Momentum or Rprop optimizers.
 Metal requires macOS, the Metal SDK, and Objective-C++ compilation; it is not
-built by the current OpenMP example targets. See the
-[Metal backend documentation](include/hnnet/rules/backprop/metal/README.md)
-for backend composition and platform requirements.
+built by the current OpenMP example targets. The shared-activation path still
+requires verification with the Metal compiler and a GPU.
 
 Training currently uses a fixed loss threshold and maximum epoch count and prints progress to standard output. The OpenMP backends and `rule::Perceptron` use `NNet::State` for signals and weighted sums, separately from the network topology.
 
@@ -227,7 +235,8 @@ The main planned improvements are:
 
 - add adaptive optimizers such as Adam or RMSProp
 - make training thresholds, epoch limits, and reporting configurable
-- share activation and loss formulas between CPU and GPU backends
+- share loss formulas between CPU and GPU backends
+- verify shared activation formulas and derivatives on Metal
 - establish reproducible benchmarks before further dense-kernel optimizations
 
 See [TODO.md](TODO.md) for the complete list of planned improvements and their priorities.

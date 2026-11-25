@@ -7,7 +7,7 @@ namespace hnnet {
 namespace backprop {
 namespace metal {
     using dense::update::metal::Parameters;
-    using hnnet::GpuActivation;
+    using hnnet::activation::GpuActivation;
     using dense::update::metal::DenseLayer;
 
     struct UpdateParameters {

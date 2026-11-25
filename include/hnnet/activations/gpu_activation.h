@@ -14,44 +14,44 @@
 #include "hnnet/activations/step.h"
 #include "hnnet/activations/tanh.h"
 
-namespace hnnet {
-    //////////////////////////
-    // GpuActivation struct //
-    //////////////////////////
+namespace hnnet::activation {
+    ///////////////////
+    // GpuActivation //
+    ///////////////////
     // Holds any supported GPU activation by value; compiled by the host and by the GPU backends
     struct GpuActivation {
         // Constructors
-        explicit GpuActivation(const activation::BipolarSigmoid activation) : kind(0), bipolar_sigmoid(activation) {}
-        explicit GpuActivation(const activation::BipolarStep activation) : kind(1), bipolar_step(activation) {}
-        explicit GpuActivation(const activation::ELU activation) : kind(2), elu(activation) {}
-        explicit GpuActivation(const activation::Gaussian activation) : kind(3), gaussian(activation) {}
-        explicit GpuActivation(const activation::Identity activation) : kind(4), identity(activation) {}
-        explicit GpuActivation(const activation::LeakyReLU activation) : kind(5), leaky_relu(activation) {}
-        explicit GpuActivation(const activation::Linear activation) : kind(6), linear(activation) {}
-        explicit GpuActivation(const activation::Perceptron activation) : kind(7), perceptron(activation) {}
-        explicit GpuActivation(const activation::ReLU activation) : kind(8), relu(activation) {}
-        explicit GpuActivation(const activation::Sigmoid activation) : kind(9), sigmoid(activation) {}
-        explicit GpuActivation(const activation::Softplus activation) : kind(10), softplus(activation) {}
-        explicit GpuActivation(const activation::Softsign activation) : kind(11), softsign(activation) {}
-        explicit GpuActivation(const activation::Step activation) : kind(12), step(activation) {}
-        explicit GpuActivation(const activation::Tanh activation) : kind(13), tanh(activation) {}
+        explicit GpuActivation(const BipolarSigmoid activation) : kind(0), bipolar_sigmoid(activation) {}
+        explicit GpuActivation(const BipolarStep activation) : kind(1), bipolar_step(activation) {}
+        explicit GpuActivation(const ELU activation) : kind(2), elu(activation) {}
+        explicit GpuActivation(const Gaussian activation) : kind(3), gaussian(activation) {}
+        explicit GpuActivation(const Identity activation) : kind(4), identity(activation) {}
+        explicit GpuActivation(const LeakyReLU activation) : kind(5), leaky_relu(activation) {}
+        explicit GpuActivation(const Linear activation) : kind(6), linear(activation) {}
+        explicit GpuActivation(const Perceptron activation) : kind(7), perceptron(activation) {}
+        explicit GpuActivation(const ReLU activation) : kind(8), relu(activation) {}
+        explicit GpuActivation(const Sigmoid activation) : kind(9), sigmoid(activation) {}
+        explicit GpuActivation(const Softplus activation) : kind(10), softplus(activation) {}
+        explicit GpuActivation(const Softsign activation) : kind(11), softsign(activation) {}
+        explicit GpuActivation(const Step activation) : kind(12), step(activation) {}
+        explicit GpuActivation(const Tanh activation) : kind(13), tanh(activation) {}
         // Data members
         unsigned int kind;
         union {
-            activation::BipolarSigmoid bipolar_sigmoid;
-            activation::BipolarStep bipolar_step;
-            activation::ELU elu;
-            activation::Gaussian gaussian;
-            activation::Identity identity;
-            activation::LeakyReLU leaky_relu;
-            activation::Linear linear;
-            activation::Perceptron perceptron;
-            activation::ReLU relu;
-            activation::Sigmoid sigmoid;
-            activation::Softplus softplus;
-            activation::Softsign softsign;
-            activation::Step step;
-            activation::Tanh tanh;
+            BipolarSigmoid bipolar_sigmoid;
+            BipolarStep bipolar_step;
+            ELU elu;
+            Gaussian gaussian;
+            Identity identity;
+            LeakyReLU leaky_relu;
+            Linear linear;
+            Perceptron perceptron;
+            ReLU relu;
+            Sigmoid sigmoid;
+            Softplus softplus;
+            Softsign softsign;
+            Step step;
+            Tanh tanh;
         };
         // Compute the activation value
         real_t operator()(const real_t x) const {

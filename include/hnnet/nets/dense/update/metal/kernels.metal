@@ -30,7 +30,7 @@ namespace metal {
 
 kernel void hnnet_seed(
     constant hnnet::dense::update::metal::Parameters &parameters [[buffer(0)]],
-    device const hnnet::GpuActivation *activations [[buffer(1)]],
+    device const hnnet::activation::GpuActivation *activations [[buffer(1)]],
     device const uint *input_positions [[buffer(2)]],
     device const float *inputs [[buffer(3)]],
     device float *signals [[buffer(4)]],
@@ -59,7 +59,7 @@ kernel void hnnet_seed(
 kernel void hnnet_dense_activation(
     constant hnnet::dense::update::metal::Parameters &parameters [[buffer(0)]],
     constant hnnet::dense::update::metal::DenseLayer &layer [[buffer(1)]],
-    device const hnnet::GpuActivation *activations [[buffer(2)]],
+    device const hnnet::activation::GpuActivation *activations [[buffer(2)]],
     device const float *weighted_sums [[buffer(3)]],
     device float *signals [[buffer(4)]],
     uint item [[thread_position_in_grid]]) {
